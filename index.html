@@ -637,6 +637,19 @@ async function loadAngebote(){
     .order("angebotsdatum", { ascending: false }).limit(500);
   if (r.error) { msg("angebote-msg", "Fehler beim Laden: " + esc(r.error.message), false); return; }
   alleAngebote = r.data || [];
+  // DB1/Ampel-Bewertung aus der Bewertungs-View ankauf.v_angebote_bewertet nachladen und je Fahrzeug (id) einmischen.
+  // Bewusst als separate Zusatzabfrage statt kompletter Umstellung der Hauptquery auf die View: die View enthaelt
+  // angebotspreis_brutto, mwst_ausweisbar, match_score, angebotsdatum und anbieter_fahrzeug_nr NICHT (per
+  // information_schema geprueft) - ein voller Wechsel wuerde Preisanzeige, Sortierung und Fzg-Nr-Anzeige brechen.
+  var bw = await db.from("v_angebote_bewertet").select("id,ampel,db1,db1_prozent,markt_hinweis").limit(1000);
+  if (!bw.error && bw.data) {
+    var bwMap = {};
+    bw.data.forEach(function(b){ bwMap[b.id] = b; });
+    alleAngebote.forEach(function(a){
+      var b = bwMap[a.id];
+      if (b) { a.ampel = b.ampel; a.db1 = b.db1; a.db1_prozent = b.db1_prozent; a.markt_hinweis = b.markt_hinweis; }
+    });
+  }
   var statuses = {};
   alleAngebote.forEach(function(a){ statuses[a.status] = (statuses[a.status] || 0) + 1; });
   var fh = '<span class="chip' + (statusFilter === "" ? " active" : "") + '" onclick="setFilter(\'\')">Alle (' + alleAngebote.length + ")</span>";
@@ -668,6 +681,11 @@ function resetAngebotsFilter(){
   statusFilter = "";
   renderStatusChips();
   renderAngebote();
+}
+function ampelPillClass(ampel){
+  if (ampel === "guenstig" || ampel === "günstig" || ampel === "fair") return "pill-on";
+  if (ampel === "teuer") return "pill-red";
+  return "pill-off";
 }
 function renderAngebote(){
   var rows = statusFilter ? alleAngebote.filter(function(a){ return a.status === statusFilter; }) : alleAngebote.slice();
@@ -730,7 +748,14 @@ function renderAngebote(){
       preisHtml = '<div class="preis">' + fmtEur(brutto) + '</div><div class="brutto">brutto inkl. MwSt.</div>';
     }
     var statusCls = a.status === "Match" ? "pill-blue" : (a.status === "Neu" ? "pill-gold" : "pill-off");
-    var ampel = a.ampel_bewertung ? " " + esc(a.ampel_bewertung) : "";
+    var ampelTitle = a.markt_hinweis ? ' title="' + esc(a.markt_hinweis) + '"' : "";
+    var ampelHtml = a.ampel ? '<span class="pill ' + ampelPillClass(a.ampel) + '"' + ampelTitle + '>' + esc(a.ampel) + "</span>" : "";
+    var db1Html = "";
+    if (a.db1 != null) {
+      var db1Vz = Number(a.db1) >= 0 ? "+" : "";
+      db1Html = '<span class="spec-chip"' + ampelTitle + '>DB1 <b>' + db1Vz + fmtEur(Math.round(a.db1)) + "</b>"
+        + (a.db1_prozent != null ? " (" + (Number(a.db1_prozent) >= 0 ? "+" : "") + Number(a.db1_prozent).toLocaleString("de-DE") + "%)" : "") + "</span>";
+    }
     var checked = selectedIds.has(a.id) ? " checked" : "";
 
     var chips = '<span class="spec-chip">EZ <b>' + ez + "</b></span>"
@@ -738,7 +763,9 @@ function renderAngebote(){
       + (a.motorleistung_ps ? '<span class="spec-chip"><b>' + a.motorleistung_ps + "</b> PS</span>" : "")
       + ((a.kraftstoff && a.kraftstoff.length) ? '<span class="spec-chip">' + esc(a.kraftstoff.join("/")) + "</span>" : "")
       + (a.getriebe ? '<span class="spec-chip">' + esc(a.getriebe) + "</span>" : "")
-      + '<span class="pill ' + statusCls + '">' + esc(a.status) + (a.match_score ? " " + a.match_score : "") + ampel + "</span>";
+      + db1Html
+      + '<span class="pill ' + statusCls + '">' + esc(a.status) + (a.match_score ? " " + a.match_score : "") + "</span>"
+      + ampelHtml;
 
     html += '<div class="angebot' + (checked ? " sel" : "") + '" id="ang-' + a.id + '">'
       + '<div class="selbox"><input type="checkbox" onclick="toggleSelect(' + a.id + ',this.checked)"' + checked + "></div>"
