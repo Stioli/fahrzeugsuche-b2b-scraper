@@ -71,6 +71,8 @@ h1,h2,h3{font-family:var(--font-heading);font-weight:600;letter-spacing:-0.01em}
 .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .actions .btn{font-size:14px;padding:10px 16px}
 .muted{color:var(--light);font-size:13px}
+.pflicht{display:inline-block;margin-left:8px;background:rgba(231,76,60,0.12);color:#C0392B;border-radius:6px;padding:1px 7px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+.hinweis-feld{color:var(--sub);font-size:13px;line-height:1.5;margin-top:8px;padding-left:2px;max-width:62ch}
 .msg{border-radius:12px;padding:12px 16px;margin:10px 0;font-size:15px;display:none}
 .msg.ok{display:block;background:rgba(37,211,102,0.12);color:#1EA552}
 .msg.err{display:block;background:rgba(231,76,60,0.12);color:#C0392B}
@@ -215,9 +217,9 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
             <div class="field"><label>Erstzulassung von</label><select id="f-bj_von"></select></div>
             <div class="field"><label>Erstzulassung bis</label><select id="f-bj_bis"></select></div>
           </div>
-          <div class="field"><label>Kilometerstand bis</label>
+          <div class="field"><label>Kilometerstand bis <span class="pflicht">Pflichtangabe</span></label>
             <select id="f-km_max">
-              <option value="">egal</option>
+              <option value="">bitte waehlen</option>
               <option value="500">500 km (Neuwagen/Tageszulassung)</option>
               <option value="5000">5.000 km</option>
               <option value="10000">10.000 km</option>
@@ -248,7 +250,19 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
               <label class="check"><input type="checkbox" value="Schaltgetriebe"><span>Schaltgetriebe</span></label>
             </div>
           </div>
-          <div class="field"><label>Ausstattung (Haken = muss vorhanden sein)</label>
+          <div class="field"><label>Fahrzeugzustand (leer = egal)</label>
+            <div class="checks" id="f-zustand">
+              <label class="check"><input type="checkbox" value="Tageszulassung"><span>Tageszulassung</span></label>
+              <label class="check"><input type="checkbox" value="Neu"><span>Neuwagen</span></label>
+              <label class="check"><input type="checkbox" value="Vorfuehrfahrzeug"><span>Vorf&uuml;hrfahrzeug</span></label>
+              <label class="check"><input type="checkbox" value="Gebraucht"><span>Gebraucht</span></label>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>Sitze von</label><input type="number" id="f-sitze_von" min="2" max="9" placeholder="z. B. 3"></div>
+            <div class="field"><label>Sitze bis</label><input type="number" id="f-sitze_bis" min="2" max="9" placeholder="z. B. 9"></div>
+          </div>
+          <div class="field"><label>Ausstattung &mdash; <b>bevorzugt</b>, kein Ausschluss</label>
             <div class="checks">
               <label class="check"><input type="checkbox" id="f-navigation"><span>Navigation</span></label>
               <label class="check"><input type="checkbox" id="f-apple_carplay"><span>Apple CarPlay</span></label>
@@ -258,10 +272,24 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
               <label class="check"><input type="checkbox" id="f-lenkradheizung"><span>Lenkradheizung</span></label>
               <label class="check"><input type="checkbox" id="f-panoramadach"><span>Panoramadach</span></label>
             </div>
+            <div class="hinweis-feld">Angehakte Ausstattung zieht ein Fahrzeug in der Liste nach
+              oben und wird bei der Marktwert-Suche auf mobile.de mit angeklickt. Fahrzeuge ohne
+              das Merkmal verschwinden aber nicht &mdash; die Erkennung aus dem Ausstattungstext
+              der Lieferanten ist zu unzuverlaessig, um daran ein Fahrzeug zu verlieren.</div>
           </div>
           <div class="grid2">
-            <div class="field"><label>Preis von (netto &euro;)</label><input type="number" id="f-preis_einkauf_von" placeholder="z. B. 10000"></div>
-            <div class="field"><label>Preis bis (netto &euro;)</label><input type="number" id="f-preis_einkauf_max" placeholder="z. B. 25000"></div>
+            <div class="field"><label>Marktwert-Vergleich: Postleitzahl</label>
+              <input type="text" id="f-plz" maxlength="5" placeholder="70439"></div>
+            <div class="field"><label>Marktwert-Vergleich: Umkreis (km)</label>
+              <select id="f-umkreis_km">
+                <option value="50">50 km</option>
+                <option value="100">100 km</option>
+                <option value="200" selected>200 km</option>
+                <option value="300">300 km</option>
+                <option value="500">500 km</option>
+                <option value="">ganz Deutschland</option>
+              </select>
+            </div>
           </div>
           <div class="field"><label>Bezeichnung der Suche (optional)</label><input type="text" id="f-bezeichnung" placeholder="z. B. Tucson N-Line jung"></div>
           <div class="field">
@@ -512,9 +540,11 @@ function renderWunschliste(){
     if (w.kraftstoff && w.kraftstoff.length) crit.push(esc(w.kraftstoff.join("/")));
     if (w.ps_von || w.ps_bis) crit.push((w.ps_von || "?") + "&ndash;" + (w.ps_bis || "?") + " PS");
     if (w.getriebe && w.getriebe.length) crit.push(esc(w.getriebe.join(" / ")));
+    if (w.zustand && w.zustand.length) crit.push(esc(w.zustand.join(" / ")));
+    if (w.sitze_von || w.sitze_bis) crit.push((w.sitze_von || "?") + "&ndash;" + (w.sitze_bis || "?") + " Sitze");
     var feats = BOOLS.filter(function(b){ return w[b]; }).map(function(b){ return BOOL_NAMES[b]; });
-    if (feats.length) crit.push("Pflicht: " + feats.join(", "));
-    if (w.preis_einkauf_von || w.preis_einkauf_max) crit.push("Preis " + (w.preis_einkauf_von ? fmtNum(w.preis_einkauf_von) : "&hellip;") + "&ndash;" + (w.preis_einkauf_max ? fmtNum(w.preis_einkauf_max) : "&hellip;") + " &euro; netto");
+    if (feats.length) crit.push("bevorzugt: " + feats.join(", "));
+    if (w.plz) crit.push("Marktwert um " + esc(w.plz) + (w.umkreis_km ? " / " + w.umkreis_km + " km" : " / ganz DE"));
     // Status-Zeile: laeuft gerade / letzte Suche am ... / noch nie gesucht
     var statusHtml = "";
     if (scanActive && scanWunschId === w.id) {
@@ -555,11 +585,16 @@ function openForm(id){
   el("f-modell").value = w.modell || "";
   el("f-typ").value = w.typ || "";
   el("f-bezeichnung").value = w.bezeichnung || "";
-  ["bj_von","bj_bis","km_max","preis_einkauf_von","preis_einkauf_max","ps_von","ps_bis"].forEach(function(f){ el("f-" + f).value = w[f] == null ? "" : w[f]; });
+  ["bj_von","bj_bis","km_max","ps_von","ps_bis","sitze_von","sitze_bis"].forEach(function(f){ el("f-" + f).value = w[f] == null ? "" : w[f]; });
+  // Neue Suchen erben den Standort des Autohauses, bestehende ihren eigenen.
+  el("f-plz").value = w.id ? (w.plz || "") : "70439";
+  el("f-umkreis_km").value = w.id ? (w.umkreis_km == null ? "" : String(w.umkreis_km)) : "200";
   var g = w.getriebe || [];
   el("f-getriebe").querySelectorAll("input").forEach(function(c){ c.checked = g.indexOf(c.value) >= 0; });
   var k = w.kraftstoff || [];
   el("f-kraftstoff").querySelectorAll("input").forEach(function(c){ c.checked = k.indexOf(c.value) >= 0; });
+  var z = w.zustand || [];
+  el("f-zustand").querySelectorAll("input").forEach(function(c){ c.checked = z.indexOf(c.value) >= 0; });
   BOOLS.forEach(function(b){ el("f-" + b).checked = !!w[b]; });
   el("f-aktive_suche").checked = w.id ? !!w.aktive_suche : true;
   el("form-section").scrollIntoView({ behavior: "smooth" });
@@ -569,8 +604,12 @@ function numOrNull(id){ var v = el(id).value.toString().trim(); return v === "" 
 async function saveForm(scanDanach){
   var marke = el("f-marke").value.trim();
   if (!marke) { msg("form-msg", "Bitte mindestens die Marke angeben.", false); return; }
+  if (!el("f-km_max").value) { msg("form-msg", "Bitte einen Kilometerstand waehlen – ohne ihn wird die Suche zu breit.", false); el("f-km_max").focus(); return; }
+  var plz = el("f-plz").value.trim();
+  if (plz && !/^\d{5}$/.test(plz)) { msg("form-msg", "Die Postleitzahl muss aus fünf Ziffern bestehen.", false); el("f-plz").focus(); return; }
   var getriebe = []; el("f-getriebe").querySelectorAll("input:checked").forEach(function(c){ getriebe.push(c.value); });
   var kraftstoff = []; el("f-kraftstoff").querySelectorAll("input:checked").forEach(function(c){ kraftstoff.push(c.value); });
+  var zustand = []; el("f-zustand").querySelectorAll("input:checked").forEach(function(c){ zustand.push(c.value); });
   var row = {
     bezeichnung: el("f-bezeichnung").value.trim() || (marke + " " + el("f-modell").value.trim()).trim(),
     marke: marke,
@@ -581,22 +620,24 @@ async function saveForm(scanDanach){
     kraftstoff: kraftstoff,
     ps_von: numOrNull("f-ps_von"), ps_bis: numOrNull("f-ps_bis"),
     getriebe: getriebe,
-    preis_einkauf_von: numOrNull("f-preis_einkauf_von"),
-    preis_einkauf_max: numOrNull("f-preis_einkauf_max"),
+    zustand: zustand,
+    sitze_von: numOrNull("f-sitze_von"), sitze_bis: numOrNull("f-sitze_bis"),
+    plz: plz || null,
+    umkreis_km: numOrNull("f-umkreis_km"),
     aktive_suche: scanDanach ? true : el("f-aktive_suche").checked
   };
   BOOLS.forEach(function(b){ row[b] = el("f-" + b).checked; });
-  // Warnung bei sehr breiter Suche (nur Marke/Modell, keine Eingrenzung)
+  // Warnung bei sehr breiter Suche. Die Ausstattung zaehlt hier NICHT mehr mit:
+  // sie grenzt seit dem Umbau nichts mehr ein, sondern sortiert nur noch.
   var eingrenzungen = 0;
   if (row.bj_von || row.bj_bis) eingrenzungen++;
-  if (row.km_max) eingrenzungen++;
   if (kraftstoff.length) eingrenzungen++;
   if (row.ps_von || row.ps_bis) eingrenzungen++;
   if (getriebe.length) eingrenzungen++;
-  if (row.preis_einkauf_von || row.preis_einkauf_max) eingrenzungen++;
-  if (BOOLS.some(function(b){ return row[b]; })) eingrenzungen++;
+  if (zustand.length) eingrenzungen++;
+  if (row.sitze_von || row.sitze_bis) eingrenzungen++;
   if (eingrenzungen === 0) {
-    if (!confirm("Sehr breite Suche: Ausser Marke/Modell ist nichts eingegrenzt - das kann hunderte Treffer geben (gespeichert werden max. 50 pro Suche).\n\nEmpfehlung: Erstzulassung, km oder Preis eingrenzen.\n\nTrotzdem so speichern?")) return;
+    if (!confirm("Sehr breite Suche: ausser Marke, Modell und Kilometerstand ist nichts eingegrenzt.\nDas kann hunderte Treffer geben – gespeichert werden hoechstens 100 je Suche und Quelle.\n\nEmpfehlung: Erstzulassung, Getriebe oder Fahrzeugzustand eingrenzen.\n\nTrotzdem so speichern?")) return;
   }
   var id = el("f-id").value;
   // .select().single() liefert die Kennung auch beim Anlegen zurueck - ohne
