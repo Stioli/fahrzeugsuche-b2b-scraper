@@ -96,6 +96,19 @@ h1,h2,h3{font-family:var(--font-heading);font-weight:600;letter-spacing:-0.01em}
 .specrow{grid-column:2 / -1;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 .spec-chip{background:#F4F7FB;border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:13px;color:var(--sub);white-space:nowrap}
 .spec-chip b{color:var(--ink);font-family:var(--font-heading);font-weight:600}
+/* Wirtschaftlichkeit: Einstand, Marktwert, Deckungsbeitrag, Ampel */
+.wirt{grid-column:2 / -1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.wirt .w{background:#F4F7FB;border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:13px;color:var(--sub);white-space:nowrap}
+.wirt .w b{color:var(--ink);font-family:var(--font-heading);font-weight:600}
+.ampel{font-family:var(--font-heading);font-weight:700;font-size:13px;border-radius:8px;padding:5px 12px;white-space:nowrap}
+.ampel-guenstig{background:rgba(37,211,102,0.16);color:#1EA552}
+.ampel-fair{background:rgba(245,200,66,0.22);color:#B88A00}
+.ampel-teuer{background:rgba(231,76,60,0.12);color:#C0392B}
+.ampel-unbekannt{background:rgba(142,159,180,0.15);color:var(--sub)}
+.db1-plus{color:#1EA552}
+.db1-minus{color:#C0392B}
+.warnhinweis{grid-column:1 / -1;background:rgba(245,200,66,0.14);color:#B88A00;border-radius:10px;padding:7px 12px;margin-top:8px;font-size:13px}
+@media(max-width:640px){.wirt{grid-column:1 / -1}}
 .angebot .foot{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:10px;padding-top:10px}
 .angebot .foot .btn{font-size:13px;padding:8px 14px;min-height:40px}
 .angebot .quelle-info{font-size:13px;color:var(--light)}
@@ -222,11 +235,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
               <label class="check"><input type="checkbox" value="Benzin"><span>Benzin</span></label>
               <label class="check"><input type="checkbox" value="Diesel"><span>Diesel</span></label>
               <label class="check"><input type="checkbox" value="Elektro"><span>Elektro</span></label>
-              <label class="check"><input type="checkbox" value="Hybrid"><span>Hybrid</span></label>
-              <label class="check"><input type="checkbox" value="Plug-in Hybrid"><span>Plug-in Hybrid</span></label>
-              <label class="check"><input type="checkbox" value="Mild-Hybrid"><span>Mild-Hybrid</span></label>
-              <label class="check"><input type="checkbox" value="Autogas"><span>Autogas (LPG)</span></label>
-              <label class="check"><input type="checkbox" value="Erdgas"><span>Erdgas (CNG)</span></label>
+              <label class="check"><input type="checkbox" value="Hybrid"><span>Hybrid</span> <span class="muted">(auch Plug-in und Voll-Hybrid)</span></label>
             </div>
           </div>
           <div class="grid2">
@@ -235,8 +244,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
           </div>
           <div class="field"><label>Getriebe (leer = egal)</label>
             <div class="checks" id="f-getriebe">
-              <label class="check"><input type="checkbox" value="Automatik"><span>Automatik</span></label>
-              <label class="check"><input type="checkbox" value="Doppelkupplung (DSG/DKG)"><span>Doppelkupplung (DSG/DKG)</span></label>
+              <label class="check"><input type="checkbox" value="Automatik"><span>Automatik</span> <span class="muted">(auch DSG/DKG)</span></label>
               <label class="check"><input type="checkbox" value="Schaltgetriebe"><span>Schaltgetriebe</span></label>
             </div>
           </div>
@@ -303,12 +311,19 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
             <input type="number" id="af-preis_von" placeholder="Preis von &euro;" oninput="renderAngebote()">
             <input type="number" id="af-preis_bis" placeholder="Preis bis &euro;" oninput="renderAngebote()">
             <select id="af-sort" onchange="renderAngebote()">
+              <option value="db1">Bestes Geschaeft zuerst (DB1)</option>
               <option value="datum">Neueste zuerst</option>
               <option value="preis_auf">Preis aufsteigend</option>
               <option value="preis_ab">Preis absteigend</option>
               <option value="km_auf">km aufsteigend</option>
               <option value="ez_neu">EZ neueste zuerst</option>
               <option value="score">Match-Score</option>
+            </select>
+            <select id="af-ampel" onchange="renderAngebote()">
+              <option value="">Bewertung egal</option>
+              <option value="guenstig">nur guenstig</option>
+              <option value="fair">guenstig + fair</option>
+              <option value="positiv">nur mit positivem DB1</option>
             </select>
           </div>
           <div class="frow">
@@ -342,8 +357,13 @@ var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
 var db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "ankauf" } });
 
 var MARKEN = ["Abarth","Alfa Romeo","Audi","BMW","BYD","Citroen","Cupra","Dacia","DS","Fiat","Ford","Honda","Hyundai","Jaguar","Jeep","Kia","Land Rover","Lexus","Mazda","Mercedes-Benz","MG","Mini","Mitsubishi","Nissan","Opel","Peugeot","Polestar","Porsche","Renault","Seat","Skoda","Smart","Subaru","Suzuki","Tesla","Toyota","Volkswagen","Volvo"];
-var KRAFTSTOFFE = ["Benzin","Diesel","Elektro","Hybrid","Plug-in Hybrid","Mild-Hybrid","Autogas","Erdgas"];
-var GETRIEBE_OPT = ["Automatik","Doppelkupplung (DSG/DKG)","Schaltgetriebe"];
+// Nur Werte, die in ankauf.angebote tatsaechlich vorkommen (Stand 18.08.2026:
+// 403x Automatik, 18x Schaltgetriebe; Hybrid/Benzin/Diesel/Elektro).
+// Die Scraper schreiben ausschliesslich diese. Eine Suche nach "Plug-in
+// Hybrid" oder "Doppelkupplung" trifft nie etwas - und sieht dabei aus wie
+// ein leeres Marktangebot statt wie ein Filterfehler.
+var KRAFTSTOFFE = ["Benzin","Diesel","Elektro","Hybrid"];
+var GETRIEBE_OPT = ["Automatik","Schaltgetriebe"];
 var BOOLS = ["navigation","apple_carplay","rueckfahrkamera","kamera_360","sitzheizung","lenkradheizung","panoramadach"];
 var BOOL_NAMES = {navigation:"Navi",apple_carplay:"CarPlay",rueckfahrkamera:"R-Kamera",kamera_360:"360&deg;",sitzheizung:"Sitzhzg.",lenkradheizung:"Lenkradhzg.",panoramadach:"Panoramadach"};
 var statusFilter = "";
@@ -443,7 +463,14 @@ function pollScan(jobId){
   }, 10000);
 }
 async function checkScanStatus(){
-  var r = await db.from("scan_jobs").select("*").in("status", ["offen","laeuft"]).order("id", { ascending: false }).limit(1);
+  // Altersgrenze noetig: Auftrag 20 steht seit dem 03.07.2026 auf "laeuft" und
+  // wurde nie beendet. Ohne diese Grenze meldet die Oberflaeche bei jedem
+  // Aufruf "ein Suchauftrag ist bereits unterwegs" und blockiert sich selbst.
+  var frisch = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  var r = await db.from("scan_jobs").select("*")
+    .in("status", ["offen","laeuft"])
+    .gte("angefordert_am", frisch)
+    .order("id", { ascending: false }).limit(1);
   if (!r.error && r.data && r.data.length) {
     scanWunschId = r.data[0].wunschliste_id || null;
     setScanStatus("&#9203; EIN SUCHAUFTRAG IST BEREITS UNTERWEGS &hellip;", "rot");
@@ -572,13 +599,18 @@ async function saveForm(scanDanach){
     if (!confirm("Sehr breite Suche: Ausser Marke/Modell ist nichts eingegrenzt - das kann hunderte Treffer geben (gespeichert werden max. 50 pro Suche).\n\nEmpfehlung: Erstzulassung, km oder Preis eingrenzen.\n\nTrotzdem so speichern?")) return;
   }
   var id = el("f-id").value;
-  var r = id ? await db.from("wunschliste").update(row).eq("id", id)
-             : await db.from("wunschliste").insert(row);
+  // .select().single() liefert die Kennung auch beim Anlegen zurueck - ohne
+  // sie kann der Knopf "Speichern + jetzt suchen" die neue Suche nicht starten.
+  var r = id ? await db.from("wunschliste").update(row).eq("id", id).select("id").single()
+             : await db.from("wunschliste").insert(row).select("id").single();
   if (r.error) { msg("form-msg", "Speichern fehlgeschlagen: " + esc(r.error.message), false); return; }
   closeForm();
   msg("wunsch-msg", scanDanach ? "Gespeichert &ndash; Suche wird gestartet." : "Gespeichert. Der naechste Scan nutzt die neuen Kriterien.", true);
-  loadWunschliste();
-  if (scanDanach) startScan();
+  await loadWunschliste();
+  // Bisher stand hier startScan() ohne Argument. Das landete immer im
+  // Fehlerzweig "Bitte den Button an einer konkreten Suche verwenden" -
+  // der Knopf hat also nie eine Suche ausgeloest.
+  if (scanDanach) startScan(Number(id) || (r.data && r.data.id));
 }
 async function toggleAktiv(id, on){
   var r = await db.from("wunschliste").update({ aktive_suche: on }).eq("id", id);
@@ -633,7 +665,7 @@ async function loadAngebote(){
     el("quellen").innerHTML = qh;
   }
   var r = await db.from("angebote")
-    .select("id,hersteller,modell,typ,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr")
+    .select("id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,bewertung_uneinig,markt_hinweis")
     .order("angebotsdatum", { ascending: false }).limit(500);
   if (r.error) { msg("angebote-msg", "Fehler beim Laden: " + esc(r.error.message), false); return; }
   alleAngebote = r.data || [];
@@ -663,8 +695,8 @@ function renderStatusChips(){
 }
 function resetAngebotsFilter(){
   ["af-modell","af-ps_von","af-ps_bis","af-preis_von","af-preis_bis"].forEach(function(i){ el(i).value = ""; });
-  ["af-marke","af-ez_von","af-ez_bis","af-km","af-kraftstoff","af-getriebe"].forEach(function(i){ el(i).value = ""; });
-  el("af-sort").value = "datum";
+  ["af-marke","af-ez_von","af-ez_bis","af-km","af-kraftstoff","af-getriebe","af-ampel"].forEach(function(i){ el(i).value = ""; });
+  el("af-sort").value = "db1";
   statusFilter = "";
   renderStatusChips();
   renderAngebote();
@@ -702,9 +734,21 @@ function renderAngebote(){
   if (pVon) rows = rows.filter(function(a){ return preis(a) != null && preis(a) >= Number(pVon); });
   if (pBis) rows = rows.filter(function(a){ return preis(a) != null && preis(a) <= Number(pBis); });
 
+  // Bewertungsfilter: der eigentliche Zweck des Werkzeugs ist, die wenigen
+  // lohnenden Fahrzeuge aus mehreren hundert herauszuholen.
+  var amp = el("af-ampel").value;
+  if (amp === "guenstig") rows = rows.filter(function(a){ return a.ampel_bewertung === "guenstig"; });
+  if (amp === "fair")     rows = rows.filter(function(a){ return a.ampel_bewertung === "guenstig" || a.ampel_bewertung === "fair"; });
+  if (amp === "positiv")  rows = rows.filter(function(a){ return a.db1 != null && Number(a.db1) > 0; });
+
   var sort = el("af-sort").value;
   function preisSort(a){ var p = preis(a); return p == null ? Infinity : p; }
+  // Achtung: numeric-Spalten kommen ueber PostgREST als Zeichenkette an
+  // ("2165.00"). Ohne Number() wird alphabetisch sortiert - dann steht "999"
+  // vor "2165".
+  function db1Sort(a){ return a.db1 == null ? -Infinity : Number(a.db1); }
   var sorter = {
+    db1:       function(a,b){ return db1Sort(b) - db1Sort(a); },
     datum:     function(a,b){ return new Date(b.angebotsdatum || 0) - new Date(a.angebotsdatum || 0); },
     preis_auf: function(a,b){ return preisSort(a) - preisSort(b); },
     preis_ab:  function(a,b){ var pa = preisSort(a) === Infinity ? -1 : preisSort(a), pb = preisSort(b) === Infinity ? -1 : preisSort(b); return pb - pa; },
@@ -712,7 +756,7 @@ function renderAngebote(){
     ez_neu:    function(a,b){ return new Date(b.erstzulassung || 0) - new Date(a.erstzulassung || 0); },
     score:     function(a,b){ return (b.match_score || 0) - (a.match_score || 0); }
   };
-  rows.sort(sorter[sort] || sorter.datum);
+  rows.sort(sorter[sort] || sorter.db1);
 
   sichtbareIds = rows.map(function(a){ return a.id; });
   el("treffer-anzahl").textContent = rows.length + " von " + alleAngebote.length + " Fahrzeugen";
@@ -730,15 +774,36 @@ function renderAngebote(){
       preisHtml = '<div class="preis">' + fmtEur(brutto) + '</div><div class="brutto">brutto inkl. MwSt.</div>';
     }
     var statusCls = a.status === "Match" ? "pill-blue" : (a.status === "Neu" ? "pill-gold" : "pill-off");
-    var ampel = a.ampel_bewertung ? " " + esc(a.ampel_bewertung) : "";
     var checked = selectedIds.has(a.id) ? " checked" : "";
+
+    // Wirtschaftlichkeit - das eigentliche Entscheidungskriterium.
+    // numeric kommt als Zeichenkette an, deshalb ueberall Number().
+    var ampWert = a.ampel_bewertung || "unbekannt";
+    var ampText = { guenstig: "g&uuml;nstig", fair: "fair", teuer: "teuer", unbekannt: "nicht bewertbar" }[ampWert] || esc(ampWert);
+    var db1 = a.db1 == null ? null : Number(a.db1);
+    var wirtHtml = '<div class="wirt"><span class="ampel ampel-' + esc(ampWert) + '">' + ampText + "</span>"
+      + (db1 != null ? '<span class="w">DB1 <b class="' + (db1 >= 0 ? "db1-plus" : "db1-minus") + '">'
+          + (db1 > 0 ? "+" : "") + fmtEur(Math.round(db1)) + "</b>"
+          + (a.db1_prozent != null ? " (" + Number(a.db1_prozent).toLocaleString("de-DE") + "&nbsp;%)" : "") + "</span>" : "")
+      + (a.einstand_netto != null ? '<span class="w">Einstand <b>' + fmtEur(Math.round(Number(a.einstand_netto))) + "</b></span>" : "")
+      + (a.dein_preis != null ? '<span class="w">Marktwert <b>' + fmtEur(Math.round(Number(a.dein_preis))) + "</b></span>" : "")
+      + (a.mobile_de_stichprobe != null ? '<span class="w">' + a.mobile_de_stichprobe + " Vergleichsfzg.</span>" : "")
+      + (a.linie ? '<span class="w">' + esc(a.linie) + "</span>" : "")
+      + "</div>";
+
+    // Warnungen, die den Zahlen zu misstrauen raten - lieber sichtbar als
+    // eine Scheingenauigkeit, auf die jemand einen Ankauf stuetzt.
+    var warn = [];
+    if (a.bewertung_uneinig) warn.push("Linien- und Reihenvergleich weichen deutlich voneinander ab");
+    if (a.mobile_de_stichprobe != null && a.mobile_de_stichprobe < 5) warn.push("nur " + a.mobile_de_stichprobe + " Vergleichsfahrzeuge – Marktwert wenig belastbar");
+    var warnHtml = warn.length ? '<div class="warnhinweis">&#9888;&#65039; ' + esc(warn.join(" · ")) + "</div>" : "";
 
     var chips = '<span class="spec-chip">EZ <b>' + ez + "</b></span>"
       + '<span class="spec-chip"><b>' + fmtNum(a.km_stand) + "</b> km</span>"
       + (a.motorleistung_ps ? '<span class="spec-chip"><b>' + a.motorleistung_ps + "</b> PS</span>" : "")
       + ((a.kraftstoff && a.kraftstoff.length) ? '<span class="spec-chip">' + esc(a.kraftstoff.join("/")) + "</span>" : "")
       + (a.getriebe ? '<span class="spec-chip">' + esc(a.getriebe) + "</span>" : "")
-      + '<span class="pill ' + statusCls + '">' + esc(a.status) + (a.match_score ? " " + a.match_score : "") + ampel + "</span>";
+      + '<span class="pill ' + statusCls + '">' + esc(a.status) + (a.match_score ? " " + a.match_score : "") + "</span>";
 
     html += '<div class="angebot' + (checked ? " sel" : "") + '" id="ang-' + a.id + '">'
       + '<div class="selbox"><input type="checkbox" onclick="toggleSelect(' + a.id + ',this.checked)"' + checked + "></div>"
@@ -746,6 +811,8 @@ function renderAngebote(){
       + (a.typ ? ' <span class="variante">' + esc(a.typ) + "</span>" : "") + "</h3></div>"
       + '<div class="rechts">' + preisHtml + "</div>"
       + '<div class="specrow">' + chips + "</div>"
+      + wirtHtml
+      + warnHtml
       + '<div class="foot">'
       + '<span class="quelle-info">'
       + (a.anbieter_name ? "<b>" + esc(a.anbieter_name) + "</b> &middot; " : "")
