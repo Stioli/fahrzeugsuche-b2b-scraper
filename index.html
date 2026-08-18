@@ -706,7 +706,7 @@ async function loadAngebote(){
     el("quellen").innerHTML = qh;
   }
   var r = await db.from("angebote")
-    .select("id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,bewertung_uneinig,markt_hinweis")
+    .select("id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,bewertung_uneinig,markt_hinweis,match_hinweis")
     .order("angebotsdatum", { ascending: false }).limit(500);
   if (r.error) { msg("angebote-msg", "Fehler beim Laden: " + esc(r.error.message), false); return; }
   alleAngebote = r.data || [];
@@ -835,6 +835,10 @@ function renderAngebote(){
     // Warnungen, die den Zahlen zu misstrauen raten - lieber sichtbar als
     // eine Scheingenauigkeit, auf die jemand einen Ankauf stuetzt.
     var warn = [];
+    // Warum das Fahrzeug weiter unten steht: knapp verfehlte Werte, fehlende
+    // Angaben, nicht erkannte Ausstattung. Frueher fielen diese Fahrzeuge
+    // stillschweigend ganz heraus.
+    if (a.match_hinweis) warn.push(a.match_hinweis);
     if (a.bewertung_uneinig) warn.push("Linien- und Reihenvergleich weichen deutlich voneinander ab");
     if (a.mobile_de_stichprobe != null && a.mobile_de_stichprobe < 5) warn.push("nur " + a.mobile_de_stichprobe + " Vergleichsfahrzeuge – Marktwert wenig belastbar");
     var warnHtml = warn.length ? '<div class="warnhinweis">&#9888;&#65039; ' + esc(warn.join(" · ")) + "</div>" : "";
