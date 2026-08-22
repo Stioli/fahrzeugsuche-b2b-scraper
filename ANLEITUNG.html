@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anleitung &middot; Fahrzeugsuche B2B Scraper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--accent:#1A6DD4;--accent-dark:#0D4FAB;--ink:#1A2333;--sub:#4A5F78;--light:#8E9FB4;--border:#E0E8F0;--workshop:#E74C3C;--green:#25D366;--gold:#F5C842;
+--fh:'Plus Jakarta Sans',system-ui,sans-serif;--fb:'DM Sans',system-ui,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--fb);font-size:16px;line-height:1.6;color:var(--ink);background:#FAF8F5;padding:0 0 60px}
+.wrap{max-width:900px;margin:0 auto;padding:24px}
+header{background:linear-gradient(135deg,#F8FBFF 0%,#E8F4FF 100%);border-radius:0 0 24px 24px;padding:40px 24px;text-align:center;margin-bottom:8px}
+h1{font-family:var(--fh);font-weight:600;font-size:2.2rem;line-height:1.15}
+h1 em{color:var(--accent);font-style:italic}
+header p{color:var(--sub);margin-top:8px}
+.pill{display:inline-block;background:rgba(26,109,212,0.10);color:var(--accent);font-size:12px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;padding:6px 14px;border-radius:8px;margin-bottom:14px}
+h2{font-family:var(--fh);font-weight:600;font-size:1.5rem;margin:34px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--border)}
+h2 .n{color:var(--accent)}
+h3{font-family:var(--fh);font-weight:600;font-size:1.15rem;margin:20px 0 8px}
+p{margin:8px 0}
+ul,ol{margin:8px 0 8px 22px}
+li{margin:5px 0}
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 4px 14px rgba(26,109,212,0.08);padding:20px 22px;margin:14px 0}
+a{color:var(--accent);font-weight:600}
+code{background:#EEF4FD;color:var(--accent-dark);font-family:Consolas,monospace;font-size:14px;padding:2px 6px;border-radius:6px}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:15px}
+.scroll{overflow-x:auto}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-family:var(--fh);font-weight:600;color:var(--sub);font-size:13px;text-transform:uppercase;letter-spacing:0.03em}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.g{background:var(--green)}.o{background:var(--gold)}.r{background:var(--workshop)}
+.box-blue{background:rgba(26,109,212,0.06);border-left:4px solid var(--accent);border-radius:8px;padding:12px 16px;margin:12px 0}
+.box-warn{background:rgba(245,200,66,0.14);border-left:4px solid var(--gold);border-radius:8px;padding:12px 16px;margin:12px 0}
+.box-red{background:rgba(231,76,60,0.08);border-left:4px solid var(--workshop);border-radius:8px;padding:12px 16px;margin:12px 0}
+.btn{display:inline-block;background:var(--accent);color:#fff;font-family:var(--fh);font-weight:700;border-radius:12px;padding:12px 22px;text-decoration:none;margin:8px 0}
+.muted{color:var(--light);font-size:13px}
+footer{text-align:center;color:var(--light);font-size:13px;margin-top:40px}
+.ampel{display:inline-block;font-family:var(--fh);font-weight:700;font-size:13px;border-radius:8px;padding:4px 11px;white-space:nowrap}
+.a-g{background:rgba(37,211,102,0.16);color:#1EA552}
+.a-f{background:rgba(245,200,66,0.22);color:#B88A00}
+.a-t{background:rgba(231,76,60,0.12);color:#C0392B}
+.a-u{background:rgba(142,159,180,0.15);color:var(--sub)}
+.formel{font-family:var(--fh);font-weight:700;font-size:1.05rem;text-align:center;background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin:14px 0}
+.ablauf{list-style:none;margin:10px 0 0;padding:0}
+.ablauf li{display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px dashed var(--border)}
+.ablauf li:last-child{border-bottom:none}
+.ablauf b{font-family:var(--fh);min-width:190px;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="pill">&#128663; Autohaus Stieber GmbH</div>
+  <h1>Fahrzeugsuche <em>B2B Scraper</em></h1>
+  <p>Bedienungsanleitung &middot; Stand: 22.08.2026</p>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <p><b>App öffnen:</b> <a href="https://stioli.github.io/fahrzeugsuche-b2b-scraper/">stioli.github.io/fahrzeugsuche-b2b-scraper</a></p>
+    <p class="muted">Auch als Desktop-Verknüpfung „B2B-Ankauf Pipeline". Anmeldung mit deinem gewohnten Zugang (oliver.stieber@autohaus-stieber.de).</p>
+  </div>
+
+  <h2><span class="n">1.</span> Was die App macht</h2>
+  <p>Die App durchsucht mehrere B2B-Fahrzeug-Marktplätze nach Fahrzeugen, die zu deinen
+     hinterlegten <b>Suchen</b> passen, sammelt die Treffer an einem Ort — und <b>bewertet sie
+     gegen den Markt</b>. Du siehst also nicht nur, was es gibt, sondern auch, ob sich der
+     Einkauf lohnt.</p>
+  <p>Zwei Bereiche über die Reiter oben:</p>
+  <ul>
+    <li><b>Suchen</b> – Suchaufträge anlegen, bearbeiten, starten.</li>
+    <li><b>Gefundene Fahrzeuge</b> – alle Treffer mit Bewertung, Filter und Sortierung.</li>
+  </ul>
+
+  <h2><span class="n">2.</span> Eine Suche anlegen</h2>
+  <p>Reiter <b>Suchen</b> → <b>+ Neue Suche anlegen</b>. Nur die <b>Marke</b> ist Pflicht.
+     Alles Weitere grenzt ein: Modell, Modellvariante, Erstzulassung, km, Kraftstoff, PS,
+     Getriebe, Preis, Sitzplätze, Fahrzeugzustand.</p>
+
+  <div class="box-blue">
+    <p><b>Ausstattung ist ein Pluspunkt, kein Ausschluss.</b> Ein Fahrzeug ohne das gewünschte
+       Panoramadach fliegt nicht raus — es rutscht nur weiter nach unten. Am Fahrzeug steht
+       dann als Hinweis, was gefehlt hat.</p>
+  </div>
+
+  <h3>Marktwert-Vergleich: PLZ und Umkreis</h3>
+  <p>Ganz unten in der Suchmaske stehen zwei Felder, die nicht das Suchen, sondern das
+     <b>Bewerten</b> steuern: von welcher Postleitzahl aus und in welchem Umkreis der Marktpreis
+     bei mobile.de ermittelt wird. Vorgabe ist 70439 / 200 km. „Ganz Deutschland" nimmt die
+     Umkreisgrenze ganz heraus.</p>
+
+  <div class="box-warn">
+    <p><b>Pro Suche werden höchstens 100 Fahrzeuge gespeichert.</b> Steht an der Suche ein
+       gelber Hinweis, dass die Grenze greift, dann Erstzulassung, km oder Preis enger setzen —
+       sonst siehst du einen willkürlichen Ausschnitt statt des besten Angebots.</p>
+  </div>
+
+  <h2><span class="n">3.</span> Wann gesucht wird</h2>
+  <p>Beides gilt gleichzeitig:</p>
+
+  <table>
+    <tr>
+      <th style="width:38%">Automatisch</th>
+      <td><b>Werktags um 7, 10, 13 und 17 Uhr.</b> Alle aktiven Suchen laufen mit, ohne dass
+          jemand etwas drückt.</td>
+    </tr>
+    <tr>
+      <th>Von Hand</th>
+      <td>Knopf <b>🔍 Alle aktiven Suchen jetzt starten</b> oben, oder
+          <b>🔍 Diese Suche jetzt starten</b> an einer einzelnen Suche (die wird dabei zugleich
+          aktiv geschaltet).</td>
+    </tr>
+  </table>
+
+  <p>Nach dem Start zeigt das farbige Banner den <b>echten</b> Zustand:</p>
+  <ul class="ablauf">
+    <li><b>⏳ Wird ausgelöst</b> <span>Der Auftrag geht raus.</span></li>
+    <li><b>⏳ Wird eingereiht</b> <span>Ein paar Sekunden, bis der Lauf angelegt ist.</span></li>
+    <li><b>🔄 Suche läuft gerade</b> <span>Mit Link zum Lauf. Dauert je nach Treffermenge 20 bis 50 Minuten.</span></li>
+    <li><b>✅ Suche abgeschlossen</b> <span>Fahrzeuge und Suchen werden neu geladen.</span></li>
+  </ul>
+
+  <div class="box-blue">
+    <p><b>Du musst die Seite nicht offen lassen.</b> Der Lauf läuft weiter, auch wenn du das
+       Fenster schließt. Beim nächsten Öffnen erkennt das Dashboard einen laufenden Lauf und
+       zeigt ihn wieder an. Zwei Läufe gleichzeitig kann es nicht geben — ein zweiter Start
+       wird eingereiht.</p>
+  </div>
+
+  <h2><span class="n">4.</span> Die Bewertung verstehen</h2>
+  <p>Zu jedem Fahrzeug ermittelt die App den Marktpreis vergleichbarer Fahrzeuge bei mobile.de
+     und rechnet daraus den Deckungsbeitrag aus:</p>
+
+  <div class="formel">DB1 = Marktwert netto &minus; Einkauf netto</div>
+
+  <div class="box-warn">
+    <p><b>Aufbereitung, Garantie und Fracht werden nicht abgezogen.</b> Sie stecken bereits im
+       Ziel-DB1 von 2.400 €. Würde man sie zusätzlich abziehen, zählten sie doppelt und jedes
+       Fahrzeug erschiene rund 1.100 € zu teuer.</p>
+  </div>
+
+  <h3>Die Ampel</h3>
+  <table>
+    <tr><td style="width:150px"><span class="ampel a-g">günstig</span></td>
+        <td>DB1 liegt mindestens 25 % über dem Ziel — also ab 3.000 €.</td></tr>
+    <tr><td><span class="ampel a-f">fair</span></td>
+        <td>DB1 erreicht das Ziel von 2.400 €.</td></tr>
+    <tr><td><span class="ampel a-t">teuer</span></td>
+        <td>DB1 bleibt unter dem Ziel.</td></tr>
+    <tr><td><span class="ampel a-u">nicht bewertbar</span></td>
+        <td>Zu wenige Vergleichsfahrzeuge oder kein Einkaufspreis hinterlegt.</td></tr>
+  </table>
+
+  <h3>Was in der Zeile daneben steht</h3>
+  <div class="scroll">
+  <table>
+    <tr><th>Angabe</th><th>Bedeutung</th></tr>
+    <tr><td><b>DB1</b></td><td>Der Deckungsbeitrag in Euro und in Prozent vom Marktwert.</td></tr>
+    <tr><td><b>Einstand</b></td><td>Der Netto-Einkaufspreis.</td></tr>
+    <tr><td><b>Marktwert</b></td><td>Der mittlere Preis der Vergleichsfahrzeuge, <b>netto</b>.</td></tr>
+    <tr><td><b>Spanne</b></td><td>Wo die mittlere Hälfte der Vergleichsfahrzeuge liegt, <b>brutto</b>. Eine weite Spanne heißt: der Markt ist uneins.</td></tr>
+    <tr><td><b>Vergleichsfzg.</b></td><td>Auf wie vielen Fahrzeugen der Marktwert beruht. Unter 5 ist er wenig belastbar.</td></tr>
+    <tr><td><b>Ausstattungslinie</b></td><td>Die erkannte Linie (z. B. „N Line"). Gibt es genug Fahrzeuge derselben Linie, wird gegen sie gerechnet, sonst gegen die ganze Modellreihe.</td></tr>
+  </table>
+  </div>
+
+  <div class="box-red">
+    <p><b>Die gelben Warnhinweise unter einem Fahrzeug sind wichtig.</b> Dort steht, warum
+       eine Zahl wackelig ist — etwa „Keine Vergleichsfahrzeuge der Linie X – Modellreihe
+       herangezogen", „nur 3 Vergleichsfahrzeuge" oder „Marktwert vom 14.08. – 8 Tage alt".
+       Ein DB1 ohne Warnhinweis ist deutlich verlässlicher als eines mit.</p>
+  </div>
+
+  <h2><span class="n">5.</span> Gefundene Fahrzeuge</h2>
+  <ul>
+    <li><b>Sortierung</b> – Vorgabe ist „Bestes Geschäft zuerst (DB1)".</li>
+    <li><b>Filter</b> wie bei mobile.de: Marke, EZ von–bis, km, Kraftstoff, Getriebe — dazu ein
+        Ampel-Filter, mit dem sich alles Unwirtschaftliche ausblenden lässt.</li>
+    <li><b>Status</b>: <b>Match</b> (passt zu einer Suche, mit Punktzahl) oder <b>Neu</b>.</li>
+    <li>Jedes Fahrzeug zeigt Netto- <em>und</em> Bruttopreis, Anbieter, dessen Fahrzeugnummer
+        und <b>Zum Inserat →</b>.</li>
+  </ul>
+  <p><b>Löschen:</b> Häkchen setzen → <b>🗑️ Ausgewählte Fahrzeuge löschen</b>. An einer Suche
+     räumt <b>🗑️ Treffer löschen</b> alle ihre Fahrzeuge weg — mit Rückfrage. Die Suche selbst
+     bleibt erhalten.</p>
+
+  <h2><span class="n">6.</span> Angebundene Quellen</h2>
+  <div class="scroll">
+  <table>
+    <tr><th>Quelle</th><th>Zustand</th><th>Hinweis</th></tr>
+    <tr><td><span class="dot g"></span><b>ELN</b></td><td>läuft mit</td><td>Anmeldung erneuert sich selbst, ohne Browser</td></tr>
+    <tr><td><span class="dot g"></span><b>Tabor</b></td><td>läuft mit</td><td>ruft zu jedem Treffer die Detailseite ab, dauert deshalb länger</td></tr>
+    <tr><td><span class="dot g"></span><b>Autoropa</b></td><td>läuft mit</td><td>saubere JSON-Schnittstelle</td></tr>
+    <tr><td><span class="dot g"></span><b>Carconnex</b></td><td>läuft mit</td><td>viele EU-Marken</td></tr>
+    <tr><td><span class="dot g"></span><b>Imexso</b></td><td>läuft mit</td><td>Preise netto (HTVA)</td></tr>
+    <tr><td><span class="dot r"></span><b>Importo</b></td><td>läuft <b>nicht</b> mit</td><td>Der Login verlangt eine CAPTCHA-Antwort von Hand — nicht automatisierbar</td></tr>
+  </table>
+  </div>
+  <p class="muted">Fällt eine Quelle aus, laufen die übrigen weiter. Oben im Reiter „Gefundene
+     Fahrzeuge" steht je Quelle, wann sie zuletzt geliefert hat.</p>
+
+  <h2><span class="n">7.</span> Wenn etwas klemmt</h2>
+  <div class="scroll">
+  <table>
+    <tr><th>Was du siehst</th><th>Was dahintersteckt</th></tr>
+    <tr><td>Suchen und Fahrzeuge bleiben leer</td>
+        <td>Das angemeldete Konto ist für den Ankauf nicht freigeschaltet. Ein Hinweis dazu
+            steht unter „Suchen". Mit dem richtigen Konto anmelden.</td></tr>
+    <tr><td>„Der Sofortstart ist noch nicht eingerichtet"</td>
+        <td>Der hinterlegte GitHub-Token fehlt oder ist abgelaufen. Die Schritte stehen in
+            <code>09_scraper_starten_EINRICHTUNG.md</code>.</td></tr>
+    <tr><td>„Keine Rückmeldung nach 30 Minuten"</td>
+        <td>Die Seite hat aufgehört nachzufragen. Der Lauf selbst kann trotzdem noch laufen —
+            der Link im Banner führt direkt hin.</td></tr>
+    <tr><td>Viele Fahrzeuge „nicht bewertbar"</td>
+        <td>Meist zu wenige Vergleichsfahrzeuge, weil die Suche sehr eng ist oder das Modell
+            selten. Der Warnhinweis am Fahrzeug sagt es genauer.</td></tr>
+    <tr><td>Ein Marktwert ist mehrere Tage alt</td>
+        <td>Normal — Marktwerte werden nach sieben Tagen von selbst erneuert. Das Alter steht
+            am Fahrzeug, sobald es auffällt.</td></tr>
+  </table>
+  </div>
+
+  <h2><span class="n">8.</span> Wichtige Daten</h2>
+  <div class="card">
+    <table>
+      <tr><th style="width:34%">Dashboard</th><td><a href="https://stioli.github.io/fahrzeugsuche-b2b-scraper/">stioli.github.io/fahrzeugsuche-b2b-scraper</a></td></tr>
+      <tr><th>Läufe ansehen</th><td><a href="https://github.com/Stioli/claude-ki/actions/workflows/ankauf-scraper.yml">GitHub Actions → Ankauf Scraper</a></td></tr>
+      <tr><th>Zeitplan</th><td>werktags 7, 10, 13 und 17 Uhr</td></tr>
+      <tr><th>Ziel-DB1</th><td>2.400 € netto (Aufbereitung, Garantie und Fracht sind darin enthalten)</td></tr>
+      <tr><th>Trefferlimit</th><td>100 Fahrzeuge je Suche</td></tr>
+      <tr><th>Marktwert-Vorgabe</th><td>70439, Umkreis 200 km — je Suche änderbar</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    Autohaus Stieber GmbH &middot; Fahrzeugsuche B2B Scraper &middot; Stand 22.08.2026
+  </footer>
+
+</div>
+</body>
+</html>
