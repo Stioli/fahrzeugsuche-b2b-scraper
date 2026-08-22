@@ -42,6 +42,9 @@ h1,h2,h3{font-family:var(--font-heading);font-weight:600;letter-spacing:-0.01em}
 .scan-banner{font-family:var(--font-heading);font-size:1.3rem;font-weight:700;text-align:center;margin:12px auto 0;padding:12px 20px;border-radius:14px;max-width:640px}
 .scan-banner.rot{color:#E74C3C;background:rgba(231,76,60,0.10)}
 .scan-banner.gruen{color:#1EA552;background:rgba(37,211,102,0.12)}
+/* Ruhigere Variante fuer Hinweise, die aus mehr als drei Woertern bestehen. */
+.scan-banner.info{font-size:1rem;font-weight:600;line-height:1.55;color:var(--ink);background:rgba(37,99,235,0.09);max-width:720px}
+.scan-banner a{color:#2563EB}
 .btn-block{display:block;width:100%}
 .btn-sub{text-align:center;color:var(--light);font-size:13px;margin-top:8px}
 .field{margin-bottom:14px}
@@ -172,7 +175,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       <div class="section-h" style="margin-bottom:18px">
         <span class="label">&#128663; B2B-Ankauf</span>
         <h1>Fahrzeugsuche <em>B2B Scraper</em></h1>
-        <p>Automatische Vor-Selektion von Gebrauchtwagen aus B2B-Quellen &mdash; jede Suche wird manuell gestartet.</p>
+        <p>Automatische Vor-Selektion von Gebrauchtwagen aus B2B-Quellen &mdash; f&uuml;nf Lieferanten, viermal an jedem Werktag.</p>
       </div>
       <div class="tabs">
         <button class="tab active" id="tab-wunsch" onclick="showTab('wunsch')">&#128203; Suchen</button>
@@ -180,7 +183,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       </div>
       <div id="suchen-controls">
         <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="openForm(null)">+ Neue Suche anlegen</button>
-        <div class="btn-sub" id="scan-status">Kein automatischer Abruf. Ein Klick durchsucht ausschlie&szlig;lich die gew&auml;hlte Suche (startet in unter 1 Minute).</div>
+        <div class="btn-sub" id="scan-status">Der Scraper l&auml;uft automatisch an Werktagen um 7, 10, 13 und 17 Uhr &uuml;ber alle aktiven Suchen. Ein Lauf l&auml;sst sich jederzeit von Hand ausl&ouml;sen.</div>
         <div class="wfilter" style="margin-top:14px">
           <input type="text" id="wf-text" placeholder="&#128269; Suche filtern (Marke, Modell) &hellip;" oninput="renderWunschliste()">
           <select id="wf-status" onchange="renderWunschliste()">
@@ -298,7 +301,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
           <div id="form-msg" class="msg"></div>
           <div class="actions">
             <button class="btn btn-primary" onclick="saveForm(false)">Speichern &rarr;</button>
-            <button class="btn btn-go" onclick="saveForm(true)">Speichern + jetzt suchen &#128269;</button>
+            <button class="btn btn-go" onclick="saveForm(true)">Speichern + vormerken &#128269;</button>
             <button class="btn btn-ghost" onclick="closeForm()">Abbrechen</button>
           </div>
         </div>
@@ -475,20 +478,29 @@ el("login-pass").addEventListener("keydown", function(e){ if (e.key === "Enter")
 // ---------- Scan jetzt starten ----------
 var scanPoll = null;
 var scanWunschId = null;   // welche Suche laeuft gerade (fuer die Karten-Anzeige)
+// Der Scraper laeuft als GitHub-Actions-Workflow nach Zeitplan und liest
+// ankauf.scan_jobs NICHT. Verbraucher dieser Tabelle war ein Windows-Task auf
+// dem Rechner des ausgeschiedenen Einkaeufers - den gibt es nicht mehr.
+// Deshalb hat dieser Knopf frueher einen Auftrag angelegt, den niemand abholt,
+// und dazu "startet in unter 1 Minute" behauptet. Auftrag 21 vom 22.08.2026
+// stand danach stundenlang auf "offen".
+// Was der Knopf wirklich kann: die Suche aktiv schalten, damit der naechste
+// planmaessige Lauf sie mitnimmt - und den Weg zeigen, wie man einen Lauf
+// sofort ausloest.
+var WORKFLOW_URL = "https://github.com/Stioli/claude-ki/actions/workflows/ankauf-scraper.yml";
+
 async function startScan(wunschId){
   if (!wunschId) { msg("wunsch-msg", "Bitte den Button an einer konkreten Suche verwenden.", false); return; }
-  // Suche muss aktiv sein, damit der Scraper sie beruecksichtigt
   var u = await db.from("wunschliste").update({ aktive_suche: true }).eq("id", wunschId);
   if (u.error) { msg("wunsch-msg", esc(u.error.message), false); return; }
-  var r = await db.from("scan_jobs")
-    .insert({ angefordert_von: (currentUser && currentUser.email) || "", wunschliste_id: wunschId })
-    .select().single();
-  if (r.error) { msg("wunsch-msg", "Auftrag fehlgeschlagen: " + esc(r.error.message), false); return; }
-  scanWunschId = wunschId;
-  setScanStatus("&#9203; SUCHE BEAUFTRAGT &ndash; startet in unter 1 Minute", "rot");
-  setScanActive(true);
+  // Bewusst KEIN Eintrag in scan_jobs mehr: die Tabelle hat keinen Verbraucher,
+  // und jede Zeile darin liess das Dashboard beim naechsten Laden faelschlich
+  // "ein Suchauftrag ist bereits unterwegs" melden.
+  setScanStatus('&#9989; Suche ist aktiv &ndash; der n&auml;chste planm&auml;&szlig;ige Lauf nimmt sie mit '
+    + '(werktags 7, 10, 13 und 17 Uhr).<br>Sofort starten: '
+    + '<a href="' + WORKFLOW_URL + '" target="_blank" rel="noopener">GitHub Actions &rarr; Run workflow</a> '
+    + '&ndash; Feld <b>wunschliste_id</b> auf <b>' + wunschId + '</b> setzen.', "info");
   loadWunschliste();
-  pollScan(r.data.id);
 }
 // Beendet die Statusabfrage sauber und raeumt den Zustand auf.
 function pollEnde(html){
@@ -634,7 +646,7 @@ function renderWunschliste(){
       + statusHtml
       + hinweisHtml
       + '<div class="actions">'
-      + '<button class="btn btn-go" onclick="startScan(' + w.id + ')">&#128269; Suche jetzt starten</button>'
+      + '<button class="btn btn-go" onclick="startScan(' + w.id + ')">&#128269; F&uuml;r den n&auml;chsten Lauf vormerken</button>'
       + '<button class="btn btn-ghost" onclick="openForm(' + w.id + ')">Bearbeiten</button>'
       + '<button class="btn btn-ghost" onclick="toggleAktiv(' + w.id + "," + !w.aktive_suche + ')">' + (w.aktive_suche ? "Pausieren" : "Aktivieren") + "</button>"
       + '<button class="btn btn-danger" onclick="delTreffer(' + w.id + ')">&#128465;&#65039; Treffer loeschen</button>'
@@ -708,12 +720,12 @@ async function saveForm(scanDanach){
   }
   var id = el("f-id").value;
   // .select().single() liefert die Kennung auch beim Anlegen zurueck - ohne
-  // sie kann der Knopf "Speichern + jetzt suchen" die neue Suche nicht starten.
+  // sie kann der Knopf "Speichern + vormerken" die neue Suche nicht aktivieren.
   var r = id ? await db.from("wunschliste").update(row).eq("id", id).select("id").single()
              : await db.from("wunschliste").insert(row).select("id").single();
   if (r.error) { msg("form-msg", "Speichern fehlgeschlagen: " + esc(r.error.message), false); return; }
   closeForm();
-  msg("wunsch-msg", scanDanach ? "Gespeichert &ndash; Suche wird gestartet." : "Gespeichert. Der naechste Scan nutzt die neuen Kriterien.", true);
+  msg("wunsch-msg", scanDanach ? "Gespeichert und aktiv geschaltet." : "Gespeichert. Der naechste Lauf nutzt die neuen Kriterien.", true);
   await loadWunschliste();
   // Bisher stand hier startScan() ohne Argument. Das landete immer im
   // Fehlerzweig "Bitte den Button an einer konkreten Suche verwenden" -
