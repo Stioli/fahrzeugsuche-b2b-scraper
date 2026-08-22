@@ -383,6 +383,9 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
 var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
 var db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "ankauf" } });
+// Zweiter Zugang nur fuer die Rollenpruefung: shared.aktuelle_rolle() liegt im
+// Schema "shared", der Hauptzugang ist fest auf "ankauf" eingestellt.
+var dbShared = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "shared" } });
 
 var MARKEN = ["Abarth","Alfa Romeo","Audi","BMW","BYD","Citroen","Cupra","Dacia","DS","Fiat","Ford","Honda","Hyundai","Jaguar","Jeep","Kia","Land Rover","Lexus","Mazda","Mercedes-Benz","MG","Mini","Mitsubishi","Nissan","Opel","Peugeot","Polestar","Porsche","Renault","Seat","Skoda","Smart","Subaru","Suzuki","Tesla","Toyota","Volkswagen","Volvo"];
 // Nur Werte, die in ankauf.angebote tatsaechlich vorkommen (Stand 18.08.2026:
@@ -397,6 +400,7 @@ var BOOL_NAMES = {navigation:"Navi",apple_carplay:"CarPlay",rueckfahrkamera:"R-K
 var statusFilter = "";
 var alleAngebote = [];
 var alleWuensche = [];
+var trefferProSuche = {};   // live gezaehlt, nicht der gespeicherte Altwert
 var currentUser = null;
 var scanActive = false;
 function setScanActive(on){
@@ -438,13 +442,33 @@ async function doLogin(){
   showApp(r.data.user);
 }
 async function doLogout(){ await db.auth.signOut(); location.reload(); }
-function showApp(user){
+async function showApp(user){
   currentUser = user;
   el("view-app").style.display = "block";
   el("who").textContent = "Angemeldet als " + (user.email || "");
+  if (!(await hatZugriff())) return;
   loadWunschliste();
   loadAngebote();
   checkScanStatus();
+}
+// Wer keinen Eintrag in shared.benutzer hat, bekommt vom Server auf jede
+// Abfrage im Schema ankauf eine LEERE Liste statt einer Fehlermeldung. Die
+// Seite sah dann aus, als gaebe es schlicht keine Daten - am 22.08.2026 hat
+// genau das eine halbe Stunde Fehlersuche gekostet, weil im Browser noch ein
+// anderes Konto angemeldet war.
+async function hatZugriff(){
+  var r = await dbShared.rpc("aktuelle_rolle");
+  // Laesst sich die Rolle nicht ermitteln, lieber weitermachen als den
+  // Zugang faelschlich sperren.
+  if (r.error || r.data) return true;
+  el("wunsch-list").innerHTML = '<div class="card">'
+    + '<h3>Ihr Konto ist f&uuml;r den Ankauf nicht freigeschaltet.</h3>'
+    + '<p style="margin:10px 0 0">Angemeldet als <b>' + esc((currentUser && currentUser.email) || "") + "</b>. "
+    + "Dieses Konto hat keine Rolle im Ankauf, deshalb bleiben Suchen und Fahrzeuge leer und Speichern wird abgelehnt.</p>"
+    + '<p style="margin:10px 0 0">Melden Sie sich mit einem berechtigten Konto an oder lassen Sie dieses freischalten.</p>'
+    + "</div>";
+  el("angebote-list").innerHTML = '<div class="card muted">Kein Zugriff &ndash; siehe Hinweis unter &bdquo;Suchen&ldquo;.</div>';
+  return false;
 }
 el("login-pass").addEventListener("keydown", function(e){ if (e.key === "Enter") doLogin(); });
 
@@ -466,11 +490,35 @@ async function startScan(wunschId){
   loadWunschliste();
   pollScan(r.data.id);
 }
+// Beendet die Statusabfrage sauber und raeumt den Zustand auf.
+function pollEnde(html){
+  if (scanPoll) { clearInterval(scanPoll); scanPoll = null; }
+  scanActive = false; scanWunschId = null;
+  setScanStatus(html, "rot");
+  loadWunschliste();
+}
 function pollScan(jobId){
   if (scanPoll) clearInterval(scanPoll);
+  // Ohne Grenze lief diese Abfrage bis zum Neuladen der Seite weiter - alle
+  // 10 Sekunden, auch wenn der Auftrag nie fertig wurde. Das Banner blieb
+  // stehen und die Suche liess sich nicht neu starten.
+  var versucheUebrig = 180;   // 180 x 10 s = 30 Minuten
+  var fehlerInFolge = 0;
   scanPoll = setInterval(async function(){
+    if (--versucheUebrig <= 0) {
+      pollEnde("&#9888;&#65039; KEINE R&Uuml;CKMELDUNG NACH 30 MINUTEN &ndash; bitte den Lauf in GitHub Actions pr&uuml;fen");
+      return;
+    }
     var r = await db.from("scan_jobs").select("*").eq("id", jobId).single();
-    if (r.error || !r.data) return;
+    if (r.error || !r.data) {
+      // Frueher stand hier nur "return" - ein dauerhafter Fehler blieb damit
+      // unsichtbar. Einzelne Aussetzer sollen aber nicht gleich abbrechen.
+      if (++fehlerInFolge >= 6) {
+        pollEnde("&#9888;&#65039; STATUS NICHT ABRUFBAR" + (r.error ? ": " + esc(r.error.message) : ""));
+      }
+      return;
+    }
+    fehlerInFolge = 0;
     var j = r.data;
     if (j.wunschliste_id) scanWunschId = j.wunschliste_id;
     if (j.status === "laeuft") {
@@ -499,7 +547,8 @@ async function checkScanStatus(){
     .in("status", ["offen","laeuft"])
     .gte("angefordert_am", frisch)
     .order("id", { ascending: false }).limit(1);
-  if (!r.error && r.data && r.data.length) {
+  if (r.error) { msg("wunsch-msg", "Auftragsstatus nicht abrufbar: " + esc(r.error.message), false); return; }
+  if (r.data && r.data.length) {
     scanWunschId = r.data[0].wunschliste_id || null;
     setScanStatus("&#9203; EIN SUCHAUFTRAG IST BEREITS UNTERWEGS &hellip;", "rot");
     setScanActive(true);
@@ -517,7 +566,22 @@ async function loadWunschliste(){
   var r = await db.from("wunschliste").select("*").order("id");
   if (r.error) { msg("wunsch-msg", "Fehler beim Laden: " + esc(r.error.message), false); return; }
   alleWuensche = (r.data || []).filter(function(w){ return (w.bezeichnung || w.marke || w.modell || "").trim() !== ""; });
+  await ladeTrefferZaehler();
   renderWunschliste();
+}
+// Die Karte zeigte frueher wunschliste.treffer_letzter_scan - einen beim Scan
+// gespeicherten Altwert. Der blieb nach dem Loeschen stehen (deshalb wurde am
+// 22.08.2026 mehrfach geklickt und echte Daten geloescht) und zaehlte
+// ausserdem nur den ELN-Anteil, nicht die anderen vier Quellen. Jetzt wird
+// gezaehlt, was tatsaechlich gespeichert ist.
+async function ladeTrefferZaehler(){
+  trefferProSuche = {};
+  var r = await db.from("angebote").select("match_wunschliste_id")
+    .not("match_wunschliste_id", "is", null).limit(20000);
+  if (r.error) { msg("wunsch-msg", "Trefferzahlen nicht abrufbar: " + esc(r.error.message), false); return; }
+  (r.data || []).forEach(function(a){
+    trefferProSuche[a.match_wunschliste_id] = (trefferProSuche[a.match_wunschliste_id] || 0) + 1;
+  });
 }
 function renderWunschliste(){
   var rows = alleWuensche.slice();
@@ -546,15 +610,18 @@ function renderWunschliste(){
     if (feats.length) crit.push("bevorzugt: " + feats.join(", "));
     if (w.plz) crit.push("Marktwert um " + esc(w.plz) + (w.umkreis_km ? " / " + w.umkreis_km + " km" : " / ganz DE"));
     // Status-Zeile: laeuft gerade / letzte Suche am ... / noch nie gesucht
+    // Live gezaehlt aus den tatsaechlich gespeicherten Fahrzeugen - siehe
+    // ladeTrefferZaehler().
+    var anzahl = trefferProSuche[w.id] || 0;
+    var trefferText = '<b style="color:var(--ink)">' + anzahl + "</b> Fahrzeug" + (anzahl === 1 ? "" : "e") + " gespeichert";
     var statusHtml = "";
     if (scanActive && scanWunschId === w.id) {
       statusHtml = '<div style="color:#E74C3C;font-family:var(--font-heading);font-weight:700;font-size:1.05rem;margin-top:8px">&#128260; Suche l&auml;uft &hellip;</div>';
     } else if (w.letzter_scan_am) {
       var ts = new Date(w.letzter_scan_am).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-      statusHtml = '<div style="color:var(--sub);font-size:14px;margin-top:8px">&#128337; Letzte Suche: <b style="color:var(--ink)">' + ts + " Uhr</b>"
-        + (w.treffer_letzter_scan != null ? " &middot; " + w.treffer_letzter_scan + " Treffer" : "") + "</div>";
+      statusHtml = '<div style="color:var(--sub);font-size:14px;margin-top:8px">&#128337; Letzte Suche: <b style="color:var(--ink)">' + ts + " Uhr</b> &middot; " + trefferText + "</div>";
     } else {
-      statusHtml = '<div class="muted" style="margin-top:8px">Noch nie gesucht</div>';
+      statusHtml = '<div class="muted" style="margin-top:8px">Noch nie gesucht &middot; ' + trefferText + "</div>";
     }
     var hinweisHtml = "";
     if (w.treffer_hinweis) {
@@ -689,12 +756,16 @@ async function delTreffer(id){
   if (r.error) { msg("wunsch-msg", "Loeschen fehlgeschlagen: " + esc(r.error.message), false); return; }
   var n = (r.data || []).length;
   msg("wunsch-msg", n + " Fahrzeug(e) der Suche '" + esc(name) + "' geloescht.", true);
+  // loadWunschliste() fehlte hier. Dadurch blieb die alte Trefferzahl auf der
+  // Karte stehen, obwohl die Fahrzeuge weg waren.
+  loadWunschliste();
   loadAngebote();
 }
 
 // ---------- Gefundene Fahrzeuge ----------
 async function loadAngebote(){
   var q = await db.from("quellen_log").select("*").order("quelle");
+  if (q.error) { msg("angebote-msg", "Quellen-Status nicht abrufbar: " + esc(q.error.message), false); }
   if (!q.error) {
     var qh = "";
     (q.data || []).forEach(function(s){
@@ -898,6 +969,9 @@ async function delSelected(){
   var n = (r.data || []).length;
   selectedIds.clear();
   msg("angebote-msg", n + " Fahrzeug(e) gel&ouml;scht. Die Suchen bleiben unver&auml;ndert.", true);
+  // Auch hier muessen die Karten neu gezaehlt werden - sonst stehen dort
+  // Fahrzeuge, die es nicht mehr gibt.
+  loadWunschliste();
   loadAngebote();
 }
 
