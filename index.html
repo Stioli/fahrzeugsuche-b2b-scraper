@@ -183,7 +183,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       </div>
       <div id="suchen-controls">
         <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="openForm(null)">+ Neue Suche anlegen</button>
-        <div class="btn-sub" id="scan-status">Der Scraper l&auml;uft automatisch an Werktagen um 7, 10, 13 und 17 Uhr &uuml;ber alle aktiven Suchen. Ein Lauf l&auml;sst sich jederzeit von Hand ausl&ouml;sen.</div>
+        <button class="btn btn-go btn-block" style="margin-top:8px" onclick="startScanAlle()">&#128269; Alle aktiven Suchen jetzt starten</button>
+        <div class="btn-sub" id="scan-status">Der Scraper l&auml;uft automatisch an Werktagen um 7, 10, 13 und 17 Uhr &uuml;ber alle aktiven Suchen. Der Knopf oben st&ouml;&szlig;t einen Lauf sofort an.</div>
         <div class="wfilter" style="margin-top:14px">
           <input type="text" id="wf-text" placeholder="&#128269; Suche filtern (Marke, Modell) &hellip;" oninput="renderWunschliste()">
           <select id="wf-status" onchange="renderWunschliste()">
@@ -475,33 +476,59 @@ async function hatZugriff(){
 }
 el("login-pass").addEventListener("keydown", function(e){ if (e.key === "Enter") doLogin(); });
 
-// ---------- Scan jetzt starten ----------
+// ---------- Lauf starten ----------
+// Der Scraper laeuft als GitHub-Actions-Workflow. Von hier aus wird er ueber
+// die Edge Function scraper_starten ausgeloest; die haelt den GitHub-Token als
+// Geheimnis. Direkt aus dieser Seite ginge es nicht - das Dashboard-Repo ist
+// oeffentlich, ein Token im Quelltext laege fuer jeden offen.
+//
+// Frueher schrieb dieser Knopf in ankauf.scan_jobs. Diese Tabelle hat seit dem
+// Weggang des Einkaeufers keinen Verbraucher mehr (das war sein Windows-Task) -
+// der Auftrag blieb liegen, waehrend die Seite "startet in unter 1 Minute"
+// behauptete. Sie wird hier bewusst nicht mehr angefasst.
 var scanPoll = null;
 var scanWunschId = null;   // welche Suche laeuft gerade (fuer die Karten-Anzeige)
-// Der Scraper laeuft als GitHub-Actions-Workflow nach Zeitplan und liest
-// ankauf.scan_jobs NICHT. Verbraucher dieser Tabelle war ein Windows-Task auf
-// dem Rechner des ausgeschiedenen Einkaeufers - den gibt es nicht mehr.
-// Deshalb hat dieser Knopf frueher einen Auftrag angelegt, den niemand abholt,
-// und dazu "startet in unter 1 Minute" behauptet. Auftrag 21 vom 22.08.2026
-// stand danach stundenlang auf "offen".
-// Was der Knopf wirklich kann: die Suche aktiv schalten, damit der naechste
-// planmaessige Lauf sie mitnimmt - und den Weg zeigen, wie man einen Lauf
-// sofort ausloest.
 var WORKFLOW_URL = "https://github.com/Stioli/claude-ki/actions/workflows/ankauf-scraper.yml";
 
+// Bei einer Fehlerantwort steckt der Klartext der Funktion in error.context;
+// error.message sagt nur "non-2xx status code" und hilft niemandem weiter.
+async function ruftScraper(body){
+  var r = await db.functions.invoke("scraper_starten", { body: body || {} });
+  if (!r.error) return { ok: true, daten: r.data };
+  var text = "";
+  try { var j = await r.error.context.json(); text = j.fehler || ""; } catch (e) { /* keine JSON-Antwort */ }
+  return { ok: false, fehler: text || r.error.message };
+}
+
 async function startScan(wunschId){
-  if (!wunschId) { msg("wunsch-msg", "Bitte den Button an einer konkreten Suche verwenden.", false); return; }
+  if (!wunschId) { msg("wunsch-msg", "Bitte den Knopf an einer konkreten Suche verwenden.", false); return; }
   var u = await db.from("wunschliste").update({ aktive_suche: true }).eq("id", wunschId);
   if (u.error) { msg("wunsch-msg", esc(u.error.message), false); return; }
-  // Bewusst KEIN Eintrag in scan_jobs mehr: die Tabelle hat keinen Verbraucher,
-  // und jede Zeile darin liess das Dashboard beim naechsten Laden faelschlich
-  // "ein Suchauftrag ist bereits unterwegs" melden.
-  setScanStatus('&#9989; Suche ist aktiv &ndash; der n&auml;chste planm&auml;&szlig;ige Lauf nimmt sie mit '
-    + '(werktags 7, 10, 13 und 17 Uhr).<br>Sofort starten: '
-    + '<a href="' + WORKFLOW_URL + '" target="_blank" rel="noopener">GitHub Actions &rarr; Run workflow</a> '
-    + '&ndash; Feld <b>wunschliste_id</b> auf <b>' + wunschId + '</b> setzen.', "info");
-  loadWunschliste();
+  await loeseLaufAus({ wunschliste_id: wunschId }, wunschId);
 }
+
+// Ohne wunschliste_id nimmt der Workflow alle aktiven Suchen.
+async function startScanAlle(){
+  await loeseLaufAus({}, null);
+}
+
+async function loeseLaufAus(body, wunschId){
+  if (scanPoll) { clearInterval(scanPoll); scanPoll = null; }
+  setScanStatus("&#9203; LAUF WIRD AUSGEL&Ouml;ST &hellip;", "rot");
+  setScanActive(true);
+  var r = await ruftScraper(body);
+  if (!r.ok) {
+    setScanActive(false);
+    setScanStatus("&#9888;&#65039; START FEHLGESCHLAGEN: " + esc(r.fehler)
+      + '<br><a href="' + WORKFLOW_URL + '" target="_blank" rel="noopener">Ersatzweise bei GitHub Actions starten</a>', "rot");
+    return;
+  }
+  scanWunschId = wunschId || null;
+  setScanStatus("&#9203; LAUF WIRD EINGEREIHT &hellip;", "rot");
+  loadWunschliste();
+  pollLauf(r.daten && r.daten.vorher_id, wunschId);
+}
+
 // Beendet die Statusabfrage sauber und raeumt den Zustand auf.
 function pollEnde(html){
   if (scanPoll) { clearInterval(scanPoll); scanPoll = null; }
@@ -509,64 +536,76 @@ function pollEnde(html){
   setScanStatus(html, "rot");
   loadWunschliste();
 }
-function pollScan(jobId){
+
+// vorherId ist die Kennung des letzten Laufs VOR dem Ausloesen. Solange GitHub
+// noch denselben Lauf als neuesten meldet, ist der angeforderte dort noch gar
+// nicht angelegt - ohne diesen Vergleich meldete die Seite den alten, laengst
+// fertigen Lauf sofort als "abgeschlossen". Beim Seitenaufruf gibt es keinen
+// Vorher-Wert; dann wird der aktuelle Lauf direkt verfolgt (vorherId == null).
+function pollLauf(vorherId, wunschId){
   if (scanPoll) clearInterval(scanPoll);
-  // Ohne Grenze lief diese Abfrage bis zum Neuladen der Seite weiter - alle
-  // 10 Sekunden, auch wenn der Auftrag nie fertig wurde. Das Banner blieb
-  // stehen und die Suche liess sich nicht neu starten.
+  // Ohne Grenze liefe diese Abfrage bis zum Neuladen der Seite weiter.
   var versucheUebrig = 180;   // 180 x 10 s = 30 Minuten
   var fehlerInFolge = 0;
+  var neuGesehen = (vorherId == null);
+  scanWunschId = wunschId || null;
   scanPoll = setInterval(async function(){
     if (--versucheUebrig <= 0) {
-      pollEnde("&#9888;&#65039; KEINE R&Uuml;CKMELDUNG NACH 30 MINUTEN &ndash; bitte den Lauf in GitHub Actions pr&uuml;fen");
+      pollEnde('&#9888;&#65039; KEINE R&Uuml;CKMELDUNG NACH 30 MINUTEN &ndash; bitte den '
+        + '<a href="' + WORKFLOW_URL + '" target="_blank" rel="noopener">Lauf bei GitHub Actions</a> pr&uuml;fen');
       return;
     }
-    var r = await db.from("scan_jobs").select("*").eq("id", jobId).single();
-    if (r.error || !r.data) {
-      // Frueher stand hier nur "return" - ein dauerhafter Fehler blieb damit
-      // unsichtbar. Einzelne Aussetzer sollen aber nicht gleich abbrechen.
-      if (++fehlerInFolge >= 6) {
-        pollEnde("&#9888;&#65039; STATUS NICHT ABRUFBAR" + (r.error ? ": " + esc(r.error.message) : ""));
-      }
+    var r = await ruftScraper({ aktion: "status" });
+    if (!r.ok) {
+      // Einzelne Aussetzer sollen nicht gleich abbrechen, ein dauerhafter
+      // Fehler darf aber nicht unsichtbar bleiben.
+      if (++fehlerInFolge >= 6) pollEnde("&#9888;&#65039; STATUS NICHT ABRUFBAR: " + esc(r.fehler));
       return;
     }
     fehlerInFolge = 0;
-    var j = r.data;
-    if (j.wunschliste_id) scanWunschId = j.wunschliste_id;
-    if (j.status === "laeuft") {
-      setScanStatus("&#128260; SUCHE L&Auml;UFT GERADE &hellip;", "rot");
-      setScanActive(true);
-    } else if (j.status === "erledigt") {
-      clearInterval(scanPoll); scanPoll = null;
-      setScanStatus("&#9989; SUCHE ABGESCHLOSSEN" + (j.ergebnis ? " &ndash; " + esc(j.ergebnis) : ""), "gruen");
-      scanActive = false; scanWunschId = null;
-      loadAngebote();
-      loadWunschliste();
-    } else if (j.status === "fehler") {
-      clearInterval(scanPoll); scanPoll = null;
-      setScanStatus("&#9888;&#65039; SUCHE FEHLGESCHLAGEN" + (j.ergebnis ? ": " + esc(j.ergebnis) : ""), "rot");
-      scanActive = false; scanWunschId = null;
-      loadWunschliste();
+    var l = r.daten && r.daten.lauf;
+    if (!l) return;
+    if (!neuGesehen) {
+      if (l.id === vorherId) {
+        setScanStatus("&#9203; LAUF WIRD EINGEREIHT &hellip;", "rot");
+        setScanActive(true);
+        return;
+      }
+      neuGesehen = true;
     }
+    var link = ' &middot; <a href="' + esc(l.url) + '" target="_blank" rel="noopener">Lauf ' + l.nummer + " ansehen</a>";
+    if (l.zustand !== "completed") {
+      setScanStatus("&#128260; SUCHE L&Auml;UFT GERADE &hellip;" + link, "rot");
+      setScanActive(true);
+      return;
+    }
+    clearInterval(scanPoll); scanPoll = null;
+    scanActive = false; scanWunschId = null;
+    if (l.ergebnis === "success") {
+      setScanStatus("&#9989; SUCHE ABGESCHLOSSEN" + link, "gruen");
+    } else {
+      // Einzelne Quellen duerfen ausfallen (continue-on-error). Ein anderes
+      // Ergebnis als "success" heisst also: hinsehen, nicht Panik.
+      setScanStatus("&#9888;&#65039; LAUF BEENDET MIT &bdquo;" + esc(l.ergebnis || "unbekannt") + "&ldquo;" + link, "rot");
+    }
+    loadAngebote();
+    loadWunschliste();
   }, 10000);
 }
+
+// Beim Seitenaufruf: laeuft gerade einer? Dann Banner zeigen und verfolgen.
 async function checkScanStatus(){
-  // Altersgrenze noetig: Auftrag 20 steht seit dem 03.07.2026 auf "laeuft" und
-  // wurde nie beendet. Ohne diese Grenze meldet die Oberflaeche bei jedem
-  // Aufruf "ein Suchauftrag ist bereits unterwegs" und blockiert sich selbst.
-  var frisch = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  var r = await db.from("scan_jobs").select("*")
-    .in("status", ["offen","laeuft"])
-    .gte("angefordert_am", frisch)
-    .order("id", { ascending: false }).limit(1);
-  if (r.error) { msg("wunsch-msg", "Auftragsstatus nicht abrufbar: " + esc(r.error.message), false); return; }
-  if (r.data && r.data.length) {
-    scanWunschId = r.data[0].wunschliste_id || null;
-    setScanStatus("&#9203; EIN SUCHAUFTRAG IST BEREITS UNTERWEGS &hellip;", "rot");
-    setScanActive(true);
-    pollScan(r.data[0].id);
-  }
+  var r = await ruftScraper({ aktion: "status" });
+  // Kein Grund, die Seite mit einer Fehlermeldung zu begruessen - der Knopf
+  // meldet sich deutlich genug, wenn etwas nicht stimmt.
+  if (!r.ok) return;
+  var l = r.daten && r.daten.lauf;
+  if (!l || l.zustand === "completed") return;
+  setScanStatus("&#128260; EIN LAUF IST BEREITS UNTERWEGS &hellip;", "rot");
+  setScanActive(true);
+  pollLauf(null, null);
 }
+
 function setScanStatus(html, farbe){
   var s = el("scan-status");
   s.className = "scan-banner " + (farbe || "rot");
@@ -646,7 +685,7 @@ function renderWunschliste(){
       + statusHtml
       + hinweisHtml
       + '<div class="actions">'
-      + '<button class="btn btn-go" onclick="startScan(' + w.id + ')">&#128269; F&uuml;r den n&auml;chsten Lauf vormerken</button>'
+      + '<button class="btn btn-go" onclick="startScan(' + w.id + ')">&#128269; Diese Suche jetzt starten</button>'
       + '<button class="btn btn-ghost" onclick="openForm(' + w.id + ')">Bearbeiten</button>'
       + '<button class="btn btn-ghost" onclick="toggleAktiv(' + w.id + "," + !w.aktive_suche + ')">' + (w.aktive_suche ? "Pausieren" : "Aktivieren") + "</button>"
       + '<button class="btn btn-danger" onclick="delTreffer(' + w.id + ')">&#128465;&#65039; Treffer loeschen</button>'
