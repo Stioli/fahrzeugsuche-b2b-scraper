@@ -88,6 +88,19 @@ footer{text-align:center;color:var(--light);font-size:13px;margin-top:40px}
        dann als Hinweis, was gefehlt hat.</p>
   </div>
 
+  <div class="box-warn">
+    <p><b>Die Modellvariante ist dagegen ein hartes Ausschlusskriterium.</b> Was hier steht,
+       muss im Text des Angebots wörtlich vorkommen — sonst wird das Fahrzeug gar nicht erst
+       gespeichert. Das gilt genauso für Marke, Modell, Getriebe, Kraftstoff, Fahrzeugzustand
+       und Sitzzahl.</p>
+    <p>Am 01.09.2026 ist genau das aufgefallen: Beide Kia-Sportage-Suchen standen auf
+       <i>GT Line</i>. Das Sondermodell <i>Black Edition</i> mit denselben 239 PS war dadurch
+       unsichtbar — es lagen acht Stück bei ELN, und keines davon ist je im Dashboard
+       erschienen. <b>Im Zweifel das Feld leer lassen</b> und lieber über PS, Baujahr und km
+       eingrenzen. Wer eine bestimmte Linie <i>und</i> deren Sondermodelle sehen will, legt
+       dafür zwei Suchen an.</p>
+  </div>
+
   <h3>Marktwert-Vergleich: PLZ und Umkreis</h3>
   <p>Ganz unten in der Suchmaske stehen zwei Felder, die nicht das Suchen, sondern das
      <b>Bewerten</b> steuern: von welcher Postleitzahl aus und in welchem Umkreis der Marktpreis
@@ -185,6 +198,11 @@ footer{text-align:center;color:var(--light);font-size:13px;margin-top:40px}
     <li>Jedes Fahrzeug zeigt Netto- <em>und</em> Bruttopreis, Anbieter, dessen Fahrzeugnummer
         und <b>Zum Inserat →</b>.</li>
   </ul>
+  <p class="muted"><b>Bei ELN-Fahrzeugen bleibt der Anbieter leer.</b> ELN nennt den
+     Großhändler in seiner Schnittstelle nicht mehr — der Name steht erst auf dem
+     Bestellformular, das du im ELN-Inserat erzeugst. Statt des Namens steht in der Quelle
+     eine gleichbleibende Kennung („ELN/…"), an der sich Fahrzeuge desselben Großhändlers
+     wiedererkennen lassen. Das ist kein Fehler und kein Ausfall.</p>
   <p><b>Löschen:</b> Häkchen setzen → <b>🗑️ Ausgewählte Fahrzeuge löschen</b>. An einer Suche
      räumt <b>🗑️ Treffer löschen</b> alle ihre Fahrzeuge weg — mit Rückfrage. Die Suche selbst
      bleibt erhalten.</p>
@@ -195,14 +213,30 @@ footer{text-align:center;color:var(--light);font-size:13px;margin-top:40px}
     <tr><th>Quelle</th><th>Zustand</th><th>Hinweis</th></tr>
     <tr><td><span class="dot g"></span><b>ELN</b></td><td>läuft mit</td><td>Anmeldung erneuert sich selbst, ohne Browser</td></tr>
     <tr><td><span class="dot g"></span><b>Tabor</b></td><td>läuft mit</td><td>ruft zu jedem Treffer die Detailseite ab, dauert deshalb länger</td></tr>
-    <tr><td><span class="dot g"></span><b>Autoropa</b></td><td>läuft mit</td><td>saubere JSON-Schnittstelle</td></tr>
-    <tr><td><span class="dot g"></span><b>Carconnex</b></td><td>läuft mit</td><td>viele EU-Marken</td></tr>
-    <tr><td><span class="dot g"></span><b>Imexso</b></td><td>läuft mit</td><td>Preise netto (HTVA)</td></tr>
-    <tr><td><span class="dot r"></span><b>Importo</b></td><td>läuft <b>nicht</b> mit</td><td>Der Login verlangt eine CAPTCHA-Antwort von Hand — nicht automatisierbar</td></tr>
+    <tr><td><span class="dot g"></span><b>Autoropa</b></td><td>läuft mit</td><td>saubere JSON-Schnittstelle; am 31.08.2026 ohne neue Fahrzeuge</td></tr>
+    <tr><td><span class="dot g"></span><b>Carconnex</b></td><td>läuft mit</td><td>nur rund 190 Fahrzeuge, <b>kein Kia</b> — siehe Markenliste unten</td></tr>
+    <tr><td><span class="dot g"></span><b>Imexso</b></td><td>läuft mit</td><td>Preise netto (HTVA), <b>kein Kia</b> — siehe Markenliste unten</td></tr>
+    <tr><td><span class="dot r"></span><b>Importo</b></td><td>läuft <b>nicht</b> mit</td><td>Der Login verlangt eine CAPTCHA-Antwort von Hand — nicht automatisierbar. Zuletzt geliefert am <b>03.07.2026</b>; seither ist die gespeicherte Anmeldung abgelaufen.</td></tr>
   </table>
   </div>
   <p class="muted">Fällt eine Quelle aus, laufen die übrigen weiter. Oben im Reiter „Gefundene
      Fahrzeuge" steht je Quelle, wann sie zuletzt geliefert hat.</p>
+
+  <div class="box-blue">
+    <p><b>„Läuft mit" heißt nicht „führt deine Marke".</b> Eine grüne Quelle kann sauber
+       antworten und trotzdem nie einen Treffer liefern, weil sie die gesuchte Marke gar nicht
+       im Sortiment hat. Am 01.09.2026 gegen die Portale geprüft:</p>
+    <ul>
+      <li><b>Imexso</b> — Audi, Citroën, Dacia, Ducati, Fiat, Hyundai, Jaguar, Opel, Peugeot,
+          Porsche, Renault, Subaru. <b>Kein Kia.</b></li>
+      <li><b>Carconnex</b> — Audi, Citroën, Cupra, Ford, Geely, Hyundai, KGM, Microlino,
+          Nissan, Opel, Peugeot, Seat, Volkswagen. <b>Kein Kia.</b></li>
+      <li><b>ELN</b> und <b>Tabor</b> führen Kia. Bei ELN lagen am 01.09.2026 rund 1.700 Kia,
+          bei Tabor 105.</li>
+    </ul>
+    <p>Wenn eine Suche dauerhaft leer bleibt, ist das die zweite Frage nach der Modellvariante:
+       Führt überhaupt eine angebundene Quelle diese Marke?</p>
+  </div>
 
   <h2><span class="n">7.</span> Wenn etwas klemmt</h2>
   <div class="scroll">
@@ -217,6 +251,15 @@ footer{text-align:center;color:var(--light);font-size:13px;margin-top:40px}
     <tr><td>„Keine Rückmeldung nach 30 Minuten"</td>
         <td>Die Seite hat aufgehört nachzufragen. Der Lauf selbst kann trotzdem noch laufen —
             der Link im Banner führt direkt hin.</td></tr>
+    <tr><td>Eine Suche findet dauerhaft nichts</td>
+        <td>In dieser Reihenfolge prüfen: <b>1.</b> Steht in <b>Modellvariante</b> etwas? Das
+            Feld schließt hart aus — ein Sondermodell wie „Black Edition" fällt bei „GT Line"
+            komplett heraus. Zum Testen leeren. <b>2.</b> Führt überhaupt eine angebundene
+            Quelle diese Marke? Die Markenlisten stehen in Abschnitt 6. <b>3.</b> Sind PS-,
+            Baujahr- oder Kilometergrenzen zu eng?</td></tr>
+    <tr><td>Bei ELN-Fahrzeugen fehlt der Anbieter</td>
+        <td>Kein Fehler. ELN nennt den Großhändler in seiner Schnittstelle nicht mehr — der
+            Name steht erst auf dem Bestellformular im ELN-Inserat.</td></tr>
     <tr><td>Viele Fahrzeuge „nicht bewertbar"</td>
         <td>Meist zu wenige Vergleichsfahrzeuge, weil die Suche sehr eng ist oder das Modell
             selten. Der Warnhinweis am Fahrzeug sagt es genauer.</td></tr>

@@ -175,7 +175,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       <div class="section-h" style="margin-bottom:18px">
         <span class="label">&#128663; B2B-Ankauf</span>
         <h1>Fahrzeugsuche <em>B2B Scraper</em></h1>
-        <p>Automatische Vor-Selektion von Gebrauchtwagen aus B2B-Quellen &mdash; f&uuml;nf Lieferanten, viermal an jedem Werktag.</p>
+        <p>Automatische Vor-Selektion von Gebrauchtwagen aus B2B-Quellen &mdash; f&uuml;nf angebundene Lieferanten, viermal an jedem Werktag. Welche davon deine Marke ueberhaupt fuehren, steht in der Anleitung unter &bdquo;Angebundene Quellen&ldquo;.</p>
       </div>
       <div class="tabs">
         <button class="tab active" id="tab-wunsch" onclick="showTab('wunsch')">&#128203; Suchen</button>
@@ -216,7 +216,15 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
             </div>
             <div class="field"><label>Modell</label><input type="text" id="f-modell" placeholder="z. B. Tucson"></div>
           </div>
-          <div class="field"><label>Modellvariante / Ausstattungslinie</label><input type="text" id="f-typ" placeholder="z. B. N-Line, GS, R-Line"></div>
+          <div class="field"><label>Modellvariante / Ausstattungslinie &mdash; <b>harter Ausschluss</b></label>
+            <input type="text" id="f-typ" placeholder="z. B. N-Line, GS, R-Line">
+            <div class="hinweis-feld">Anders als die Ausstattung weiter unten grenzt dieses Feld
+              <b>hart</b> ein: Der Text muss im Angebot des Lieferanten wortwoertlich vorkommen,
+              sonst wird das Fahrzeug gar nicht erst gespeichert. Sondermodelle fallen damit
+              durchs Raster &mdash; &bdquo;GT Line&ldquo; findet keinen Sportage
+              &bdquo;Black Edition&ldquo;, obwohl er denselben Motor hat. <b>Im Zweifel leer
+              lassen</b> und lieber ueber PS, Erstzulassung und Kilometer eingrenzen.</div>
+          </div>
           <div class="grid2">
             <div class="field"><label>Erstzulassung von</label><select id="f-bj_von"></select></div>
             <div class="field"><label>Erstzulassung bis</label><select id="f-bj_bis"></select></div>
@@ -748,6 +756,9 @@ async function saveForm(scanDanach){
   // Warnung bei sehr breiter Suche. Die Ausstattung zaehlt hier NICHT mehr mit:
   // sie grenzt seit dem Umbau nichts mehr ein, sondern sortiert nur noch.
   var eingrenzungen = 0;
+  // Die Modellvariante fehlte hier bis zum 01.09.2026 - ausgerechnet das
+  // schaerfste Kriterium zaehlte in der Breitenbewertung nicht mit.
+  if (row.typ) eingrenzungen++;
   if (row.bj_von || row.bj_bis) eingrenzungen++;
   if (kraftstoff.length) eingrenzungen++;
   if (row.ps_von || row.ps_bis) eingrenzungen++;
