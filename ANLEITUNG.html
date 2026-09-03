@@ -56,7 +56,7 @@ footer{text-align:center;color:var(--light);font-size:13px;margin-top:40px}
 <header>
   <div class="pill">&#128663; Autohaus Stieber GmbH</div>
   <h1>Fahrzeugsuche <em>B2B Scraper</em></h1>
-  <p>Bedienungsanleitung &middot; Stand: 22.08.2026</p>
+  <p>Bedienungsanleitung &middot; Stand: 03.09.2026</p>
 </header>
 
 <div class="wrap">
@@ -245,7 +245,11 @@ footer{text-align:center;color:var(--light);font-size:13px;margin-top:40px}
     <tr><th>Was du siehst</th><th>Was dahintersteckt</th></tr>
     <tr><td>Suchen und Fahrzeuge bleiben leer</td>
         <td>Das angemeldete Konto ist für den Ankauf nicht freigeschaltet. Ein Hinweis dazu
-            steht unter „Suchen". Mit dem richtigen Konto anmelden.</td></tr>
+            steht unter „Suchen". Ein Admin schaltet es im Reiter <b>Benutzer</b> frei
+            (Abschnitt 9).</td></tr>
+    <tr><td>Passwort vergessen</td>
+        <td>Auf der Anmeldeseite E-Mail eintragen und „Passwort vergessen?" wählen. Der Link
+            in der E-Mail führt zurück in die App, dort das neue Passwort zweimal eingeben.</td></tr>
     <tr><td>„Der Sofortstart ist noch nicht eingerichtet"</td>
         <td>Der hinterlegte GitHub-Token fehlt oder ist abgelaufen. Die Schritte stehen in
             <code>09_scraper_starten_EINRICHTUNG.md</code>.</td></tr>
@@ -282,8 +286,46 @@ footer{text-align:center;color:var(--light);font-size:13px;margin-top:40px}
     </table>
   </div>
 
+  <h2><span class="n">9.</span> Anmeldung, Passwort und Benutzer</h2>
+  <p>Jeder Mitarbeiter meldet sich mit eigener E-Mail-Adresse und eigenem Passwort an.
+     Was er darf, bestimmt seine <b>Rolle</b>:</p>
+  <div class="scroll">
+  <table>
+    <tr><th>Rolle</th><th>Im Ankauf</th></tr>
+    <tr><td><b>admin</b></td><td>alles, zusätzlich Benutzer verwalten</td></tr>
+    <tr><td><b>verkauf</b></td><td>Suchen anlegen, starten, Fahrzeuge löschen — der Normalfall</td></tr>
+    <tr><td><b>werkstatt</b></td><td>nur lesen</td></tr>
+    <tr><td><b>buero</b></td><td>kein Zugriff auf den Ankauf</td></tr>
+  </table>
+  </div>
+  <div class="box-warn">Die Rolle hängt am Login, nicht an dieser App. Wer hier <b>verkauf</b>
+    bekommt, hat dieselbe Rolle auch in anderen Anwendungen mit demselben Supabase-Login
+    (z.&nbsp;B. CRM).</div>
+
+  <h3>Passwort vergessen</h3>
+  <p>Auf der Anmeldeseite die E-Mail-Adresse eintragen und <b>„Passwort vergessen?"</b>
+     wählen. Es kommt eine E-Mail mit einem Link; der führt zurück in die App auf eine Seite
+     „Neues Passwort". Dort das Passwort zweimal eingeben (mindestens 8 Zeichen) — danach ist
+     man direkt angemeldet. Der Link gilt nur kurz und nur einmal; ist er abgelaufen, einfach
+     erneut anfordern.</p>
+
+  <h3>Benutzer verwalten (nur Admin)</h3>
+  <p>Admins sehen einen dritten Reiter <b>👤 Benutzer</b>. Ein neues Konto einrichten geht in
+     zwei Schritten:</p>
+  <ol>
+    <li><b>Anmeldekonto anlegen</b> — in Supabase unter <i>Authentication → Users → Add user</i>
+        (E-Mail und Startpasswort). Das ist der einzige Schritt außerhalb der App.</li>
+    <li><b>Freischalten</b> — im Reiter Benutzer erscheint das Konto unter „Konten ohne Rolle".
+        Auf „Freischalten" klicken, Anzeigename und Rolle wählen, fertig. Ab sofort sieht die
+        Person Suchen und Fahrzeuge.</li>
+  </ol>
+  <p>In der Liste darunter lassen sich Rolle und Aktiv-Haken jederzeit ändern. <b>Deaktivieren</b>
+     sperrt den Zugriff sofort, ohne das Konto zu löschen — der richtige Weg, wenn jemand das
+     Haus verlässt. Das eigene Konto lässt sich absichtlich nicht ändern, damit sich ein Admin
+     nicht selbst aussperrt.</p>
+
   <footer>
-    Autohaus Stieber GmbH &middot; Fahrzeugsuche B2B Scraper &middot; Stand 22.08.2026
+    Autohaus Stieber GmbH &middot; Fahrzeugsuche B2B Scraper &middot; Stand 03.09.2026
   </footer>
 
 </div>
