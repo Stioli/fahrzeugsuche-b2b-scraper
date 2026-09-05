@@ -1,0 +1,14 @@
+# ACHTUNG: Dieses Verzeichnis wird von GitHub Pages VOLLSTAENDIG im Internet
+# veroeffentlicht - jede Datei, die hier eingecheckt wird, ist oeffentlich
+# abrufbar. Was hier steht, bleibt dagegen rein lokal.
+
+# Interne Arbeitsunterlagen: Uebergaben, Bauplaene, Datenbankskripte,
+# Quelltext der Edge Functions, Anfrageentwuerfe an Lieferanten.
+# Auf Olivers Wunsch am 05.09.2026 hierher verschoben, damit er sie im selben
+# Ordner findet - veroeffentlicht werden duerfen sie ausdruecklich NICHT.
+ankauf-aenderungen/
+
+# Windows- und OneDrive-Beiwerk
+desktop.ini
+Thumbs.db
+.DS_Store
