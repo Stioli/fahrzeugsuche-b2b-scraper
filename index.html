@@ -436,6 +436,16 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
         <div id="konten-ohne-rolle" style="margin-top:16px"></div>
       </div>
 
+      <div class="card">
+        <div class="row-head"><h3>&#128273; Autrado-Sitzung</h3></div>
+        <p class="muted" style="margin:6px 0 4px">Autrado sch&uuml;tzt seine Anmeldung gegen automatische Zugriffe. Der Suchlauf umgeht das nicht, sondern nutzt <b>deine</b> Anmeldung weiter. Daf&uuml;r braucht er einmal das Sitzungsmerkmal aus deinem Browser &ndash; und neu, sobald Autrado dich abmeldet.</p>
+        <p class="muted" style="margin:0 0 14px">So kommst du daran: bei <b>autrado-market.de</b> angemeldet sein &rarr; <b>F12</b> &rarr; Reiter <b>Application</b> (deutsch: Anwendung) &rarr; links <b>Cookies</b> &rarr; <b>PHPSESSID</b> &rarr; Spalte <i>Value</i> kopieren.</p>
+        <div id="autrado-stand" class="muted" style="margin-bottom:10px">Stand wird geladen &hellip;</div>
+        <div class="field"><label>Sitzungsmerkmal (PHPSESSID)</label><input type="password" id="autrado-wert" placeholder="nur den Wert einf&uuml;gen, ohne &bdquo;PHPSESSID=&ldquo;" autocomplete="off" spellcheck="false"></div>
+        <button class="btn btn-primary" onclick="autradoSpeichern()">Sitzung hinterlegen &rarr;</button>
+        <p class="muted" style="margin-top:10px">Der Wert wird abgeschottet gespeichert und nie wieder angezeigt &ndash; auch hier nicht. Sichtbar bleibt nur, wann er zuletzt erneuert wurde.</p>
+      </div>
+
       <div id="benutzer-list"></div>
     </div>
 
@@ -1176,6 +1186,62 @@ function showTab(t){
   el("suchen-controls").style.display = t === "wunsch" ? "block" : "none";
 }
 
+// ---------- Autrado-Sitzung (nur Admin) ----------
+// Autrado schuetzt seinen Login mit ALTCHA. Der Schutz wird nicht umgangen:
+// Oliver meldet sich von Hand an, und der Scraper nutzt die bestehende Sitzung
+// weiter. Weil sie regelmaessig ablaeuft, wird sie hier erneuert statt in den
+// GitHub-Einstellungen - das waere jedes Mal ein Umweg ueber ein fremdes
+// Werkzeug.
+//
+// Der Wert geht ausschliesslich an die Edge Function autrado_sitzung und von
+// dort in eine abgeschottete Tabelle. Er kommt nie wieder heraus; abfragbar
+// ist nur sein Alter. Deshalb steht im Feld auch type="password" - damit er
+// beim Einfuegen nicht offen auf dem Bildschirm steht.
+async function autradoStand(){
+  var box = el("autrado-stand");
+  if (!box) return;
+  try {
+    var r = await db.functions.invoke("autrado_sitzung", { body: { aktion: "status" } });
+    if (r.error) throw r.error;
+    var d = r.data || {};
+    if (d.status !== "vorhanden") {
+      box.innerHTML = "<b>Noch keine Sitzung hinterlegt.</b> Autrado wird bei jedem Suchlauf uebersprungen.";
+      return;
+    }
+    var alt = d.alter_stunden;
+    var wann = alt < 1 ? "vor wenigen Minuten"
+             : alt < 48 ? "vor " + Math.round(alt) + " Stunden"
+             : "vor " + Math.round(alt / 24) + " Tagen";
+    box.innerHTML = "Zuletzt erneuert " + wann
+      + (d.aktualisiert_von ? " von " + d.aktualisiert_von : "")
+      + ". Meldet der Suchlauf &bdquo;Sitzung abgelaufen&ldquo;, hier neu einf&uuml;gen.";
+  } catch (e) {
+    box.textContent = "Stand nicht abrufbar (" + (e.message || e) + ")";
+  }
+}
+
+async function autradoSpeichern(){
+  var feld = el("autrado-wert");
+  var wert = (feld.value || "").trim();
+  if (!wert) { msg("benutzer-msg", "Bitte das Sitzungsmerkmal einf&uuml;gen.", false); return; }
+  // Der haeufigste Fehlgriff: die ganze Cookie-Zeile statt nur des Wertes.
+  // Das laesst sich hier freundlich abfangen, statt den Server abweisen zu lassen.
+  var m = wert.match(/PHPSESSID=([^;\s]+)/i);
+  if (m) wert = m[1];
+  try {
+    var r = await db.functions.invoke("autrado_sitzung", { body: { phpsessid: wert } });
+    if (r.error) {
+      var text = await (r.error.context && r.error.context.json ? r.error.context.json() : null);
+      throw new Error((text && text.fehler) || r.error.message);
+    }
+    feld.value = "";
+    msg("benutzer-msg", "Sitzung hinterlegt. Autrado wird ab dem n&auml;chsten Suchlauf mitgelesen.", true);
+    autradoStand();
+  } catch (e) {
+    msg("benutzer-msg", "Nicht gespeichert: " + (e.message || e), false);
+  }
+}
+
 // ---------- Benutzer (nur Admin) ----------
 // Liest und schreibt shared.benutzer - die gemeinsame Benutzertabelle aller
 // Anwendungen an diesem Supabase-Projekt. Die Schutzregel dort laesst nur
@@ -1187,6 +1253,7 @@ var ROLLEN = [];
 function attr(s){ return esc(s).replace(/"/g, "&quot;"); }
 async function loadBenutzer(){
   if (currentRolle !== "admin") return;
+  autradoStand();
   var r = await dbShared.from("rollen").select("rolle,beschreibung,sortierung").order("sortierung");
   ROLLEN = r.data || [];
   el("bn-rolle").innerHTML = ROLLEN.map(function(x){
