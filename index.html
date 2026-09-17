@@ -74,6 +74,9 @@ h1,h2,h3{font-family:var(--font-heading);font-weight:600;letter-spacing:-0.01em}
 .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .actions .btn{font-size:14px;padding:10px 16px}
 .muted{color:var(--light);font-size:13px}
+/* Versionszeile: bewusst unauffaellig - sie soll auffindbar sein, wenn man sie
+   sucht, und sonst nicht stoeren. */
+.version-zeile{color:var(--light);font-size:12px;letter-spacing:.02em;margin:6px 0 0}
 .pflicht{display:inline-block;margin-left:8px;background:rgba(231,76,60,0.12);color:#C0392B;border-radius:6px;padding:1px 7px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
 .hinweis-feld{color:var(--sub);font-size:13px;line-height:1.5;margin-top:8px;padding-left:2px;max-width:62ch}
 .msg{border-radius:12px;padding:12px 16px;margin:10px 0;font-size:15px;display:none}
@@ -168,6 +171,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
         <button class="btn btn-primary btn-block" onclick="doLogin()">Anmelden &rarr;</button>
         <div class="btn-sub"><button class="linklike" onclick="passwortVergessen()">Passwort vergessen?</button></div>
         <div class="btn-sub">Autohaus Stieber GmbH &middot; Stuttgart-Stammheim</div>
+        <div class="btn-sub version-zeile" id="version-login"></div>
       </div>
     </div>
   </div>
@@ -208,7 +212,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       <div class="section-h" style="margin-bottom:18px">
         <span class="label">&#128663; B2B-Ankauf</span>
         <h1>Fahrzeugsuche <em>B2B Scraper</em></h1>
-        <p>Automatische Vor-Selektion von Gebrauchtwagen aus B2B-Quellen &mdash; f&uuml;nf angebundene Lieferanten, viermal an jedem Werktag. Welche davon deine Marke ueberhaupt fuehren, steht in der Anleitung unter &bdquo;Angebundene Quellen&ldquo;.</p>
+        <p>Automatische Vor-Selektion von Gebrauchtwagen aus B2B-Quellen &mdash; zehn angebundene Lieferanten, Start von Hand. Welche davon deine Marke ueberhaupt fuehren, steht in der Anleitung unter &bdquo;Angebundene Quellen&ldquo;.</p>
+        <p class="version-zeile" id="version-app"></p>
       </div>
       <div class="tabs">
         <button class="tab active" id="tab-wunsch" onclick="showTab('wunsch')">&#128203; Suchen</button>
@@ -218,7 +223,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       <div id="suchen-controls">
         <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="openForm(null)">+ Neue Suche anlegen</button>
         <button class="btn btn-go btn-block" style="margin-top:8px" onclick="startScanAlle()">&#128269; Alle aktiven Suchen jetzt starten</button>
-        <div class="btn-sub" id="scan-status">Der Scraper l&auml;uft automatisch an Werktagen um 7, 10, 13 und 17 Uhr &uuml;ber alle aktiven Suchen. Der Knopf oben st&ouml;&szlig;t einen Lauf sofort an.</div>
+        <div class="btn-sub" id="scan-status">Der Scraper l&auml;uft seit dem 17.09.2026 <b>nicht mehr automatisch</b>. Der Knopf oben st&ouml;&szlig;t einen Lauf &uuml;ber alle aktiven Suchen an &mdash; das ist der einzige Weg.</div>
         <div class="wfilter" style="margin-top:14px">
           <input type="text" id="wf-text" placeholder="&#128269; Suche filtern (Marke, Modell) &hellip;" oninput="renderWunschliste()">
           <select id="wf-status" onchange="renderWunschliste()">
@@ -359,6 +364,15 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
           <h1>Gefundene <em>Fahrzeuge</em></h1>
           <p>Alle Treffer aus den B2B-Quellen.</p>
         </div>
+        <!-- Stilllegung der Marktbewertung (Oliver, 17.09.2026). Bewusst in
+             der ruhigen Info-Variante und nicht in Rot: es ist eine
+             Entscheidung, kein Defekt. Ohne diesen Satz sieht die Liste aus
+             wie ein kaputtes System - die grosse Mehrheit der Fahrzeuge hat
+             weder DB1 noch Ampel. Faellt weg, sobald die Bewertung wieder
+             laeuft. -->
+        <div class="scan-banner info">&#8505;&#65039; Die <b>Marktbewertung ist seit 17.09.2026 stillgelegt</b>.
+          DB1 und Ampel werden bis auf weiteres nicht neu berechnet; bereits bewertete Fahrzeuge
+          behalten ihre Werte. Alles andere &ndash; Suchen, Quellen und gefundene Fahrzeuge &ndash; l&auml;uft normal weiter.</div>
         <div class="quellen" id="quellen"></div>
         <div class="filterbar" id="status-filter"></div>
 
@@ -404,6 +418,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
             <span class="treffer" id="treffer-anzahl"></span>
             <span style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-danger" style="font-size:14px;padding:9px 16px" onclick="delVerwaiste()">&#128465;&#65039; Treffer ohne Suche loeschen</button>
+              <button class="btn btn-danger" style="font-size:14px;padding:9px 16px" onclick="delAlleFahrzeuge()">&#128465;&#65039; ALLE Fahrzeuge l&ouml;schen</button>
               <button class="btn btn-ghost" style="font-size:14px;padding:9px 16px" onclick="resetAngebotsFilter()">Filter zur&uuml;cksetzen</button>
             </span>
           </div>
@@ -456,9 +471,38 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 </div>
 
 <script>
+// ---------------------------------------------------------------------------
+// Version dieses Dashboards.
+//
+// NUR HIER pflegen - die Anmeldeseite und die Kopf-Box holen sich den Text von
+// selbst (siehe versionAnzeigen() weiter unten). Stuenden die Angaben doppelt
+// im HTML, waere nach der zweiten Aenderung eine davon falsch.
+//
+// Beim Aendern des Dashboards mitzaehlen: hintere Stelle bei jeder Aenderung,
+// vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
+// Veroeffentlichung.
+// ---------------------------------------------------------------------------
+var VERSION       = "1.2";
+var VERSION_DATUM = "17.09.2026";
+
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
 var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
 var db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "ankauf" } });
+
+// Schreibt die Version an beide Stellen. Laeuft einmal beim Laden der Seite,
+// also bevor die Anmeldung entschieden ist - die Anmeldeseite braucht die
+// Angabe ja gerade dann, wenn noch niemand angemeldet ist.
+function versionAnzeigen(){
+  var text = "Version " + VERSION + " · Stand " + VERSION_DATUM;
+  ["version-login", "version-app"].forEach(function(id){
+    var n = document.getElementById(id);
+    if (n) { n.textContent = text; }
+  });
+}
+// Sofort ausfuehren: Dieses <script> steht hinter dem Markup, die beiden
+// Knoten gibt es also bereits. Ein Warten auf DOMContentLoaded wuerde die
+// Anzeige nur unnoetig verzoegern.
+versionAnzeigen();
 // Zweiter Zugang nur fuer die Rollenpruefung: shared.aktuelle_rolle() liegt im
 // Schema "shared", der Hauptzugang ist fest auf "ankauf" eingestellt.
 var dbShared = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "shared" } });
@@ -500,6 +544,10 @@ function setScanActive(on){
 
 function el(id){ return document.getElementById(id); }
 function esc(s){ return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+// Fuer Werte, die in einem Attribut landen (title="..."): dort muessen
+// zusaetzlich die Anfuehrungszeichen weg, sonst reisst eine Fehlermeldung
+// mit einem " im Text das Attribut auf.
+function escAttr(s){ return esc(s).replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 function msg(id, text, ok){ var m = el(id); m.className = "msg " + (ok ? "ok" : "err"); m.innerHTML = text; setTimeout(function(){ m.className = "msg"; }, 6000); }
 function fmtNum(n){ return n == null ? "&ndash;" : Number(n).toLocaleString("de-DE"); }
 function fmtEur(n){ return n == null ? "&ndash;" : Number(n).toLocaleString("de-DE") + " &euro;"; }
@@ -919,6 +967,62 @@ async function delVerwaiste(){
   msg("angebote-msg", (r.data || []).length + " Fahrzeug(e) ohne Suche geloescht.", true);
   loadAngebote();
 }
+// Raeumt den gesamten Fahrzeugbestand ab - ueber alle Suchen hinweg.
+//
+// Seit dem 17.09.2026 buchen die Laeufe nichts mehr selbsttaetig aus (der
+// Schritt im Workflow steht auf "if: false"). Verkaufte Fahrzeuge verschwinden
+// also nur noch, wenn hier jemand aufraeumt.
+//
+// Zwei Gruppen bleiben grundsaetzlich stehen, denn sie sind Arbeitsergebnis
+// und nicht Suchergebnis:
+//   - Status "Angefragt" oder "Gekauft"  -> da haengt ein Vorgang dran
+//   - Fahrzeuge mit einer Notiz von Oli  -> jemand hat sich Gedanken gemacht
+//
+// Hier stand bis zum 17.09.2026 noch eine dritte Pruefung: Fahrzeuge, an denen
+// ein Eintrag in ankauf.kaeufe haengt. Sie ist entfallen, weil diese Tabelle
+// nichts enthaelt ausser einer Beispielzeile vom 17.05.2026 und von keinem
+// Skript und keiner Ansicht befuellt wird - was tatsaechlich gekauft und mit
+// welcher Marge verkauft wurde, wertet Repdoc aus. Eine Abfrage, die nie
+// etwas findet, schuetzt nichts; sie macht nur den Eindruck, es gaebe hier
+// eine Sicherung.
+async function delAlleFahrzeuge(){
+  var gesamt = await db.from("angebote").select("*", { count: "exact", head: true });
+  if (gesamt.error) { msg("angebote-msg", "Bestand nicht abrufbar: " + esc(gesamt.error.message), false); return; }
+  if (!gesamt.count) { msg("angebote-msg", "Es sind keine Fahrzeuge gespeichert.", true); return; }
+
+  // Ein Filter, zweimal verwendet: einmal zum Zaehlen, einmal zum Loeschen.
+  // Stuenden hier zwei getrennte Fassungen, wuerde die angekuendigte Zahl
+  // frueher oder spaeter von der geloeschten abweichen.
+  function loeschbar(q){
+    return q.not("status", "in", '("Angefragt","Gekauft")').is("notiz_oli", null);
+  }
+
+  var z = await loeschbar(db.from("angebote").select("*", { count: "exact", head: true }));
+  if (z.error) { msg("angebote-msg", "Zaehlen fehlgeschlagen: " + esc(z.error.message), false); return; }
+  var faellt = z.count || 0;
+  var bleibt = gesamt.count - faellt;
+
+  if (!faellt) { msg("angebote-msg", "Es gibt nichts zu loeschen: alle " + gesamt.count + " Fahrzeuge sind geschuetzt (angefragt, gekauft oder mit Notiz).", true); return; }
+
+  var frage = faellt + " von " + gesamt.count + " Fahrzeugen werden geloescht.";
+  if (bleibt) { frage += "\n\n" + bleibt + " bleiben stehen: angefragt, gekauft oder mit deiner Notiz."; }
+  frage += "\n\nDie Suchen selbst bleiben unveraendert. Wirklich loeschen?";
+  if (!confirm(frage)) return;
+
+  // Zweite Nachfrage ab 100 Fahrzeugen: Der erste Klick kann Gewohnheit sein,
+  // der zweite ist eine Entscheidung.
+  if (faellt >= 100 && !confirm("Sicherheitsfrage: Es geht um " + faellt + " Fahrzeuge.\n\nSie sind danach weg und kommen erst beim naechsten Suchlauf zurueck - und nur, wenn der Lieferant sie noch fuehrt.\n\nWirklich alle loeschen?")) return;
+
+  var r = await loeschbar(db.from("angebote").delete()).select("id");
+  if (r.error) { msg("angebote-msg", "Loeschen fehlgeschlagen: " + esc(r.error.message), false); return; }
+  var n = (r.data || []).length;
+  selectedIds.clear();
+  msg("angebote-msg", n + " Fahrzeug(e) geloescht." + (bleibt ? " " + bleibt + " geschuetzte bleiben erhalten." : "") + " Die Suchen sind unveraendert.", true);
+  // Beide Ansichten neu laden - sonst zeigen die Suchkarten Trefferzahlen von
+  // Fahrzeugen, die es nicht mehr gibt (der Fehler vom 22.08.2026).
+  loadWunschliste();
+  loadAngebote();
+}
 async function delTreffer(id){
   var w = alleWuensche.find(function(x){ return x.id === id; }) || {};
   var name = w.bezeichnung || (w.marke + " " + (w.modell || ""));
@@ -942,16 +1046,57 @@ async function loadAngebote(){
     (q.data || []).forEach(function(s){
       var cls = "dot-pause";
       if (s.status === "OK") cls = "dot-ok"; else if (s.status === "Fehler") cls = "dot-err"; else if (s.status === "Warnung") cls = "dot-warn";
-      var when = s.letzter_pull ? new Date(s.letzter_pull).toLocaleDateString("de-DE") : "&ndash;";
-      qh += '<span class="quelle"><span class="dot ' + cls + '"></span>' + esc(s.quelle) + ' <span class="muted">' + when + "</span></span>";
+      // Ein grauer Punkt mit einem Gedankenstrich daneben sagt niemandem,
+      // was los ist - "mobile.de &ndash;" las sich wie eine kaputte Quelle.
+      // Bei "Pausiert" steht deshalb der Klartext statt eines Datums.
+      var when = s.status === "Pausiert"
+        ? "stillgelegt"
+        : (s.letzter_pull ? new Date(s.letzter_pull).toLocaleDateString("de-DE") : "&ndash;");
+      var titel = s.status === "Pausiert"
+        ? "Diese Quelle ist bewusst abgeschaltet und wird nicht abgerufen."
+        : "Status: " + s.status + (s.fehlermeldung ? " – " + s.fehlermeldung : "");
+      qh += '<span class="quelle" title="' + escAttr(titel) + '"><span class="dot ' + cls + '"></span>'
+        + esc(s.quelle) + ' <span class="muted">' + when + "</span></span>";
     });
     el("quellen").innerHTML = qh;
   }
-  var r = await db.from("angebote")
-    .select("id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis")
-    .order("angebotsdatum", { ascending: false }).limit(500);
-  if (r.error) { msg("angebote-msg", "Fehler beim Laden: " + esc(r.error.message), false); return; }
-  alleAngebote = r.data || [];
+  // Bis zum 17.09.2026 stand hier ".limit(500)" - eine STILLE Obergrenze.
+  // Bei 1.220 Fahrzeugen fehlten dadurch 720, und zwar die aeltesten, weil
+  // nach Angebotsdatum sortiert wird. Folge: "Bestes Geschaeft zuerst"
+  // sortierte nur innerhalb der neuesten 500; ein guenstiges aelteres
+  // Fahrzeug war im Dashboard schlicht nicht zu finden, ohne dass irgendwo
+  // stand, dass etwas fehlt. Genau das war der Fehler - nicht die Zahl 500.
+  //
+  // Jetzt werden ALLE Zeilen geholt, seitenweise zu 1.000 (mehr gibt
+  // PostgREST je Anfrage nicht heraus). Filter, Sortierung und die Zaehler
+  // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
+  // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
+  // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
+  var spalten = "id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis";
+  var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
+  var geladen = [], seite = 0, abgeschnitten = false;
+  while (true) {
+    // Zweites Sortierfeld id: bei gleichem Angebotsdatum waere die
+    // Reihenfolge sonst nicht festgelegt, und beim seitenweisen Holen
+    // koennten Fahrzeuge doppelt kommen oder ganz durchrutschen.
+    var r = await db.from("angebote").select(spalten)
+      .order("angebotsdatum", { ascending: false })
+      .order("id", { ascending: false })
+      .range(seite * PRO_SEITE, seite * PRO_SEITE + PRO_SEITE - 1);
+    if (r.error) { msg("angebote-msg", "Fehler beim Laden: " + esc(r.error.message), false); return; }
+    var teil = r.data || [];
+    geladen = geladen.concat(teil);
+    if (teil.length < PRO_SEITE) break;
+    seite++;
+    if (seite >= MAX_SEITEN) { abgeschnitten = true; break; }
+  }
+  alleAngebote = geladen;
+  // Wenn die Notbremse greift, muss das dastehen - sonst waere es wieder
+  // eine stille Obergrenze.
+  if (abgeschnitten) {
+    msg("angebote-msg", "Obergrenze erreicht: " + fmtNum(alleAngebote.length) + " Fahrzeuge geladen. "
+      + "Sollte es mehr geben, fehlen sie in Liste und Filtern.", true);
+  }
   var statuses = {};
   alleAngebote.forEach(function(a){ statuses[a.status] = (statuses[a.status] || 0) + 1; });
   var fh = '<span class="chip' + (statusFilter === "" ? " active" : "") + '" onclick="setFilter(\'\')">Alle (' + alleAngebote.length + ")</span>";
@@ -984,7 +1129,16 @@ function resetAngebotsFilter(){
   renderStatusChips();
   renderAngebote();
 }
-function renderAngebote(){
+// Wie viele Karten gezeichnet werden. Geladen sind immer alle Fahrzeuge -
+// begrenzt ist nur die Anzeige, und die Zahl steht ueber der Liste.
+// Jeder Filterwechsel ruft renderAngebote() ohne Argument auf und setzt die
+// Anzahl damit wieder auf den Anfangswert zurueck; nur der Knopf
+// "weitere anzeigen" behaelt sie bei.
+var ZEIGE_SCHRITT = 300;
+var zeigeMax = ZEIGE_SCHRITT;
+function mehrAnzeigen(){ zeigeMax += ZEIGE_SCHRITT; renderAngebote(true); }
+function renderAngebote(anzahlBehalten){
+  if (!anzahlBehalten) zeigeMax = ZEIGE_SCHRITT;
   var rows = statusFilter ? alleAngebote.filter(function(a){ return a.status === statusFilter; }) : alleAngebote.slice();
 
   var marke = el("af-marke").value;
@@ -1041,8 +1195,16 @@ function renderAngebote(){
   };
   rows.sort(sorter[sort] || sorter.db1);
 
+  // Erst hier kuerzen - gefiltert und sortiert wird ueber den ganzen Bestand.
+  var gefunden = rows.length;
+  var gekuerzt = gefunden > zeigeMax;
+  if (gekuerzt) rows = rows.slice(0, zeigeMax);
+  // sichtbareIds steuert "Alle sichtbaren auswaehlen". Es darf nur das
+  // enthalten, was wirklich als Karte dasteht - sonst wuerde das Haekchen
+  // stillschweigend auch Fahrzeuge auswaehlen, die niemand sieht.
   sichtbareIds = rows.map(function(a){ return a.id; });
-  el("treffer-anzahl").textContent = rows.length + " von " + alleAngebote.length + " Fahrzeugen";
+  el("treffer-anzahl").textContent = gefunden + " von " + alleAngebote.length + " Fahrzeugen"
+    + (gekuerzt ? " · " + rows.length + " angezeigt" : "");
 
   var html = "";
   rows.forEach(function(a){
@@ -1063,6 +1225,10 @@ function renderAngebote(){
     // numeric kommt als Zeichenkette an, deshalb ueberall Number().
     var ampWert = a.ampel_bewertung || "unbekannt";
     var ampText = { guenstig: "g&uuml;nstig", fair: "fair", teuer: "teuer", unbekannt: "nicht bewertbar" }[ampWert] || esc(ampWert);
+    // "nicht bewertbar" hiess bisher zweierlei: die Bewertung lief und kam zu
+    // keinem Ergebnis - oder sie lief nie. Seit der Stilllegung ist fast
+    // immer das Zweite der Fall, und das ist kein Mangel am Fahrzeug.
+    if (ampWert === "unbekannt") ampText = a.markt_bewertet_am ? "nicht bewertbar" : "noch nicht bewertet";
     var db1 = a.db1 == null ? null : Number(a.db1);
     var wirtHtml = '<div class="wirt"><span class="ampel ampel-' + esc(ampWert) + '">' + ampText + "</span>"
       + (db1 != null ? '<span class="w">DB1 <b class="' + (db1 >= 0 ? "db1-plus" : "db1-minus") + '">'
@@ -1101,14 +1267,16 @@ function renderAngebote(){
 
     if (a.mobile_de_stichprobe != null && a.mobile_de_stichprobe < 5) warn.push("nur " + a.mobile_de_stichprobe + " Vergleichsfahrzeuge – Marktwert wenig belastbar");
 
-    // Marktwerte altern still: markt_bewertet_am wird nach der ersten Bewertung
-    // nie zurueckgesetzt, das Fahrzeug wird also nie neu bewertet. Solange das
-    // so ist, gehoert das Alter sichtbar an das Fahrzeug.
+    // Das Alter des Marktwerts gehoert sichtbar an das Fahrzeug. Der Grund hat
+    // zweimal gewechselt: bis 22.08.2026 wurde ein bewertetes Fahrzeug NIE
+    // wieder angefasst; danach kam die Neubewertung nach sieben Tagen dazu;
+    // seit der Stilllegung am 17.09.2026 altert jeder Wert wieder vor sich hin.
+    // Auf einen alten Marktwert stuetzt niemand einen Ankauf, ohne es zu wissen.
     if (a.markt_bewertet_am) {
       var tage = Math.floor((Date.now() - new Date(a.markt_bewertet_am).getTime()) / 86400000);
       if (tage >= 7) {
         warn.push("Marktwert vom " + new Date(a.markt_bewertet_am).toLocaleDateString("de-DE")
-          + " – " + tage + " Tage alt und wird nicht selbst erneuert");
+          + " – " + tage + " Tage alt (Marktbewertung stillgelegt, keine Erneuerung)");
       }
     }
     var warnHtml = warn.length ? '<div class="warnhinweis">&#9888;&#65039; ' + esc(warn.join(" · ")) + "</div>" : "";
@@ -1136,6 +1304,13 @@ function renderAngebote(){
       + (a.original_link ? '<a class="btn btn-ghost" href="' + esc(a.original_link) + '" target="_blank" rel="noopener">Zum Inserat &rarr;</a>' : "")
       + "</div></div>";
   });
+  if (gekuerzt) {
+    var rest = gefunden - rows.length;
+    html += '<div style="text-align:center;margin-top:6px">'
+      + '<button class="btn btn-ghost" onclick="mehrAnzeigen()">Weitere '
+      + Math.min(ZEIGE_SCHRITT, rest) + ' Fahrzeuge anzeigen <span class="muted">(noch '
+      + rest + ')</span></button></div>';
+  }
   el("angebote-list").innerHTML = html || '<div class="card muted">Keine Fahrzeuge fuer diesen Filter.</div>';
   updateSelCount();
 }
