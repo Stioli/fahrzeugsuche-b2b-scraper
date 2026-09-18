@@ -146,6 +146,7 @@ h1,h2,h3{font-family:var(--font-heading);font-weight:600;letter-spacing:-0.01em}
 .fpanel input,.fpanel select{width:100%;font-family:var(--font-body);font-size:16px;color:var(--ink);background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 12px;min-height:48px}
 .fpanel input:focus,.fpanel select:focus{outline:2px solid rgba(26,109,212,0.35);border-color:var(--accent)}
 .fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.fgrid>*{min-width:0}
 .wfilter{display:flex;gap:12px;align-items:center}
 .wfilter input,.wfilter select{width:auto;flex:1 1 0;min-width:0;max-width:none;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;min-height:48px;font-family:var(--font-body);font-size:16px;color:var(--ink)}
 .wfilter input:focus,.wfilter select:focus{outline:2px solid rgba(26,109,212,0.35);border-color:var(--accent)}
@@ -402,10 +403,12 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
             <select id="af-getriebe" onchange="renderAngebote()"><option value="">Getriebe egal</option></select>
             <input type="number" id="af-preis_von" placeholder="Preis von &euro;" oninput="renderAngebote()">
             <input type="number" id="af-preis_bis" placeholder="Preis bis &euro;" oninput="renderAngebote()">
+            <!-- v1.5 (Oliver 18.09.2026): Standard ist "Preis aufsteigend" - die
+                 Marktbewertung ist stillgelegt, DB1 ist fuer neue Fahrzeuge leer. -->
             <select id="af-sort" onchange="renderAngebote()">
+              <option value="preis_auf" selected>Preis aufsteigend</option>
               <option value="db1">Bestes Geschaeft zuerst (DB1)</option>
               <option value="datum">Neueste zuerst</option>
-              <option value="preis_auf">Preis aufsteigend</option>
               <option value="preis_ab">Preis absteigend</option>
               <option value="km_auf">km aufsteigend</option>
               <option value="ez_neu">EZ neueste zuerst</option>
@@ -417,6 +420,17 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
               <option value="fair">guenstig + fair</option>
               <option value="positiv">nur mit positivem DB1</option>
             </select>
+            <!-- v1.5 (Oliver 18.09.2026): Eingangsdatum, Lieferant und Suche -->
+            <select id="af-eingang" onchange="renderAngebote()">
+              <option value="">Eingang egal</option>
+              <option value="0">heute</option>
+              <option value="3">letzte 3 Tage</option>
+              <option value="7">letzte 7 Tage</option>
+              <option value="14">letzte 14 Tage</option>
+              <option value="30">letzte 30 Tage</option>
+            </select>
+            <select id="af-quelle" onchange="renderAngebote()"><option value="">Alle Lieferanten</option></select>
+            <select id="af-suche" onchange="renderAngebote()"><option value="">Alle Suchen</option></select>
           </div>
           <div class="frow">
             <span class="treffer" id="treffer-anzahl"></span>
@@ -486,7 +500,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.4";
+var VERSION       = "1.5";
 var VERSION_DATUM = "18.09.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
@@ -808,6 +822,9 @@ async function loadWunschliste(){
   var r = await db.from("wunschliste").select("*").order("id");
   if (r.error) { msg("wunsch-msg", "Fehler beim Laden: " + esc(r.error.message), false); return; }
   alleWuensche = (r.data || []).filter(function(w){ return (w.bezeichnung || w.marke || w.modell || "").trim() !== ""; });
+  // v1.5: Suchen und Fahrzeuge laden gleichzeitig. Kommen die Suchen als
+  // Zweites an, stuenden im Filter "Suche" sonst nur Nummern.
+  fuelleSuchFilter();
   await ladeTrefferZaehler();
   renderWunschliste();
 }
@@ -1098,7 +1115,7 @@ async function loadAngebote(){
   // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
   // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
   // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
-  var spalten = "id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon";
+  var spalten = "id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at";
   var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
   var geladen = [], seite = 0, abgeschnitten = false;
   while (true) {
@@ -1135,7 +1152,89 @@ async function loadAngebote(){
   var marken = [...new Set(alleAngebote.map(function(a){ return a.hersteller; }).filter(Boolean))].sort();
   sel.innerHTML = '<option value="">Alle Marken</option>' + marken.map(function(m){ return '<option value="' + esc(m) + '">' + esc(m) + "</option>"; }).join("");
   sel.value = vorher;
+  fuelleQuellenFilter();
+  fuelleSuchFilter();
   renderAngebote();
+}
+
+// ---------- Filter Lieferant / Quelle und Suche (v1.5, Oliver 18.09.2026) ----------
+// ELN speichert "ELN/<Kennung des Anbieters>" - fuer die Auswahl zaehlt nur
+// der Lieferant, sonst stuende ELN siebenmal in der Liste.
+function quelleVon(a){ var q = String(a.quelle_detail || "").trim(); return q ? q.split("/")[0] : ""; }
+// Mail-Haendler = anbieter_name bis vor " (" - also Firma oder Domain ohne
+// den Ansprechpartner. Sonst zerfiele ein Haendler in mehrere Eintraege.
+function mailHaendler(a){ var n = String(a.anbieter_name || "").trim(); var i = n.indexOf(" ("); return (i > 0 ? n.slice(0, i) : n).trim(); }
+function quelleText(q){ return q === "Outlook-Mail" ? "Aus Mail (alle)" : q; }
+function passtQuelle(a, wert){
+  if (!wert) return true;
+  if (wert.indexOf("mail:") === 0) return a.quelle_detail === "Outlook-Mail" && mailHaendler(a) === wert.slice(5);
+  return quelleVon(a) === wert;
+}
+function fuelleQuellenFilter(){
+  var sel = el("af-quelle");
+  var vorher = sel.value;
+  var zQ = {}, zH = {};
+  alleAngebote.forEach(function(a){
+    var q = quelleVon(a);
+    if (q) zQ[q] = (zQ[q] || 0) + 1;
+    if (a.quelle_detail === "Outlook-Mail") { var h = mailHaendler(a); if (h) zH[h] = (zH[h] || 0) + 1; }
+  });
+  var sortiert = function(o){ return Object.keys(o).sort(function(x, y){ return quelleText(x).localeCompare(quelleText(y), "de"); }); };
+  var html = '<option value="">Alle Lieferanten</option>'
+    + sortiert(zQ).map(function(q){ return '<option value="' + escAttr(q) + '">' + esc(quelleText(q)) + " (" + zQ[q] + ")</option>"; }).join("");
+  var haendler = sortiert(zH);
+  if (haendler.length) html += '<optgroup label="H&auml;ndler aus Mails">'
+    + haendler.map(function(h){ return '<option value="' + escAttr("mail:" + h) + '">' + esc(h) + " (" + zH[h] + ")</option>"; }).join("")
+    + "</optgroup>";
+  sel.innerHTML = html;
+  sel.value = vorher;
+  if (sel.value !== vorher) sel.value = "";
+}
+function suchName(id){
+  var w = alleWuensche.find(function(x){ return String(x.id) === String(id); });
+  if (!w) return "Suche #" + id;
+  var n = String(w.bezeichnung || "").trim();
+  return n || [w.marke, w.modell, w.typ].filter(Boolean).join(" ") || "Suche #" + id;
+}
+function passtSuche(a, wert){
+  if (!wert) return true;
+  if (wert === "ohne") return a.match_wunschliste_id == null;
+  return String(a.match_wunschliste_id) === wert;
+}
+function fuelleSuchFilter(){
+  var sel = el("af-suche");
+  var vorher = sel.value;
+  var z = {}, ohne = 0;
+  alleAngebote.forEach(function(a){
+    if (a.match_wunschliste_id == null) ohne++;
+    else z[a.match_wunschliste_id] = (z[a.match_wunschliste_id] || 0) + 1;
+  });
+  var ids = Object.keys(z).sort(function(x, y){ return suchName(x).localeCompare(suchName(y), "de"); });
+  sel.innerHTML = '<option value="">Alle Suchen</option>'
+    + ids.map(function(id){ return '<option value="' + escAttr(id) + '">' + esc(suchName(id)) + " (" + z[id] + ")</option>"; }).join("")
+    + (ohne ? '<option value="ohne">ohne Suche (' + ohne + ")</option>" : "");
+  sel.value = vorher;
+  if (sel.value !== vorher) sel.value = "";
+}
+// Eingang = angebotsdatum, sonst created_at. "heute" heisst ab 0:00 Uhr
+// Ortszeit, "letzte 3 Tage" ab 0:00 Uhr vor drei Tagen.
+function eingangVon(a){ var d = a.angebotsdatum || a.created_at; if (!d) return null; var t = new Date(d); return isNaN(t) ? null : t; }
+function eingangAb(tage, jetzt){ var d = new Date(jetzt || Date.now()); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - Number(tage)); return d; }
+function passtEingang(a, tage, jetzt){
+  if (tage === "" || tage == null) return true;
+  var t = eingangVon(a);
+  return t != null && t >= eingangAb(tage, jetzt);
+}
+// Preis fuer Filter und Sortierung - immer NETTO (v1.5, Oliver 18.09.2026).
+// Bis v1.4 wurde bei fehlendem Netto der Bruttopreis unveraendert genommen;
+// bei ausweisbarer MwSt lag das Fahrzeug damit 19 % zu hoch im Filter.
+// Ohne ausweisbare MwSt (Differenzbesteuerung) ist der Bruttopreis zugleich
+// der Einkaufspreis, weil keine Vorsteuer abziehbar ist - er bleibt stehen.
+function preisNetto(a){
+  if (a.angebotspreis_netto != null) return Number(a.angebotspreis_netto);
+  if (a.angebotspreis_brutto == null) return null;
+  var b = Number(a.angebotspreis_brutto);
+  return a.mwst_ausweisbar === true ? Math.round(b / 1.19 * 100) / 100 : b;
 }
 function setFilter(s){ statusFilter = s; renderStatusChips(); renderAngebote(); }
 function renderStatusChips(){
@@ -1149,8 +1248,8 @@ function renderStatusChips(){
 }
 function resetAngebotsFilter(){
   ["af-modell","af-ps_von","af-ps_bis","af-preis_von","af-preis_bis"].forEach(function(i){ el(i).value = ""; });
-  ["af-marke","af-ez_von","af-ez_bis","af-km","af-kraftstoff","af-getriebe","af-ampel"].forEach(function(i){ el(i).value = ""; });
-  el("af-sort").value = "db1";
+  ["af-marke","af-ez_von","af-ez_bis","af-km","af-kraftstoff","af-getriebe","af-ampel","af-eingang","af-quelle","af-suche"].forEach(function(i){ el(i).value = ""; });
+  el("af-sort").value = "preis_auf";   // v1.5: Standard Preis aufsteigend
   statusFilter = "";
   renderStatusChips();
   renderAngebote();
@@ -1192,7 +1291,7 @@ function renderAngebote(anzahlBehalten){
   var getr = el("af-getriebe").value;
   if (getr) rows = rows.filter(function(a){ return a.getriebe === getr; });
 
-  function preis(a){ var p = a.angebotspreis_netto != null ? a.angebotspreis_netto : a.angebotspreis_brutto; return p == null ? null : Number(p); }
+  var preis = preisNetto;   // v1.5: netto, siehe preisNetto()
   var pVon = el("af-preis_von").value, pBis = el("af-preis_bis").value;
   if (pVon) rows = rows.filter(function(a){ return preis(a) != null && preis(a) >= Number(pVon); });
   if (pBis) rows = rows.filter(function(a){ return preis(a) != null && preis(a) <= Number(pBis); });
@@ -1203,6 +1302,14 @@ function renderAngebote(anzahlBehalten){
   if (amp === "guenstig") rows = rows.filter(function(a){ return a.ampel_bewertung === "guenstig"; });
   if (amp === "fair")     rows = rows.filter(function(a){ return a.ampel_bewertung === "guenstig" || a.ampel_bewertung === "fair"; });
   if (amp === "positiv")  rows = rows.filter(function(a){ return a.db1 != null && Number(a.db1) > 0; });
+
+  // v1.5 (Oliver 18.09.2026): Eingangsdatum, Lieferant / Quelle, Suche
+  var eing = el("af-eingang").value;
+  if (eing !== "") rows = rows.filter(function(a){ return passtEingang(a, eing); });
+  var quelle = el("af-quelle").value;
+  if (quelle) rows = rows.filter(function(a){ return passtQuelle(a, quelle); });
+  var suche = el("af-suche").value;
+  if (suche) rows = rows.filter(function(a){ return passtSuche(a, suche); });
 
   var sort = el("af-sort").value;
   function preisSort(a){ var p = preis(a); return p == null ? Infinity : p; }
@@ -1219,7 +1326,7 @@ function renderAngebote(anzahlBehalten){
     ez_neu:    function(a,b){ return new Date(b.erstzulassung || 0) - new Date(a.erstzulassung || 0); },
     score:     function(a,b){ return (b.match_score || 0) - (a.match_score || 0); }
   };
-  rows.sort(sorter[sort] || sorter.db1);
+  rows.sort(sorter[sort] || sorter.preis_auf);   // v1.5: Standard Preis aufsteigend
 
   // Erst hier kuerzen - gefiltert und sortiert wird ueber den ganzen Bestand.
   var gefunden = rows.length;
