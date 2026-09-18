@@ -1115,7 +1115,7 @@ async function loadAngebote(){
   // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
   // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
   // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
-  var spalten = "id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at";
+  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at";
   var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
   var geladen = [], seite = 0, abgeschnitten = false;
   while (true) {
@@ -1163,7 +1163,15 @@ async function loadAngebote(){
 function quelleVon(a){ var q = String(a.quelle_detail || "").trim(); return q ? q.split("/")[0] : ""; }
 // Mail-Haendler = anbieter_name bis vor " (" - also Firma oder Domain ohne
 // den Ansprechpartner. Sonst zerfiele ein Haendler in mehrere Eintraege.
-function mailHaendler(a){ var n = String(a.anbieter_name || "").trim(); var i = n.indexOf(" ("); return (i > 0 ? n.slice(0, i) : n).trim(); }
+// Haendler = Domain der Absenderadresse, sonst der Name bis vor " (".
+// Die Domain ist eindeutig; nach dem Namen stand derselbe Haendler doppelt
+// da ("Autovation bv" aus einem Handeintrag, "autovation.be" aus dem Lauf).
+function mailHaendler(a){
+  var m = String(a.anbieter_email || "").toLowerCase().trim();
+  if (m.indexOf("@") > 0) return m.slice(m.lastIndexOf("@") + 1);
+  var n = String(a.anbieter_name || "").trim(); var i = n.indexOf(" (");
+  return (i > 0 ? n.slice(0, i) : n).trim();
+}
 function quelleText(q){ return q === "Outlook-Mail" ? "Aus Mail (alle)" : q; }
 function passtQuelle(a, wert){
   if (!wert) return true;
