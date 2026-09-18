@@ -565,7 +565,10 @@ function kontaktKnoepfe(a){
     html += '<a class="btn btn-ghost" href="' + escAttr(href) + '" title="' + escAttr("Antwort an " + mail) + '">Antworten &rarr;</a>';
   }
   var tel = String(a.anbieter_telefon || "").trim();
-  var telNr = tel.replace(/[^+\d]/g, "");
+  // "+32(0)495 ..." ist in Belgien, NL und DE ueblich - die (0) wird bei
+  // internationaler Wahl nicht mitgewaehlt. Ohne diese Zeile entstand
+  // "tel:+320495...", eine falsche Nummer.
+  var telNr = tel.replace(/^(\+\d{1,3})\s*\(0\)/, "$1").replace(/[^+\d]/g, "");
   if (tel && telNr.replace(/\+/g, "").length >= 3) {
     html += '<a class="btn btn-ghost" href="tel:' + escAttr(telNr) + '">&#128222; ' + esc(tel) + "</a>";
   }
@@ -1344,7 +1347,7 @@ function renderAngebote(anzahlBehalten){
       // zusaetzlich "Antworten" (mailto) und die Telefonnummer (tel).
       + '<span class="foot-aktionen">'
       + (istMail ? kontaktKnoepfe(a) : "")
-      + (a.original_link ? '<a class="btn btn-ghost" href="' + esc(a.original_link) + '" target="_blank" rel="noopener"'
+      + (a.original_link ? '<a class="btn btn-ghost" href="' + escAttr(a.original_link) + '" target="_blank" rel="noopener"'
           + (istMail ? ' title="Oeffnet die Originalmail in Outlook - nur mit Zugriff auf das Postfach"' : "") + ">"
           + (istMail ? "Mail &ouml;ffnen" : "Zum Inserat") + " &rarr;</a>" : "")
       + "</span>"
