@@ -112,6 +112,8 @@ h1,h2,h3{font-family:var(--font-heading);font-weight:600;letter-spacing:-0.01em}
 .specrow{grid-column:2 / -1;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 .spec-chip{background:#F4F7FB;border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:13px;color:var(--sub);white-space:nowrap}
 .spec-chip b{color:var(--ink);font-family:var(--font-heading);font-weight:600}
+.spec-chip.paket{background:rgba(245,200,66,0.14);border-color:rgba(245,200,66,0.6);color:#B88A00}
+.spec-chip.paket b{color:#B88A00}
 /* Wirtschaftlichkeit: Einstand, Marktwert, Deckungsbeitrag, Ampel */
 .wirt{grid-column:2 / -1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .wirt .w{background:#F4F7FB;border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:13px;color:var(--sub);white-space:nowrap}
@@ -212,7 +214,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       <div class="section-h" style="margin-bottom:18px">
         <span class="label">&#128663; B2B-Ankauf</span>
         <h1>Fahrzeugsuche <em>B2B Scraper</em></h1>
-        <p>Automatische Vor-Selektion von Gebrauchtwagen aus B2B-Quellen &mdash; zehn angebundene Lieferanten, Start von Hand. Welche davon deine Marke ueberhaupt fuehren, steht in der Anleitung unter &bdquo;Angebundene Quellen&ldquo;.</p>
+        <p>Automatische Vor-Selektion von Gebrauchtwagen aus B2B-Quellen &mdash; zehn angebundene Lieferanten und H&auml;ndlerangebote per Mail, Start von Hand. Welche davon deine Marke ueberhaupt fuehren, steht in der Anleitung unter &bdquo;Angebundene Quellen&ldquo;.</p>
         <p class="version-zeile" id="version-app"></p>
       </div>
       <div class="tabs">
@@ -482,8 +484,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.2";
-var VERSION_DATUM = "17.09.2026";
+var VERSION       = "1.3";
+var VERSION_DATUM = "18.09.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
 var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
@@ -1072,7 +1074,7 @@ async function loadAngebote(){
   // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
   // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
   // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
-  var spalten = "id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis";
+  var spalten = "id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit";
   var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
   var geladen = [], seite = 0, abgeschnitten = false;
   while (true) {
@@ -1218,6 +1220,7 @@ function renderAngebote(anzahlBehalten){
     } else {
       preisHtml = '<div class="preis">' + fmtEur(brutto) + '</div><div class="brutto">brutto inkl. MwSt.</div>';
     }
+    var istMail = a.quelle_detail === "Outlook-Mail";
     var statusCls = a.status === "Match" ? "pill-blue" : (a.status === "Neu" ? "pill-gold" : "pill-off");
     var checked = selectedIds.has(a.id) ? " checked" : "";
 
@@ -1279,6 +1282,13 @@ function renderAngebote(anzahlBehalten){
           + " – " + tage + " Tage alt (Marktbewertung stillgelegt, keine Erneuerung)");
       }
     }
+    // Paketangebote (seit 18.09.2026, Quelle Outlook-Mail): Der Preis gilt nur
+    // fuer die ganze Menge. Ohne diesen Satz saehe ein LKW voller Sportage
+    // wie ein einzelnes Schnaeppchen aus, das man gar nicht heben kann.
+    if (a.paketangebot) {
+      warn.unshift("Paketangebot – Preis gilt nur bei Abnahme "
+        + (a.mindestabnahme ? "von mindestens " + a.mindestabnahme + " Fahrzeugen" : "der ganzen Menge (z. B. volle LKW-Ladung)"));
+    }
     var warnHtml = warn.length ? '<div class="warnhinweis">&#9888;&#65039; ' + esc(warn.join(" · ")) + "</div>" : "";
 
     var chips = '<span class="spec-chip">EZ <b>' + ez + "</b></span>"
@@ -1286,6 +1296,10 @@ function renderAngebote(anzahlBehalten){
       + (a.motorleistung_ps ? '<span class="spec-chip"><b>' + a.motorleistung_ps + "</b> PS</span>" : "")
       + ((a.kraftstoff && a.kraftstoff.length) ? '<span class="spec-chip">' + esc(a.kraftstoff.join("/")) + "</span>" : "")
       + (a.getriebe ? '<span class="spec-chip">' + esc(a.getriebe) + "</span>" : "")
+      + (a.stueckzahl ? '<span class="spec-chip"><b>' + a.stueckzahl + "</b> St&uuml;ck verf&uuml;gbar</span>" : "")
+      + (a.paketangebot ? '<span class="spec-chip paket">&#128230; <b>Paket</b>'
+          + (a.mindestabnahme ? " ab " + a.mindestabnahme + " Stk." : "") + "</span>" : "")
+      + (istMail ? '<span class="spec-chip">&#9993;&#65039; aus Mail</span>' : "")
       + '<span class="pill ' + statusCls + '">' + esc(a.status) + (a.match_score ? " " + a.match_score : "") + "</span>";
 
     html += '<div class="angebot' + (checked ? " sel" : "") + '" id="ang-' + a.id + '">'
@@ -1299,9 +1313,13 @@ function renderAngebote(anzahlBehalten){
       + '<div class="foot">'
       + '<span class="quelle-info">'
       + (a.anbieter_name ? "<b>" + esc(a.anbieter_name) + "</b> &middot; " : "")
-      + (a.anbieter_fahrzeug_nr ? "Fzg-Nr. <b>" + esc(a.anbieter_fahrzeug_nr) + "</b> &middot; " : "")
+      + (a.anbieter_fahrzeug_nr ? (istMail ? "Mail <b>" : "Fzg-Nr. <b>") + esc(a.anbieter_fahrzeug_nr) + "</b> &middot; " : "")
       + (a.angebotsdatum ? new Date(a.angebotsdatum).toLocaleDateString("de-DE") : "") + "</span>"
-      + (a.original_link ? '<a class="btn btn-ghost" href="' + esc(a.original_link) + '" target="_blank" rel="noopener">Zum Inserat &rarr;</a>' : "")
+      // Bei Mail-Angeboten ist der Link die Mail in Outlook im Web. Oeffnen
+      // kann sie nur, wer Zugriff auf das Postfach hat - fuer alle anderen
+      // steht Absender und Betreff links daneben.
+      + (a.original_link ? '<a class="btn btn-ghost" href="' + esc(a.original_link) + '" target="_blank" rel="noopener">'
+          + (istMail ? "Mail &ouml;ffnen" : "Zum Inserat") + " &rarr;</a>" : "")
       + "</div></div>";
   });
   if (gekuerzt) {
