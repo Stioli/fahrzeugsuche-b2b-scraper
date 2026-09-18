@@ -130,6 +130,8 @@ h1,h2,h3{font-family:var(--font-heading);font-weight:600;letter-spacing:-0.01em}
 .angebot .foot{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:10px;padding-top:10px}
 .angebot .foot .btn{font-size:13px;padding:8px 14px;min-height:40px}
 .angebot .quelle-info{font-size:13px;color:var(--light)}
+.angebot .foot-aktionen{display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:100%}
+.angebot .foot-aktionen .btn{max-width:100%;overflow-wrap:anywhere}
 .angebot .quelle-info b{color:var(--ink)}
 @media(max-width:640px){.angebot{grid-template-columns:auto 1fr}.angebot .rechts{grid-column:1 / -1;text-align:left;margin-top:4px}}
 .selbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px 16px;margin-bottom:14px}
@@ -484,7 +486,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.3";
+var VERSION       = "1.4";
 var VERSION_DATUM = "18.09.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
@@ -550,6 +552,25 @@ function esc(s){ return String(s == null ? "" : s).replace(/&/g,"&amp;").replace
 // zusaetzlich die Anfuehrungszeichen weg, sonst reisst eine Fehlermeldung
 // mit einem " im Text das Attribut auf.
 function escAttr(s){ return esc(s).replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+
+// Kontakt-Knoepfe fuer Mail-Angebote (v1.4): "Antworten" per mailto und die
+// Telefonnummer als tel-Link. Beides nur, wenn die Angabe vorhanden und
+// plausibel ist - die Werte kommen aus fremden Mails, deshalb alles escapen.
+function kontaktKnoepfe(a){
+  var html = "";
+  var mail = String(a.anbieter_email || "").trim();
+  if (mail && /^[^\s@<>"]+@[^\s@<>"]+$/.test(mail)) {
+    var href = "mailto:" + encodeURIComponent(mail).replace(/%40/g, "@")
+      + "?subject=" + encodeURIComponent("AW: " + (a.anbieter_fahrzeug_nr || "Ihr Angebot"));
+    html += '<a class="btn btn-ghost" href="' + escAttr(href) + '" title="' + escAttr("Antwort an " + mail) + '">Antworten &rarr;</a>';
+  }
+  var tel = String(a.anbieter_telefon || "").trim();
+  var telNr = tel.replace(/[^+\d]/g, "");
+  if (tel && telNr.replace(/\+/g, "").length >= 3) {
+    html += '<a class="btn btn-ghost" href="tel:' + escAttr(telNr) + '">&#128222; ' + esc(tel) + "</a>";
+  }
+  return html;
+}
 function msg(id, text, ok){ var m = el(id); m.className = "msg " + (ok ? "ok" : "err"); m.innerHTML = text; setTimeout(function(){ m.className = "msg"; }, 6000); }
 function fmtNum(n){ return n == null ? "&ndash;" : Number(n).toLocaleString("de-DE"); }
 function fmtEur(n){ return n == null ? "&ndash;" : Number(n).toLocaleString("de-DE") + " &euro;"; }
@@ -1074,7 +1095,7 @@ async function loadAngebote(){
   // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
   // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
   // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
-  var spalten = "id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit";
+  var spalten = "id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon";
   var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
   var geladen = [], seite = 0, abgeschnitten = false;
   while (true) {
@@ -1318,8 +1339,15 @@ function renderAngebote(anzahlBehalten){
       // Bei Mail-Angeboten ist der Link die Mail in Outlook im Web. Oeffnen
       // kann sie nur, wer Zugriff auf das Postfach hat - fuer alle anderen
       // steht Absender und Betreff links daneben.
-      + (a.original_link ? '<a class="btn btn-ghost" href="' + esc(a.original_link) + '" target="_blank" rel="noopener">'
+      // v1.4 (Oliver 18.09.2026): jeder Dashboard-Nutzer soll den Haendler
+      // erreichen, auch ohne Postfachzugriff - deshalb bei Mail-Angeboten
+      // zusaetzlich "Antworten" (mailto) und die Telefonnummer (tel).
+      + '<span class="foot-aktionen">'
+      + (istMail ? kontaktKnoepfe(a) : "")
+      + (a.original_link ? '<a class="btn btn-ghost" href="' + esc(a.original_link) + '" target="_blank" rel="noopener"'
+          + (istMail ? ' title="Oeffnet die Originalmail in Outlook - nur mit Zugriff auf das Postfach"' : "") + ">"
           + (istMail ? "Mail &ouml;ffnen" : "Zum Inserat") + " &rarr;</a>" : "")
+      + "</span>"
       + "</div></div>";
   });
   if (gekuerzt) {
