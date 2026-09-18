@@ -431,6 +431,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
             </select>
             <select id="af-quelle" onchange="renderAngebote()"><option value="">Alle Lieferanten</option></select>
             <select id="af-suche" onchange="renderAngebote()"><option value="">Alle Suchen</option></select>
+            <!-- v1.6 (Oliver 18.09.2026): Dubletten standardmaessig aus -->
+            <label class="check" title="Dasselbe Fahrzeug aus einer weiteren Mail oder Quelle. Standard: ausgeblendet, der behaltene Eintrag nennt sie unter &bdquo;auch bei&ldquo;."><input type="checkbox" id="af-dubletten" onchange="dublettenUmschalten()" style="width:20px;min-height:0;padding:0"><span>Dubletten zeigen</span></label>
           </div>
           <div class="frow">
             <span class="treffer" id="treffer-anzahl"></span>
@@ -500,7 +502,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.5";
+var VERSION       = "1.6";
 var VERSION_DATUM = "18.09.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
@@ -1115,7 +1117,7 @@ async function loadAngebote(){
   // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
   // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
   // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
-  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at";
+  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at,dublette_von,farbe";
   var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
   var geladen = [], seite = 0, abgeschnitten = false;
   while (true) {
@@ -1140,13 +1142,8 @@ async function loadAngebote(){
     msg("angebote-msg", "Obergrenze erreicht: " + fmtNum(alleAngebote.length) + " Fahrzeuge geladen. "
       + "Sollte es mehr geben, fehlen sie in Liste und Filtern.", true);
   }
-  var statuses = {};
-  alleAngebote.forEach(function(a){ statuses[a.status] = (statuses[a.status] || 0) + 1; });
-  var fh = '<span class="chip' + (statusFilter === "" ? " active" : "") + '" onclick="setFilter(\'\')">Alle (' + alleAngebote.length + ")</span>";
-  Object.keys(statuses).sort().forEach(function(s){
-    fh += '<span class="chip' + (statusFilter === s ? " active" : "") + '" onclick="setFilter(\'' + esc(s) + '\')">' + esc(s) + " (" + statuses[s] + ")</span>";
-  });
-  el("status-filter").innerHTML = fh;
+  dublettenOrdnen();
+  renderStatusChips();
   var sel = el("af-marke");
   var vorher = sel.value;
   var marken = [...new Set(alleAngebote.map(function(a){ return a.hersteller; }).filter(Boolean))].sort();
@@ -1182,7 +1179,7 @@ function fuelleQuellenFilter(){
   var sel = el("af-quelle");
   var vorher = sel.value;
   var zQ = {}, zH = {};
-  alleAngebote.forEach(function(a){
+  bestand().forEach(function(a){
     var q = quelleVon(a);
     if (q) zQ[q] = (zQ[q] || 0) + 1;
     if (a.quelle_detail === "Outlook-Mail") { var h = mailHaendler(a); if (h) zH[h] = (zH[h] || 0) + 1; }
@@ -1213,7 +1210,7 @@ function fuelleSuchFilter(){
   var sel = el("af-suche");
   var vorher = sel.value;
   var z = {}, ohne = 0;
-  alleAngebote.forEach(function(a){
+  bestand().forEach(function(a){
     if (a.match_wunschliste_id == null) ohne++;
     else z[a.match_wunschliste_id] = (z[a.match_wunschliste_id] || 0) + 1;
   });
@@ -1244,11 +1241,50 @@ function preisNetto(a){
   var b = Number(a.angebotspreis_brutto);
   return a.mwst_ausweisbar === true ? Math.round(b / 1.19 * 100) / 100 : b;
 }
+// ---------- Dubletten (v1.6, Oliver 18.09.2026) ----------
+// Dasselbe Fahrzeug kommt aus mehreren Mails oder Quellen. match_angebote.py
+// (dubletten.py) markiert die weiteren Eintraege mit dublette_von = id des
+// behaltenen - geloescht wird nichts. Standard hier: Dubletten ausblenden,
+// am behaltenen Eintrag steht "auch bei: ...". Zeigt dublette_von auf einen
+// Eintrag, der nicht geladen ist (z. B. gerade geloescht), bleibt die Zeile
+// sichtbar - sonst verschwaende ein Fahrzeug ganz.
+var dublettenJe = {};   // id des behaltenen -> [Dubletten]
+function dublettenOrdnen(){
+  dublettenJe = {};
+  var ids = {};
+  alleAngebote.forEach(function(a){ ids[a.id] = true; });
+  alleAngebote.forEach(function(a){
+    if (a.dublette_von != null && ids[a.dublette_von]) (dublettenJe[a.dublette_von] = dublettenJe[a.dublette_von] || []).push(a);
+  });
+}
+function istVersteckteDublette(a){ return a.dublette_von != null && !!dublettenJe[a.dublette_von]; }
+function dublettenZeigen(){ var c = el("af-dubletten"); return !!(c && c.checked); }
+// Der Bestand, auf den sich Zaehler und Auswahllisten beziehen.
+function bestand(){ return dublettenZeigen() ? alleAngebote : alleAngebote.filter(function(a){ return !istVersteckteDublette(a); }); }
+function herkunftText(a){ return a.quelle_detail === "Outlook-Mail" ? "Mail " + (mailHaendler(a) || "?") : (quelleVon(a) || "?"); }
+// "auch bei: Mail haendler.be / Tabor (2)" am behaltenen Eintrag; bei
+// eingeblendeten Dubletten der Verweis auf den behaltenen.
+function dublettenChip(a){
+  var liste = dublettenJe[a.id];
+  if (liste && liste.length) {
+    var wo = [];
+    liste.forEach(function(d){ var t = herkunftText(d); if (wo.indexOf(t) < 0) wo.push(t); });
+    var titel = liste.map(function(d){
+      return "#" + d.id + " " + herkunftText(d) + (d.angebotsdatum ? ", " + new Date(d.angebotsdatum).toLocaleDateString("de-DE") : "")
+        + (d.farbe ? ", " + d.farbe : "") + (d.angebotspreis_netto != null ? ", " + Number(d.angebotspreis_netto).toLocaleString("de-DE") + " € netto" : "");   // Klartext: fmtEur liefert &euro;, im title-Attribut stuende das woertlich
+    }).join(" | ");
+    return '<span class="spec-chip" title="' + escAttr(titel) + '">&#128279; auch bei: <b>' + esc(wo.join(" / ")) + "</b> (" + liste.length + ")</span>";
+  }
+  if (istVersteckteDublette(a)) return '<span class="spec-chip">&#128279; Dublette von <b>#' + esc(a.dublette_von) + "</b></span>";
+  return "";
+}
+function dublettenUmschalten(){ renderStatusChips(); fuelleQuellenFilter(); fuelleSuchFilter(); renderAngebote(); }
+
 function setFilter(s){ statusFilter = s; renderStatusChips(); renderAngebote(); }
 function renderStatusChips(){
-  var statuses = {};
-  alleAngebote.forEach(function(a){ statuses[a.status] = (statuses[a.status] || 0) + 1; });
-  var fh = '<span class="chip' + (statusFilter === "" ? " active" : "") + '" onclick="setFilter(\'\')">Alle (' + alleAngebote.length + ")</span>";
+  var statuses = {}, basis = bestand();
+  basis.forEach(function(a){ statuses[a.status] = (statuses[a.status] || 0) + 1; });
+  var fh = '<span class="chip' + (statusFilter === "" ? " active" : "") + '" onclick="setFilter(\'\')">Alle (' + basis.length + ")</span>";
   Object.keys(statuses).sort().forEach(function(s){
     fh += '<span class="chip' + (statusFilter === s ? " active" : "") + '" onclick="setFilter(\'' + esc(s) + '\')">' + esc(s) + " (" + statuses[s] + ")</span>";
   });
@@ -1258,8 +1294,11 @@ function resetAngebotsFilter(){
   ["af-modell","af-ps_von","af-ps_bis","af-preis_von","af-preis_bis"].forEach(function(i){ el(i).value = ""; });
   ["af-marke","af-ez_von","af-ez_bis","af-km","af-kraftstoff","af-getriebe","af-ampel","af-eingang","af-quelle","af-suche"].forEach(function(i){ el(i).value = ""; });
   el("af-sort").value = "preis_auf";   // v1.5: Standard Preis aufsteigend
+  el("af-dubletten").checked = false;  // v1.6: Standard Dubletten aus
   statusFilter = "";
   renderStatusChips();
+  fuelleQuellenFilter();
+  fuelleSuchFilter();
   renderAngebote();
 }
 // Wie viele Karten gezeichnet werden. Geladen sind immer alle Fahrzeuge -
@@ -1272,7 +1311,11 @@ var zeigeMax = ZEIGE_SCHRITT;
 function mehrAnzeigen(){ zeigeMax += ZEIGE_SCHRITT; renderAngebote(true); }
 function renderAngebote(anzahlBehalten){
   if (!anzahlBehalten) zeigeMax = ZEIGE_SCHRITT;
-  var rows = statusFilter ? alleAngebote.filter(function(a){ return a.status === statusFilter; }) : alleAngebote.slice();
+  // v1.6: ohne Haekchen "Dubletten zeigen" fehlen die markierten Dubletten
+  // schon im Ausgangsbestand - Filter, Zaehler und Auswahl sehen sie nicht.
+  var basis = bestand();
+  var versteckt = alleAngebote.length - basis.length;
+  var rows = statusFilter ? basis.filter(function(a){ return a.status === statusFilter; }) : basis.slice();
 
   var marke = el("af-marke").value;
   if (marke) rows = rows.filter(function(a){ return a.hersteller === marke; });
@@ -1344,8 +1387,9 @@ function renderAngebote(anzahlBehalten){
   // enthalten, was wirklich als Karte dasteht - sonst wuerde das Haekchen
   // stillschweigend auch Fahrzeuge auswaehlen, die niemand sieht.
   sichtbareIds = rows.map(function(a){ return a.id; });
-  el("treffer-anzahl").textContent = gefunden + " von " + alleAngebote.length + " Fahrzeugen"
-    + (gekuerzt ? " · " + rows.length + " angezeigt" : "");
+  el("treffer-anzahl").textContent = gefunden + " von " + basis.length + " Fahrzeugen"
+    + (gekuerzt ? " · " + rows.length + " angezeigt" : "")
+    + (versteckt ? " · " + versteckt + (versteckt === 1 ? " Dublette" : " Dubletten") + " ausgeblendet" : "");
 
   var html = "";
   rows.forEach(function(a){
@@ -1439,6 +1483,7 @@ function renderAngebote(anzahlBehalten){
       + (a.paketangebot ? '<span class="spec-chip paket">&#128230; <b>Paket</b>'
           + (a.mindestabnahme ? " ab " + a.mindestabnahme + " Stk." : "") + "</span>" : "")
       + (istMail ? '<span class="spec-chip">&#9993;&#65039; aus Mail</span>' : "")
+      + dublettenChip(a)
       + '<span class="pill ' + statusCls + '">' + esc(a.status) + (a.match_score ? " " + a.match_score : "") + "</span>";
 
     html += '<div class="angebot' + (checked ? " sel" : "") + '" id="ang-' + a.id + '">'
