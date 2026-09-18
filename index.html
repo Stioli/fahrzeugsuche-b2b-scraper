@@ -1313,7 +1313,7 @@ function renderAngebote(anzahlBehalten){
       + '<div class="foot">'
       + '<span class="quelle-info">'
       + (a.anbieter_name ? "<b>" + esc(a.anbieter_name) + "</b> &middot; " : "")
-      + (a.anbieter_fahrzeug_nr ? (istMail ? "Mail <b>" : "Fzg-Nr. <b>") + esc(a.anbieter_fahrzeug_nr) + "</b> &middot; " : "")
+      + (a.anbieter_fahrzeug_nr ? (istMail ? "Betreff <b>" : "Fzg-Nr. <b>") + esc(a.anbieter_fahrzeug_nr) + "</b> &middot; " : "")
       + (a.angebotsdatum ? new Date(a.angebotsdatum).toLocaleDateString("de-DE") : "") + "</span>"
       // Bei Mail-Angeboten ist der Link die Mail in Outlook im Web. Oeffnen
       // kann sie nur, wer Zugriff auf das Postfach hat - fuer alle anderen
