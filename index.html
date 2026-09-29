@@ -502,7 +502,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.7";
+var VERSION       = "1.8";
 var VERSION_DATUM = "29.09.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
@@ -1117,7 +1117,7 @@ async function loadAngebote(){
   // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
   // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
   // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
-  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at,dublette_von,farbe,postfach";
+  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at,dublette_von,farbe,postfach,dublette_verdacht";
   var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
   var geladen = [], seite = 0, abgeschnitten = false;
   while (true) {
@@ -1249,12 +1249,18 @@ function preisNetto(a){
 // Eintrag, der nicht geladen ist (z. B. gerade geloescht), bleibt die Zeile
 // sichtbar - sonst verschwaende ein Fahrzeug ganz.
 var dublettenJe = {};   // id des behaltenen -> [Dubletten]
+// v1.8 (Oliver 29.09.2026, AP 1.4 Regel D): Verdacht ueber Quellen hinweg -
+// nur ein Hinweis, nichts wird ausgeblendet. dublette_verdacht zeigt auf das
+// Angebot beim direkten Lieferanten.
+var verdachtJe = {};    // id des Ziels -> [Angebote mit Verdacht darauf]
+var angebotNachId = {};
 function dublettenOrdnen(){
-  dublettenJe = {};
+  dublettenJe = {}; verdachtJe = {}; angebotNachId = {};
   var ids = {};
-  alleAngebote.forEach(function(a){ ids[a.id] = true; });
+  alleAngebote.forEach(function(a){ ids[a.id] = true; angebotNachId[a.id] = a; });
   alleAngebote.forEach(function(a){
     if (a.dublette_von != null && ids[a.dublette_von]) (dublettenJe[a.dublette_von] = dublettenJe[a.dublette_von] || []).push(a);
+    if (a.dublette_verdacht != null && ids[a.dublette_verdacht]) (verdachtJe[a.dublette_verdacht] = verdachtJe[a.dublette_verdacht] || []).push(a);
   });
 }
 function istVersteckteDublette(a){ return a.dublette_von != null && !!dublettenJe[a.dublette_von]; }
@@ -1278,7 +1284,7 @@ function dublettenChip(a){
   var liste = dublettenJe[a.id];
   if (liste && liste.length) {
     var wo = [];
-    liste.forEach(function(d){ var t = herkunftText(d); if (wo.indexOf(t) < 0) wo.push(t); });
+    liste.forEach(function(d){ var t = dublettenArt(d, a); if (wo.indexOf(t) < 0) wo.push(t); });
     var titel = liste.map(function(d){
       return "#" + d.id + " " + herkunftText(d) + (d.angebotsdatum ? ", " + new Date(d.angebotsdatum).toLocaleDateString("de-DE") : "")
         + (d.farbe ? ", " + d.farbe : "") + (d.angebotspreis_netto != null ? ", " + Number(d.angebotspreis_netto).toLocaleString("de-DE") + " € netto" : "");   // Klartext: fmtEur liefert &euro;, im title-Attribut stuende das woertlich
@@ -1286,6 +1292,27 @@ function dublettenChip(a){
     return '<span class="spec-chip" title="' + escAttr(titel) + '">&#128279; auch bei: <b>' + esc(wo.join(" / ")) + "</b> (" + liste.length + ")</span>";
   }
   if (istVersteckteDublette(a)) return '<span class="spec-chip">&#128279; Dublette von <b>#' + esc(a.dublette_von) + "</b></span>";
+  return "";
+}
+// Regel C (dubletten.py): gleiche Quelle, gleiche Nummer - "mit AHK" bzw.
+// "erneut eingestellt" statt nochmals denselben Quellennamen.
+function dublettenArt(d, behalten){
+  if (d.quelle_detail && d.quelle_detail === behalten.quelle_detail && d.quelle_detail !== "Outlook-Mail") {
+    return /ahk\s*$/i.test(String(d.anbieter_fahrzeug_nr || "")) ? "Fassung mit AHK" : "erneut eingestellt";
+  }
+  return herkunftText(d);
+}
+function verdachtChip(a){
+  var ziel = a.dublette_verdacht != null ? angebotNachId[a.dublette_verdacht] : null;
+  if (ziel) {
+    return '<span class="spec-chip" title="' + escAttr("Gleiche Suche, Farbe, PS, EZ-Monat, km und Preis fast gleich - ohne FIN nicht sicher. Bitte vergleichen.") + '">&#9888;&#65039; evtl. dasselbe wie <b>#'
+      + esc(ziel.id) + "</b> (" + esc(herkunftText(ziel)) + ")</span>";
+  }
+  var liste = verdachtJe[a.id];
+  if (liste && liste.length) {
+    return '<span class="spec-chip" title="' + escAttr(liste.map(function(d){ return "#" + d.id + " " + herkunftText(d); }).join(" | ")) + '">&#9888;&#65039; evtl. auch bei: <b>'
+      + esc(liste.map(herkunftText).join(" / ")) + "</b></span>";
+  }
   return "";
 }
 function dublettenUmschalten(){ renderStatusChips(); fuelleQuellenFilter(); fuelleSuchFilter(); renderAngebote(); }
@@ -1495,6 +1522,7 @@ function renderAngebote(anzahlBehalten){
       + (istMail ? '<span class="spec-chip"' + (a.postfach ? ' title="' + escAttr("Postfach: " + a.postfach) + '"' : "") + '>&#9993;&#65039; aus Mail'
           + (postfachKurz(a) ? " &middot; <b>" + esc(postfachKurz(a)) + "</b>" : "") + "</span>" : "")
       + dublettenChip(a)
+      + verdachtChip(a)
       + '<span class="pill ' + statusCls + '">' + esc(a.status) + (a.match_score ? " " + a.match_score : "") + "</span>";
 
     html += '<div class="angebot' + (checked ? " sel" : "") + '" id="ang-' + a.id + '">'
