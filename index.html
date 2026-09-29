@@ -502,8 +502,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.6";
-var VERSION_DATUM = "18.09.2026";
+var VERSION       = "1.7";
+var VERSION_DATUM = "29.09.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
 var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
@@ -1117,7 +1117,7 @@ async function loadAngebote(){
   // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
   // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
   // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
-  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at,dublette_von,farbe";
+  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at,dublette_von,farbe,postfach";
   var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
   var geladen = [], seite = 0, abgeschnitten = false;
   while (true) {
@@ -1261,7 +1261,17 @@ function istVersteckteDublette(a){ return a.dublette_von != null && !!dublettenJ
 function dublettenZeigen(){ var c = el("af-dubletten"); return !!(c && c.checked); }
 // Der Bestand, auf den sich Zaehler und Auswahllisten beziehen.
 function bestand(){ return dublettenZeigen() ? alleAngebote : alleAngebote.filter(function(a){ return !istVersteckteDublette(a); }); }
-function herkunftText(a){ return a.quelle_detail === "Outlook-Mail" ? "Mail " + (mailHaendler(a) || "?") : (quelleVon(a) || "?"); }
+// v1.7 (Oliver 29.09.2026): Postfach, in dem die Angebotsmail lag - kurz als
+// "verkauf@". Leer bei Handeintraegen ohne Mail-Vermerk.
+function postfachKurz(a){
+  var p = String(a.postfach || "").toLowerCase().trim();
+  return p.indexOf("@") > 0 ? p.slice(0, p.indexOf("@") + 1) : "";
+}
+function herkunftText(a){
+  if (a.quelle_detail !== "Outlook-Mail") return quelleVon(a) || "?";
+  var pf = postfachKurz(a);
+  return "Mail " + (mailHaendler(a) || "?") + (pf ? " (" + pf + ")" : "");
+}
 // "auch bei: Mail haendler.be / Tabor (2)" am behaltenen Eintrag; bei
 // eingeblendeten Dubletten der Verweis auf den behaltenen.
 function dublettenChip(a){
@@ -1482,7 +1492,8 @@ function renderAngebote(anzahlBehalten){
       + (a.stueckzahl ? '<span class="spec-chip"><b>' + a.stueckzahl + "</b> St&uuml;ck verf&uuml;gbar</span>" : "")
       + (a.paketangebot ? '<span class="spec-chip paket">&#128230; <b>Paket</b>'
           + (a.mindestabnahme ? " ab " + a.mindestabnahme + " Stk." : "") + "</span>" : "")
-      + (istMail ? '<span class="spec-chip">&#9993;&#65039; aus Mail</span>' : "")
+      + (istMail ? '<span class="spec-chip"' + (a.postfach ? ' title="' + escAttr("Postfach: " + a.postfach) + '"' : "") + '>&#9993;&#65039; aus Mail'
+          + (postfachKurz(a) ? " &middot; <b>" + esc(postfachKurz(a)) + "</b>" : "") + "</span>" : "")
       + dublettenChip(a)
       + '<span class="pill ' + statusCls + '">' + esc(a.status) + (a.match_score ? " " + a.match_score : "") + "</span>";
 
