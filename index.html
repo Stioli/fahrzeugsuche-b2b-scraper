@@ -306,6 +306,15 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
               <label class="check"><input type="checkbox" value="Schaltgetriebe"><span>Schaltgetriebe</span></label>
             </div>
           </div>
+          <!-- v1.10 (Oliver 29.09.2026): Antrieb. Wie Getriebe: anderer Antrieb faellt
+               raus, ohne Angabe beim Anbieter bleibt das Fahrzeug mit Hinweis drin. -->
+          <div class="field"><label>Antrieb (leer = egal)</label>
+            <div class="checks" id="f-antrieb">
+              <label class="check"><input type="checkbox" value="allrad"><span>Allrad</span> <span class="muted">(AWD/4WD)</span></label>
+              <label class="check"><input type="checkbox" value="front"><span>Front</span> <span class="muted">(2WD/FWD)</span></label>
+            </div>
+            <div class="muted">Nennt der Anbieter keinen Antrieb, bleibt das Fahrzeug drin und tr&auml;gt einen Hinweis.</div>
+          </div>
           <div class="field"><label>Fahrzeugzustand (leer = egal)</label>
             <div class="checks" id="f-zustand">
               <label class="check"><input type="checkbox" value="Tageszulassung"><span>Tageszulassung</span></label>
@@ -510,7 +519,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.9";
+var VERSION       = "1.10";
 var VERSION_DATUM = "29.09.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
@@ -873,6 +882,7 @@ function renderWunschliste(){
     if (w.kraftstoff && w.kraftstoff.length) crit.push(esc(w.kraftstoff.join("/")));
     if (w.ps_von || w.ps_bis) crit.push((w.ps_von || "?") + "&ndash;" + (w.ps_bis || "?") + " PS");
     if (w.getriebe && w.getriebe.length) crit.push(esc(w.getriebe.join(" / ")));
+    if (w.antrieb && w.antrieb.length === 1) crit.push(w.antrieb[0] === "allrad" ? "Allrad" : "Front");
     if (w.zustand && w.zustand.length) crit.push(esc(w.zustand.join(" / ")));
     if (w.sitze_von || w.sitze_bis) crit.push((w.sitze_von || "?") + "&ndash;" + (w.sitze_bis || "?") + " Sitze");
     var feats = BOOLS.filter(function(b){ return w[b]; }).map(function(b){ return BOOL_NAMES[b]; });
@@ -927,6 +937,8 @@ function openForm(id){
   el("f-umkreis_km").value = w.id ? (w.umkreis_km == null ? "" : String(w.umkreis_km)) : "200";
   var g = w.getriebe || [];
   el("f-getriebe").querySelectorAll("input").forEach(function(c){ c.checked = g.indexOf(c.value) >= 0; });
+  var an = w.antrieb || [];
+  el("f-antrieb").querySelectorAll("input").forEach(function(c){ c.checked = an.indexOf(c.value) >= 0; });
   var k = w.kraftstoff || [];
   el("f-kraftstoff").querySelectorAll("input").forEach(function(c){ c.checked = k.indexOf(c.value) >= 0; });
   var z = w.zustand || [];
@@ -944,6 +956,7 @@ async function saveForm(scanDanach){
   var plz = el("f-plz").value.trim();
   if (plz && !/^\d{5}$/.test(plz)) { msg("form-msg", "Die Postleitzahl muss aus fünf Ziffern bestehen.", false); el("f-plz").focus(); return; }
   var getriebe = []; el("f-getriebe").querySelectorAll("input:checked").forEach(function(c){ getriebe.push(c.value); });
+  var antrieb = []; el("f-antrieb").querySelectorAll("input:checked").forEach(function(c){ antrieb.push(c.value); });
   var kraftstoff = []; el("f-kraftstoff").querySelectorAll("input:checked").forEach(function(c){ kraftstoff.push(c.value); });
   var zustand = []; el("f-zustand").querySelectorAll("input:checked").forEach(function(c){ zustand.push(c.value); });
   var row = {
@@ -956,6 +969,7 @@ async function saveForm(scanDanach){
     kraftstoff: kraftstoff,
     ps_von: numOrNull("f-ps_von"), ps_bis: numOrNull("f-ps_bis"),
     getriebe: getriebe,
+    antrieb: antrieb.length === 1 ? antrieb : [],   // beide angehakt = egal
     zustand: zustand,
     sitze_von: numOrNull("f-sitze_von"), sitze_bis: numOrNull("f-sitze_bis"),
     plz: plz || null,
@@ -973,6 +987,7 @@ async function saveForm(scanDanach){
   if (kraftstoff.length) eingrenzungen++;
   if (row.ps_von || row.ps_bis) eingrenzungen++;
   if (getriebe.length) eingrenzungen++;
+  if (antrieb.length === 1) eingrenzungen++;
   if (zustand.length) eingrenzungen++;
   if (row.sitze_von || row.sitze_bis) eingrenzungen++;
   if (eingrenzungen === 0) {
