@@ -401,6 +401,14 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
             <input type="number" id="af-ps_von" placeholder="PS von" oninput="renderAngebote()">
             <input type="number" id="af-ps_bis" placeholder="PS bis" oninput="renderAngebote()">
             <select id="af-getriebe" onchange="renderAngebote()"><option value="">Getriebe egal</option></select>
+            <!-- v1.9 (Oliver 29.09.2026): Antrieb als eigenes Feld. "unbekannt" = die
+                 Quelle nennt ihn nicht - bei "Allrad"/"Front" fallen diese Angebote weg. -->
+            <select id="af-antrieb" onchange="renderAngebote()">
+              <option value="">Antrieb egal</option>
+              <option value="allrad">Allrad</option>
+              <option value="front">Front</option>
+              <option value="?">Antrieb unbekannt</option>
+            </select>
             <input type="number" id="af-preis_von" placeholder="Preis von &euro;" oninput="renderAngebote()">
             <input type="number" id="af-preis_bis" placeholder="Preis bis &euro;" oninput="renderAngebote()">
             <!-- v1.5 (Oliver 18.09.2026): Standard ist "Preis aufsteigend" - die
@@ -502,7 +510,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.8";
+var VERSION       = "1.9";
 var VERSION_DATUM = "29.09.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
@@ -1117,7 +1125,7 @@ async function loadAngebote(){
   // arbeiten damit auf dem vollstaendigen Bestand. Nur das ZEICHNEN der
   // Karten ist begrenzt (siehe zeigeMax in renderAngebote) - das haelt die
   // Seite auch auf dem Tablet schnell und steht sichtbar ueber der Liste.
-  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at,dublette_von,farbe,postfach,dublette_verdacht";
+  var spalten = "id,match_wunschliste_id,hersteller,modell,typ,linie,erstzulassung,km_stand,motorleistung_ps,getriebe,kraftstoff,angebotspreis_netto,angebotspreis_brutto,mwst_ausweisbar,status,match_score,ampel_bewertung,original_link,quelle_detail,angebotsdatum,anbieter_name,anbieter_fahrzeug_nr,einstand_netto,dein_preis,db1,db1_prozent,mobile_de_stichprobe,markt_q1_brutto,markt_q3_brutto,markt_bewertet_am,bewertung_uneinig,markt_hinweis,match_hinweis,paketangebot,mindestabnahme,stueckzahl,verfuegbarkeit,anbieter_email,anbieter_telefon,created_at,dublette_von,farbe,postfach,dublette_verdacht,antrieb";
   var PRO_SEITE = 1000, MAX_SEITEN = 10;   // Notbremse: 10.000 Fahrzeuge
   var geladen = [], seite = 0, abgeschnitten = false;
   while (true) {
@@ -1329,7 +1337,7 @@ function renderStatusChips(){
 }
 function resetAngebotsFilter(){
   ["af-modell","af-ps_von","af-ps_bis","af-preis_von","af-preis_bis"].forEach(function(i){ el(i).value = ""; });
-  ["af-marke","af-ez_von","af-ez_bis","af-km","af-kraftstoff","af-getriebe","af-ampel","af-eingang","af-quelle","af-suche"].forEach(function(i){ el(i).value = ""; });
+  ["af-marke","af-ez_von","af-ez_bis","af-km","af-kraftstoff","af-getriebe","af-antrieb","af-ampel","af-eingang","af-quelle","af-suche"].forEach(function(i){ el(i).value = ""; });
   el("af-sort").value = "preis_auf";   // v1.5: Standard Preis aufsteigend
   el("af-dubletten").checked = false;  // v1.6: Standard Dubletten aus
   statusFilter = "";
@@ -1378,6 +1386,9 @@ function renderAngebote(anzahlBehalten){
 
   var getr = el("af-getriebe").value;
   if (getr) rows = rows.filter(function(a){ return a.getriebe === getr; });
+  var antr = el("af-antrieb").value;
+  if (antr === "?") rows = rows.filter(function(a){ return !a.antrieb; });
+  else if (antr) rows = rows.filter(function(a){ return a.antrieb === antr; });
 
   var preis = preisNetto;   // v1.5: netto, siehe preisNetto()
   var pVon = el("af-preis_von").value, pBis = el("af-preis_bis").value;
@@ -1516,6 +1527,7 @@ function renderAngebote(anzahlBehalten){
       + (a.motorleistung_ps ? '<span class="spec-chip"><b>' + a.motorleistung_ps + "</b> PS</span>" : "")
       + ((a.kraftstoff && a.kraftstoff.length) ? '<span class="spec-chip">' + esc(a.kraftstoff.join("/")) + "</span>" : "")
       + (a.getriebe ? '<span class="spec-chip">' + esc(a.getriebe) + "</span>" : "")
+      + (a.antrieb ? '<span class="spec-chip">' + (a.antrieb === "allrad" ? "Allrad" : "Front") + "</span>" : "")
       + (a.stueckzahl ? '<span class="spec-chip"><b>' + a.stueckzahl + "</b> St&uuml;ck verf&uuml;gbar</span>" : "")
       + (a.paketangebot ? '<span class="spec-chip paket">&#128230; <b>Paket</b>'
           + (a.mindestabnahme ? " ab " + a.mindestabnahme + " Stk." : "") + "</span>" : "")
