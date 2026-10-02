@@ -132,6 +132,8 @@ h1,h2,h3{font-family:var(--font-heading);font-weight:600;letter-spacing:-0.01em}
 .angebot .quelle-info{font-size:13px;color:var(--light)}
 .angebot .foot-aktionen{display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:100%}
 .angebot .foot-aktionen .btn{max-width:100%;overflow-wrap:anywhere}
+.angebot .vorgang{font-family:var(--font-body);font-size:15px;color:var(--ink);background:#fff;border:1px solid var(--border);border-radius:12px;padding:8px 10px;min-height:44px;max-width:100%}
+.angebot .vorgang.gesetzt{border-color:#1EA552;background:rgba(37,211,102,0.08);font-weight:600}
 .angebot .quelle-info b{color:var(--ink)}
 @media(max-width:640px){.angebot{grid-template-columns:auto 1fr}.angebot .rechts{grid-column:1 / -1;text-align:left;margin-top:4px}}
 .selbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px 16px;margin-bottom:14px}
@@ -519,8 +521,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.10";
-var VERSION_DATUM = "29.09.2026";
+var VERSION       = "1.11";
+var VERSION_DATUM = "02.10.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
 var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
@@ -589,6 +591,42 @@ function escAttr(s){ return esc(s).replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 // Kontakt-Knoepfe fuer Mail-Angebote (v1.4): "Antworten" per mailto und die
 // Telefonnummer als tel-Link. Beides nur, wenn die Angabe vorhanden und
 // plausibel ist - die Werte kommen aus fremden Mails, deshalb alles escapen.
+// v1.11 (Oliver 02.10.2026): Vorgang je Angebot festhalten - "Angefragt" beim
+// Haendler nachgefragt, "Gekauft" gekauft. Reine Markierung, es geht nichts
+// raus. Der Abgleich (match_angebote.py) laesst diese Status stehen, die
+// Loeschregeln schuetzen sie, und Etappe 1 zaehlt die Angefragten (Ziel 5).
+// "kein Vorgang" setzt zurueck auf Match bzw. Neu. Nur admin/verkauf duerfen
+// schreiben (RLS angebote_p_modify) - die Werkstatt sieht nur den Status.
+var VORGAENGE = ["Angefragt", "Gekauft"];
+function darfVorgang(){ return currentRolle === "admin" || currentRolle === "verkauf"; }
+function vorgangAuswahl(a){
+  if (!darfVorgang()) return "";
+  var ist = VORGAENGE.indexOf(a.status) >= 0 ? a.status : "";
+  return '<select class="vorgang' + (ist ? " gesetzt" : "") + '" aria-label="Vorgang" title="Beim H&auml;ndler angefragt oder gekauft? Nur eine Markierung, es geht nichts raus."'
+    + ' onchange="setzeVorgang(' + a.id + ', this)">'
+    + '<option value=""' + (ist ? "" : " selected") + ">" + (ist ? "kein Vorgang" : "Vorgang &hellip;") + "</option>"
+    + VORGAENGE.map(function(v){ return '<option value="' + v + '"' + (ist === v ? " selected" : "") + ">" + v + "</option>"; }).join("")
+    + "</select>";
+}
+async function setzeVorgang(id, sel){
+  var a = angebotNachId[id] || alleAngebote.find(function(x){ return x.id === id; });
+  if (!a) return;
+  var neu = sel.value || (a.match_wunschliste_id ? "Match" : "Neu");
+  var alt = a.status;
+  sel.disabled = true;
+  var r = await db.from("angebote").update({ status: neu }).eq("id", id).select("id,status");
+  sel.disabled = false;
+  // Ohne Recht liefert PostgREST keinen Fehler, sondern einfach 0 Zeilen.
+  if (r.error || !r.data || !r.data.length) {
+    sel.value = VORGAENGE.indexOf(alt) >= 0 ? alt : "";
+    msg("angebote-msg", "Vorgang nicht gespeichert: " + esc(r.error ? r.error.message : "keine Berechtigung"), false);
+    return;
+  }
+  a.status = r.data[0].status;
+  msg("angebote-msg", esc((a.hersteller || "") + " " + (a.modell || "")) + " (#" + id + "): " + esc(a.status), true);
+  renderStatusChips();
+  renderAngebote(true);
+}
 function kontaktKnoepfe(a){
   var html = "";
   var mail = String(a.anbieter_email || "").trim();
@@ -1467,7 +1505,8 @@ function renderAngebote(anzahlBehalten){
       preisHtml = '<div class="preis">' + fmtEur(brutto) + '</div><div class="brutto">brutto inkl. MwSt.</div>';
     }
     var istMail = a.quelle_detail === "Outlook-Mail";
-    var statusCls = a.status === "Match" ? "pill-blue" : (a.status === "Neu" ? "pill-gold" : "pill-off");
+    var statusCls = a.status === "Match" ? "pill-blue" : (a.status === "Neu" ? "pill-gold"
+      : (a.status === "Angefragt" || a.status === "Gekauft" ? "pill-on" : "pill-off"));
     var checked = selectedIds.has(a.id) ? " checked" : "";
 
     // Wirtschaftlichkeit - das eigentliche Entscheidungskriterium.
@@ -1572,6 +1611,7 @@ function renderAngebote(anzahlBehalten){
       // erreichen, auch ohne Postfachzugriff - deshalb bei Mail-Angeboten
       // zusaetzlich "Antworten" (mailto) und die Telefonnummer (tel).
       + '<span class="foot-aktionen">'
+      + vorgangAuswahl(a)
       + (istMail ? kontaktKnoepfe(a) : "")
       + (a.original_link ? '<a class="btn btn-ghost" href="' + escAttr(a.original_link) + '" target="_blank" rel="noopener"'
           + (istMail ? ' title="Oeffnet die Originalmail in Outlook - nur mit Zugriff auf das Postfach"' : "") + ">"
