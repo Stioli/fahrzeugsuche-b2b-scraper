@@ -225,6 +225,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       <div class="tabs">
         <button class="tab active" id="tab-wunsch" onclick="showTab('wunsch')">&#128203; Suchen</button>
         <button class="tab" id="tab-angebote" onclick="showTab('angebote')">&#128230; Gefundene Fahrzeuge</button>
+        <button class="tab" id="tab-vergleich" onclick="showTab('vergleich')" style="display:none">&#9878;&#65039; Vergleich</button>
         <button class="tab" id="tab-benutzer" onclick="showTab('benutzer')" style="display:none">&#128100; Benutzer</button>
       </div>
       <div id="suchen-controls">
@@ -473,6 +474,9 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       </div>
     </div>
 
+    <!-- ---- Vergleich (Admin und Verkauf): Fahrzeug einlesen und mit den Angeboten vergleichen, Code in vergleich.js ---- -->
+    <div id="pane-vergleich" style="display:none"></div>
+
     <!-- ---- Benutzer (nur fuer Admin sichtbar) ---- -->
     <div id="pane-benutzer" style="display:none">
       <div id="benutzer-msg" class="msg"></div>
@@ -521,8 +525,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.11";
-var VERSION_DATUM = "02.10.2026";
+var VERSION       = "1.13";
+var VERSION_DATUM = "07.10.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
 var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
@@ -724,6 +728,8 @@ async function hatZugriff(){
   var r = await dbShared.rpc("aktuelle_rolle");
   currentRolle = r.data || null;
   el("tab-benutzer").style.display = currentRolle === "admin" ? "" : "none";
+  // Der Angebotsvergleich ist fuer Admin und Verkauf gedacht; die Datenbankfunktion prueft die Rolle zusaetzlich.
+  el("tab-vergleich").style.display = (currentRolle === "admin" || currentRolle === "verkauf") ? "" : "none";
   // Laesst sich die Rolle nicht ermitteln, lieber weitermachen als den
   // Zugang faelschlich sperren.
   if (r.error || r.data) return true;
@@ -1669,9 +1675,14 @@ function showTab(t){
   el("tab-wunsch").className = "tab" + (t === "wunsch" ? " active" : "");
   el("tab-angebote").className = "tab" + (t === "angebote" ? " active" : "");
   el("tab-benutzer").className = "tab" + (t === "benutzer" ? " active" : "");
+  el("tab-vergleich").className = "tab" + (t === "vergleich" ? " active" : "");
   el("pane-wunsch").style.display = t === "wunsch" ? "block" : "none";
   el("pane-angebote").style.display = t === "angebote" ? "block" : "none";
   el("pane-benutzer").style.display = t === "benutzer" ? "block" : "none";
+  el("pane-vergleich").style.display = t === "vergleich" ? "block" : "none";
+  // Der Vergleich braucht eine breite Tabelle, die uebrigen Seiten bleiben schmal.
+  document.querySelector(".wrap").style.maxWidth = t === "vergleich" ? "1400px" : "";
+  if (t === "vergleich" && window.VG) { window.VG.show(); }
   // +Neue Suche + Suchen-Filter nur auf dem Suchen-Tab in der Kopf-Box zeigen
   el("suchen-controls").style.display = t === "wunsch" ? "block" : "none";
 }
@@ -1808,5 +1819,6 @@ async function benutzerFreischalten(){
 
 init();
 </script>
+<script src="vergleich.js?v=1.13"></script>
 </body>
 </html>
