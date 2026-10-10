@@ -224,6 +224,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       </div>
       <div class="tabs">
         <button class="tab active" id="tab-wunsch" onclick="showTab('wunsch')">&#128203; Suchen</button>
+        <button class="tab" id="tab-sofort" onclick="showTab('sofort')" style="display:none">&#9889; Sofort suchen</button>
         <button class="tab" id="tab-angebote" onclick="showTab('angebote')">&#128230; Gefundene Fahrzeuge</button>
         <button class="tab" id="tab-vergleich" onclick="showTab('vergleich')" style="display:none">&#9878;&#65039; Vergleich</button>
         <button class="tab" id="tab-benutzer" onclick="showTab('benutzer')" style="display:none">&#128100; Benutzer</button>
@@ -344,6 +345,37 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
               oben und wird bei der Marktwert-Suche auf mobile.de mit angeklickt. Fahrzeuge ohne
               das Merkmal verschwinden aber nicht &mdash; die Erkennung aus dem Ausstattungstext
               der Lieferanten ist zu unzuverlaessig, um daran ein Fahrzeug zu verlieren.</div>
+          </div>
+          <!-- v1.14 (Oli 10.10.2026): Ankauf-Vorgaben wie im Bestandsplan. Bei Plan-Suchen nur Anzeige - gepflegt wird im Bestandsplan. -->
+          <div class="field" id="f-vorgaben-box"><label>Ankauf-Vorgaben</label>
+            <div class="hinweis-feld" id="f-plan-hinweis" style="display:none;margin:0 0 8px;color:#B88A00">Diese Suche kommt aus dem
+              <b>Bestandsplan</b>. Höchst-EK, Mindest-DB1 und wichtige Ausstattung bitte dort pflegen (Cockpit &rarr; Bestandsplan bearbeiten &rarr; Spalte &bdquo;Ankauf-Vorgaben&ldquo;) &ndash; hier nur Anzeige.</div>
+            <div class="grid2">
+              <div class="field"><label>Höchst-EK netto (&euro;)</label><input type="number" id="f-preis_einkauf_max" min="0" step="100" placeholder="z. B. 18000"></div>
+              <div class="field"><label>Mindest-DB1 (&euro;)</label><input type="number" id="f-db1_min" min="0" step="100" placeholder="z. B. 2400"></div>
+            </div>
+            <label style="margin-top:4px">Wichtige Ausstattung &mdash; Pluspunkt, kein Ausschluss</label>
+            <div class="checks" id="f-ausstattung_wichtig">
+              <label class="check"><input type="checkbox" value="pano"><span>Panoramadach</span></label>
+              <label class="check"><input type="checkbox" value="sitzlueftung"><span>Sitzl&uuml;ftung</span></label>
+              <label class="check"><input type="checkbox" value="heckklappe"><span>el. Heckklappe</span></label>
+              <label class="check"><input type="checkbox" value="sitzheizung"><span>Sitzheizung</span></label>
+              <label class="check"><input type="checkbox" value="lenkradheizung"><span>Lenkradheizung</span></label>
+              <label class="check"><input type="checkbox" value="navi"><span>Navi</span></label>
+              <label class="check"><input type="checkbox" value="rfk"><span>R&uuml;ckfahrkamera</span></label>
+              <label class="check"><input type="checkbox" value="k360"><span>360&deg;-Kamera</span></label>
+              <label class="check"><input type="checkbox" value="ahk"><span>AHK</span></label>
+              <label class="check"><input type="checkbox" value="leder"><span>Leder</span></label>
+              <label class="check"><input type="checkbox" value="led"><span>LED/Matrix</span></label>
+              <label class="check"><input type="checkbox" value="acc"><span>ACC</span></label>
+              <label class="check"><input type="checkbox" value="hud"><span>Head-up</span></label>
+              <label class="check"><input type="checkbox" value="keyless"><span>Keyless</span></label>
+              <label class="check"><input type="checkbox" value="carplay"><span>CarPlay/Android Auto</span></label>
+              <label class="check"><input type="checkbox" value="allrad"><span>Allrad</span></label>
+              <label class="check"><input type="checkbox" value="sound"><span>Soundsystem</span></label>
+            </div>
+            <div class="hinweis-feld">Höchst-EK und wichtige Ausstattung nutzt die Auswertung &bdquo;Top-Angebote&ldquo;. Der Mindest-DB1
+              wirkt erst, wenn die Marktbewertung wieder l&auml;uft. Der Suchlauf selbst filtert danach nicht.</div>
           </div>
           <div class="grid2">
             <div class="field"><label>Marktwert-Vergleich: Postleitzahl</label>
@@ -474,6 +506,18 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       </div>
     </div>
 
+    <!-- ---- Sofort suchen (Admin und Verkauf, v1.14): Kundenwunsch direkt in den gespeicherten Angeboten suchen, Code in sofort.js ---- -->
+    <div id="pane-sofort" style="display:none">
+      <div class="section">
+        <div class="section-h">
+          <span class="label">&#9889; Einzelsuche</span>
+          <h1>Sofort <em>suchen</em></h1>
+          <p>Kunde sucht ein Fahrzeug, das wir nicht haben? Hier in Sekunden in allen Lieferanten-Angeboten nachsehen &ndash; ohne neuen Suchlauf. Stand = letzter Abruf der Quellen (Mo&ndash;Fr viermal t&auml;glich).</p>
+        </div>
+        <div class="card" id="sofort-root"></div>
+      </div>
+    </div>
+
     <!-- ---- Vergleich (Admin und Verkauf): Fahrzeug einlesen und mit den Angeboten vergleichen, Code in vergleich.js ---- -->
     <div id="pane-vergleich" style="display:none"></div>
 
@@ -525,8 +569,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.13";
-var VERSION_DATUM = "07.10.2026";
+var VERSION       = "1.14";
+var VERSION_DATUM = "10.10.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
 var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
@@ -730,6 +774,8 @@ async function hatZugriff(){
   el("tab-benutzer").style.display = currentRolle === "admin" ? "" : "none";
   // Der Angebotsvergleich ist fuer Admin und Verkauf gedacht; die Datenbankfunktion prueft die Rolle zusaetzlich.
   el("tab-vergleich").style.display = (currentRolle === "admin" || currentRolle === "verkauf") ? "" : "none";
+  // v1.14: Sofort-Suche ebenso nur Admin und Verkauf (ankauf.sofort_suchen prueft die Rolle zusaetzlich).
+  el("tab-sofort").style.display = (currentRolle === "admin" || currentRolle === "verkauf") ? "" : "none";
   // Laesst sich die Rolle nicht ermitteln, lieber weitermachen als den
   // Zugang faelschlich sperren.
   if (r.error || r.data) return true;
@@ -931,6 +977,11 @@ function renderWunschliste(){
     if (w.sitze_von || w.sitze_bis) crit.push((w.sitze_von || "?") + "&ndash;" + (w.sitze_bis || "?") + " Sitze");
     var feats = BOOLS.filter(function(b){ return w[b]; }).map(function(b){ return BOOL_NAMES[b]; });
     if (feats.length) crit.push("bevorzugt: " + feats.join(", "));
+    if (w.preis_einkauf_max != null) crit.push("EK bis " + fmtEur(w.preis_einkauf_max));
+    if (w.db1_min != null) crit.push("DB1 ab " + fmtEur(w.db1_min));
+    if (w.ausstattung_wichtig && w.ausstattung_wichtig.length) crit.push("wichtig: " + esc(w.ausstattung_wichtig.map(function(k){
+      var n = window.SOFORT ? window.SOFORT.AUSSTATTUNG.filter(function(a){ return a[0] === k; })[0] : null; return n ? n[1] : k; }).join(", ")));
+    if (w.quelle === "bestandsplan") crit.push('<span class="pill pill-blue">aus Bestandsplan</span>');
     if (w.plz) crit.push("Marktwert um " + esc(w.plz) + (w.umkreis_km ? " / " + w.umkreis_km + " km" : " / ganz DE"));
     // Status-Zeile: laeuft gerade / letzte Suche am ... / noch nie gesucht
     // Live gezaehlt aus den tatsaechlich gespeicherten Fahrzeugen - siehe
@@ -988,6 +1039,15 @@ function openForm(id){
   var z = w.zustand || [];
   el("f-zustand").querySelectorAll("input").forEach(function(c){ c.checked = z.indexOf(c.value) >= 0; });
   BOOLS.forEach(function(b){ el("f-" + b).checked = !!w[b]; });
+  // v1.14: Ankauf-Vorgaben. Plan-Suchen (quelle = bestandsplan) nur anzeigen, gepflegt wird im Bestandsplan.
+  var ausP = w.quelle === "bestandsplan";
+  el("f-plan-hinweis").style.display = ausP ? "block" : "none";
+  el("f-preis_einkauf_max").value = w.preis_einkauf_max == null ? "" : w.preis_einkauf_max;
+  el("f-db1_min").value = w.db1_min == null ? "" : w.db1_min;
+  var aw = w.ausstattung_wichtig || [];
+  el("f-ausstattung_wichtig").querySelectorAll("input").forEach(function(c){ c.checked = aw.indexOf(c.value) >= 0; c.disabled = ausP; });
+  el("f-preis_einkauf_max").disabled = ausP; el("f-db1_min").disabled = ausP;
+  el("f-id").setAttribute("data-quelle", w.quelle || "");
   el("f-aktive_suche").checked = w.id ? !!w.aktive_suche : true;
   el("form-section").scrollIntoView({ behavior: "smooth" });
 }
@@ -1021,6 +1081,13 @@ async function saveForm(scanDanach){
     aktive_suche: scanDanach ? true : el("f-aktive_suche").checked
   };
   BOOLS.forEach(function(b){ row[b] = el("f-" + b).checked; });
+  // v1.14: Ankauf-Vorgaben nur bei eigenen Suchen speichern; Plan-Suchen bekommen sie aus dem Bestandsplan.
+  if (el("f-id").getAttribute("data-quelle") !== "bestandsplan") {
+    row.preis_einkauf_max = numOrNull("f-preis_einkauf_max");
+    row.db1_min = numOrNull("f-db1_min");
+    var aw = []; el("f-ausstattung_wichtig").querySelectorAll("input:checked").forEach(function(c){ aw.push(c.value); });
+    row.ausstattung_wichtig = aw.length ? aw : null;
+  }
   // Warnung bei sehr breiter Suche. Die Ausstattung zaehlt hier NICHT mehr mit:
   // sie grenzt seit dem Umbau nichts mehr ein, sondern sortiert nur noch.
   var eingrenzungen = 0;
@@ -1676,12 +1743,18 @@ function showTab(t){
   el("tab-angebote").className = "tab" + (t === "angebote" ? " active" : "");
   el("tab-benutzer").className = "tab" + (t === "benutzer" ? " active" : "");
   el("tab-vergleich").className = "tab" + (t === "vergleich" ? " active" : "");
+  el("tab-sofort").className = "tab" + (t === "sofort" ? " active" : "");
+  el("pane-sofort").style.display = t === "sofort" ? "block" : "none";
+  if (t === "sofort" && window.SOFORT && !el("sofort-root").getAttribute("data-bereit")) {
+    window.SOFORT.init(el("sofort-root"), db);
+    el("sofort-root").setAttribute("data-bereit", "1");
+  }
   el("pane-wunsch").style.display = t === "wunsch" ? "block" : "none";
   el("pane-angebote").style.display = t === "angebote" ? "block" : "none";
   el("pane-benutzer").style.display = t === "benutzer" ? "block" : "none";
   el("pane-vergleich").style.display = t === "vergleich" ? "block" : "none";
   // Der Vergleich braucht eine breite Tabelle, die uebrigen Seiten bleiben schmal.
-  document.querySelector(".wrap").style.maxWidth = t === "vergleich" ? "1400px" : "";
+  document.querySelector(".wrap").style.maxWidth = (t === "vergleich" || t === "sofort") ? "1400px" : "";
   if (t === "vergleich" && window.VG) { window.VG.show(); }
   // +Neue Suche + Suchen-Filter nur auf dem Suchen-Tab in der Kopf-Box zeigen
   el("suchen-controls").style.display = t === "wunsch" ? "block" : "none";
@@ -1820,5 +1893,6 @@ async function benutzerFreischalten(){
 init();
 </script>
 <script src="vergleich.js?v=1.13"></script>
+<script src="sofort.js?v=1.14"></script>
 </body>
 </html>
