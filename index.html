@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#007BFF">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Fahrzeugsuche B2B &middot; Autohaus Stieber</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -227,6 +230,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
         <button class="tab" id="tab-sofort" onclick="showTab('sofort')" style="display:none">&#9889; Sofort suchen</button>
         <button class="tab" id="tab-angebote" onclick="showTab('angebote')">&#128230; Gefundene Fahrzeuge</button>
         <button class="tab" id="tab-vergleich" onclick="showTab('vergleich')" style="display:none">&#9878;&#65039; Vergleich</button>
+        <button class="tab" id="tab-leads" onclick="showTab('leads')" style="display:none">&#128222; Leads</button>
         <button class="tab" id="tab-benutzer" onclick="showTab('benutzer')" style="display:none">&#128100; Benutzer</button>
       </div>
       <div id="suchen-controls">
@@ -506,7 +510,7 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
       </div>
     </div>
 
-    <!-- ---- Sofort suchen (Admin und Verkauf, v1.14): Kundenwunsch direkt in den gespeicherten Angeboten suchen, Code in sofort.js ---- -->
+    <!-- ---- Sofort suchen (Admin und Verkauf, v1.15): Kundenwunsch direkt in den gespeicherten Angeboten suchen, Code in sofort.js ---- -->
     <div id="pane-sofort" style="display:none">
       <div class="section">
         <div class="section-h">
@@ -520,6 +524,9 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 
     <!-- ---- Vergleich (Admin und Verkauf): Fahrzeug einlesen und mit den Angeboten vergleichen, Code in vergleich.js ---- -->
     <div id="pane-vergleich" style="display:none"></div>
+
+    <!-- ---- Leads (Admin und Verkauf): faellige Nachkontakte, Code in leads.js, Daten ueber Edge Function leads_api ---- -->
+    <div id="pane-leads" style="display:none"><div class="section"><div class="card" id="leads-root"></div></div></div>
 
     <!-- ---- Benutzer (nur fuer Admin sichtbar) ---- -->
     <div id="pane-benutzer" style="display:none">
@@ -569,8 +576,8 @@ footer{text-align:center;color:var(--light);font-size:13px;padding:20px 0 40px}
 // vordere nur bei einem groesseren Umbau. Das Datum ist der Tag der
 // Veroeffentlichung.
 // ---------------------------------------------------------------------------
-var VERSION       = "1.14";
-var VERSION_DATUM = "10.10.2026";
+var VERSION       = "1.16";
+var VERSION_DATUM = "26.10.2026";
 
 var SUPABASE_URL = "https://mnglpqeqmoxccqnztqez.supabase.co";
 var SUPABASE_KEY = "sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF";
@@ -774,8 +781,10 @@ async function hatZugriff(){
   el("tab-benutzer").style.display = currentRolle === "admin" ? "" : "none";
   // Der Angebotsvergleich ist fuer Admin und Verkauf gedacht; die Datenbankfunktion prueft die Rolle zusaetzlich.
   el("tab-vergleich").style.display = (currentRolle === "admin" || currentRolle === "verkauf") ? "" : "none";
-  // v1.14: Sofort-Suche ebenso nur Admin und Verkauf (ankauf.sofort_suchen prueft die Rolle zusaetzlich).
+  // v1.15: Sofort-Suche ebenso nur Admin und Verkauf (ankauf.sofort_suchen_v2 prueft die Rolle zusaetzlich).
   el("tab-sofort").style.display = (currentRolle === "admin" || currentRolle === "verkauf") ? "" : "none";
+  // Leads-Reiter + Push (leads.js): zeigt den Reiter selbst, sobald leads_api die Rolle bestaetigt.
+  if ((currentRolle === "admin" || currentRolle === "verkauf") && window.LEADS) { window.LEADS.boot(db, { url: SUPABASE_URL, key: SUPABASE_KEY }); }
   // Laesst sich die Rolle nicht ermitteln, lieber weitermachen als den
   // Zugang faelschlich sperren.
   if (r.error || r.data) return true;
@@ -1744,6 +1753,9 @@ function showTab(t){
   el("tab-benutzer").className = "tab" + (t === "benutzer" ? " active" : "");
   el("tab-vergleich").className = "tab" + (t === "vergleich" ? " active" : "");
   el("tab-sofort").className = "tab" + (t === "sofort" ? " active" : "");
+  el("tab-leads").className = "tab" + (t === "leads" ? " active" : "");
+  el("pane-leads").style.display = t === "leads" ? "block" : "none";
+  if (t === "leads" && window.LEADS) { window.LEADS.show(el("leads-root")); }
   el("pane-sofort").style.display = t === "sofort" ? "block" : "none";
   if (t === "sofort" && window.SOFORT && !el("sofort-root").getAttribute("data-bereit")) {
     window.SOFORT.init(el("sofort-root"), db);
@@ -1893,6 +1905,7 @@ async function benutzerFreischalten(){
 init();
 </script>
 <script src="vergleich.js?v=1.13"></script>
-<script src="sofort.js?v=1.14"></script>
+<script src="sofort.js?v=1.15"></script>
+<script src="leads.js?v=1.0"></script>
 </body>
 </html>

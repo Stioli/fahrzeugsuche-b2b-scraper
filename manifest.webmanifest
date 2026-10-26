@@ -1,0 +1,15 @@
+{
+  "name": "Stieber Fahrzeug-Dashboard",
+  "short_name": "Stieber",
+  "description": "Ankauf-Dashboard und Leads des Autohaus Stieber",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F8FBFF",
+  "theme_color": "#007BFF",
+  "lang": "de",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
