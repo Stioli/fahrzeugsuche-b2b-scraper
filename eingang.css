@@ -1,0 +1,185 @@
+/* Fahrzeugeingang-Tool – gemeinsame Stile (Stieber-CI, Stand 30.10.2026)
+   Farben und Schriften nach Projekte/Autrado/Website CI/Stieber-CI-Farben-und-Schriften.md
+   Kontrastregeln: Rot und Gold nie als Schriftfarbe (Text: #C1121A), blaue Schrift auf Weiß = #0A5CD0,
+   weiße Schrift auf CI-Blau nur mit mindestens 19 px und Stärke 600. */
+:root{
+  --blau:#007BFF; --blau-dark:#0A5CD0;
+  --rot:#EC1C24; --rot-text:#C1121A; --rot-bg:#FDECEC;
+  --gruen:#25D366; --gruen-text:#12703A; --gruen-bg:#E4F6EC;
+  --gold:#F5C842; --gold-bg:#FFF6D6;
+  --ink:#1A2333; --sub:#4A5F78; --border:#E3E9F2; --bg:#F4F8FD; --weiss:#fff;
+  --font-heading:'Plus Jakarta Sans', system-ui, 'Segoe UI', Arial, sans-serif;
+  --font-body:'DM Sans', system-ui, 'Segoe UI', Arial, sans-serif;
+  --radius:16px; --tap:48px;
+  --schatten:0 4px 14px rgba(0,123,255,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:var(--font-body);font-size:16px;line-height:1.5;color:var(--ink);background:var(--bg);min-height:100vh;overflow-x:hidden}
+body.dlg-offen{overflow:hidden}
+h1,h2,h3{font-family:var(--font-heading);font-weight:700;letter-spacing:-0.01em;line-height:1.25}
+h2{font-size:20px} h3{font-size:17px}
+[hidden]{display:none !important}
+img{max-width:100%}
+.wrap{max-width:1100px;margin:0 auto;padding:14px 16px 90px}
+.muted{color:var(--sub)}
+.klein{font-size:14px}
+.fett{font-weight:700}
+.rot-text{color:var(--rot-text) !important}
+.umbruch{overflow-wrap:anywhere;word-break:break-word}
+
+/* ---------- Kopf ---------- */
+.sticky-kopf{display:contents}
+.kopf{background:var(--blau);color:#fff}
+.kopf-in{max-width:1100px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.kopf h1{font-size:20px;font-weight:700;color:#fff}
+.kopf-user{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kopf-name{background:#fff;color:var(--ink);border:none;border-radius:999px;padding:0 14px;min-height:44px;font-family:var(--font-body);font-size:15px;font-weight:600;cursor:pointer;max-width:55vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kopf-name:disabled{cursor:default}
+
+/* ---------- Demo-Band ---------- */
+.demo-band{background:var(--gold-bg);border-bottom:3px solid var(--gold);color:var(--ink)}
+.demo-band-in{max-width:1100px;margin:0 auto;padding:8px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:15px}
+.demo-band strong{font-family:var(--font-heading)}
+.demo-band select{min-height:44px;border:1px solid var(--border);border-radius:12px;padding:0 10px;font-family:var(--font-body);font-size:15px;background:#fff;color:var(--ink);max-width:100%}
+
+/* ---------- Reiter ---------- */
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30}
+.tabs-in{max-width:1100px;margin:0 auto;width:100%;display:flex}
+.tab-knopf{flex:1;min-height:52px;background:none;border:none;border-bottom:4px solid transparent;font-family:var(--font-heading);font-size:17px;font-weight:700;color:var(--sub);cursor:pointer;padding:0 8px}
+.tab-knopf[aria-selected="true"]{color:var(--blau-dark);border-bottom-color:var(--blau)}
+
+/* ---------- Knöpfe ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-heading);font-weight:700;font-size:16px;border:2px solid transparent;border-radius:14px;padding:0 18px;min-height:var(--tap);cursor:pointer;text-decoration:none;text-align:center;line-height:1.2;background:#fff;color:var(--blau-dark)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--blau);color:#fff;font-size:19px;font-weight:700}   /* weiß auf CI-Blau: mind. 19 px, halbfett */
+.btn-primary:hover:not(:disabled){background:var(--blau-dark)}
+.btn-ghost{background:#fff;color:var(--blau-dark);border-color:var(--border)}
+.btn-ghost:hover:not(:disabled){border-color:var(--blau)}
+.btn-gefahr{background:#fff;color:var(--rot-text);border-color:var(--rot-text)}
+.btn-klein{min-height:44px;font-size:15px;padding:0 14px}
+.btn-block{display:flex;width:100%}
+.linklike{background:none;border:none;color:var(--blau-dark);font-family:var(--font-body);font-size:15px;cursor:pointer;text-decoration:underline;min-height:44px;padding:0 6px}
+
+/* ---------- Felder ---------- */
+.feld{margin-bottom:14px}
+.feld > label,.feld-label{display:block;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--sub);margin-bottom:5px}
+input[type=text],input[type=number],input[type=email],input[type=password],input[type=date],input[type=search],select,textarea{width:100%;font-family:var(--font-body);font-size:16px;color:var(--ink);background:#fff;border:1px solid #C9D5E6;border-radius:12px;padding:10px 14px;min-height:var(--tap)}
+textarea{min-height:110px;line-height:1.45;resize:vertical}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid rgba(0,123,255,.35);outline-offset:1px}
+.feld-hinweis{font-size:14px;color:var(--sub);margin-top:4px}
+.zeile2{display:grid;grid-template-columns:1fr;gap:0 12px}
+@media(min-width:560px){.zeile2{grid-template-columns:1fr 1fr}}
+
+/* ---------- Karten ---------- */
+.karte{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--schatten);padding:16px;margin-bottom:14px}
+.karte.rot{border:2px solid var(--rot-text)}
+.karte-kopf{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.raster{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:700px){.raster{grid-template-columns:1fr 1fr}}
+@media(min-width:1050px){.raster{grid-template-columns:1fr 1fr 1fr}}
+.fz-karte{cursor:pointer;margin-bottom:0;text-align:left;width:100%;font:inherit;color:inherit;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start}
+.fz-karte:hover{border-color:var(--blau)}
+.fz-titel{font-family:var(--font-heading);font-weight:700;font-size:18px}
+.fz-zeile{font-size:15px;color:var(--sub);margin-top:2px}
+.fz-fin{font-family:ui-monospace,Consolas,monospace;font-size:14px;overflow-wrap:anywhere}
+
+/* ---------- Pills, Banner ---------- */
+.pill{display:inline-block;border-radius:999px;padding:3px 12px;font-size:14px;font-weight:700;line-height:1.4;background:#E8F0FB;color:var(--blau-dark);white-space:nowrap}
+.pill.grau{background:#EEF1F5;color:var(--sub)}
+.pill.gruen{background:var(--gruen-bg);color:var(--gruen-text)}
+.pill.rot{background:var(--rot-bg);color:var(--rot-text)}
+.pill.gold{background:var(--gold-bg);color:var(--ink);border:1px solid var(--gold)}
+.banner{border-radius:12px;padding:12px 14px;margin:10px 0;font-size:15px;border:1px solid var(--border);background:#fff}
+.banner.info{background:#E8F0FB;border-color:#BCD3F3}
+.banner.warn{background:var(--gold-bg);border-color:var(--gold)}
+.banner.fehler{background:var(--rot-bg);border-color:var(--rot-text);color:var(--rot-text);font-weight:600}
+.banner.ok{background:var(--gruen-bg);border-color:#9AD9B4;color:var(--gruen-text)}
+.banner strong{font-weight:700}
+
+/* ---------- Werkzeugleiste Liste ---------- */
+.leiste{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.leiste-zeile{display:flex;gap:10px;flex-wrap:wrap}
+.leiste-zeile > *{flex:1 1 200px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{min-height:44px;border-radius:999px;border:2px solid var(--border);background:#fff;font-family:var(--font-body);font-size:15px;font-weight:600;padding:0 16px;cursor:pointer;color:var(--sub)}
+.chip[aria-pressed="true"]{border-color:var(--blau);color:var(--blau-dark);background:#E8F0FB}
+
+/* ---------- Checkliste ---------- */
+.block-kopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:18px 0 8px}
+.block-kopf h3{font-size:18px}
+.punkt{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px}
+.punkt.ok{border-left:6px solid var(--gruen-text)}
+.punkt.mangel{border-left:6px solid var(--rot-text)}
+.punkt.entfaellt{border-left:6px solid #9AA8BA}
+.punkt-titel{font-weight:700}
+.punkt-hinweis{font-size:14px;color:var(--sub);margin:2px 0 8px}
+.seg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px}
+.seg-b{min-height:48px;border-radius:12px;border:2px solid var(--border);background:#fff;font-family:var(--font-heading);font-size:16px;font-weight:700;color:var(--sub);cursor:pointer;padding:0 4px}
+.seg-b:disabled{opacity:.45;cursor:not-allowed}
+.seg-ok.aktiv{background:var(--gruen-bg);border-color:var(--gruen-text);color:var(--gruen-text)}
+.seg-mangel.aktiv{background:var(--rot-bg);border-color:var(--rot-text);color:var(--rot-text)}
+.seg-entfaellt.aktiv{background:#EEF1F5;border-color:#6B7B90;color:var(--ink)}
+.extra{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.extra .feld{margin-bottom:10px}
+.klappe{margin:0 0 14px}
+.klappe > summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-family:var(--font-heading);font-weight:700;color:var(--blau-dark)}
+
+/* ---------- Mängel ---------- */
+.mangel{background:var(--rot-bg);border:1px solid #F0B9BB;border-radius:12px;padding:10px 12px;margin-top:10px}
+.mangel-kopf{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
+.mangel-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.klasse-wahl{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.klasse-wahl button{min-height:52px;border-radius:12px;border:2px solid var(--border);background:#fff;font-family:var(--font-heading);font-weight:700;font-size:16px;cursor:pointer;color:var(--sub)}
+.klasse-wahl button[aria-pressed="true"]{border-color:var(--blau);background:#E8F0FB;color:var(--blau-dark)}
+.klasse-wahl button:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- Fotos ---------- */
+.fotos{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
+.thumb{position:relative;width:84px;height:84px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:#EEF1F5;cursor:pointer;flex:0 0 auto;padding:0}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .weg{position:absolute;top:2px;right:2px;width:30px;height:30px;border-radius:50%;border:none;background:rgba(26,35,51,.8);color:#fff;font-size:18px;line-height:1;cursor:pointer}
+.thumb.laedt::after{content:"lädt …";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;background:rgba(255,255,255,.85);color:var(--sub)}
+.foto-knoepfe{display:flex;gap:8px;flex-wrap:wrap}
+.foto-gross{max-width:100%;max-height:70vh;border-radius:10px;display:block;margin:0 auto}
+
+/* ---------- Dialog ---------- */
+.dlg-ueber{position:fixed;inset:0;background:rgba(26,35,51,.55);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.dlg{background:#fff;width:100%;max-width:640px;max-height:94vh;display:flex;flex-direction:column;border-radius:20px 20px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,.25)}
+.dlg.breit{max-width:760px}
+.dlg-kopf{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:14px 16px 8px}
+.dlg-x{width:44px;height:44px;border:none;background:#EEF1F5;border-radius:50%;font-size:26px;line-height:1;cursor:pointer;color:var(--ink)}
+.dlg-inhalt{padding:4px 16px 12px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.dlg-fuss{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;padding:10px 16px 14px;border-top:1px solid var(--border)}
+.dlg-fuss .btn{flex:1 1 140px}
+@media(min-width:700px){.dlg-ueber{align-items:center}.dlg{border-radius:20px}}
+
+/* ---------- Mail-Dialog ---------- */
+.empf{background:#E8F0FB;border:2px solid #BCD3F3;border-radius:12px;padding:12px;margin-bottom:10px}
+.empf-adresse{font-family:var(--font-heading);font-size:20px;font-weight:700;overflow-wrap:anywhere;margin:2px 0 8px}
+.schritt{display:flex;gap:10px;margin:12px 0 4px;font-weight:700}
+.schritt-nr{flex:0 0 30px;height:30px;border-radius:50%;background:var(--blau-dark);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px}
+.mail-vorschau{font-family:var(--font-body);font-size:14px;min-height:180px}
+
+/* ---------- Toast ---------- */
+.toasts{position:fixed;left:0;right:0;top:12px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:200;pointer-events:none;padding:0 12px}
+.toast{background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-size:15px;max-width:520px;box-shadow:0 6px 24px rgba(0,0,0,.3);pointer-events:auto}
+.toast.fehler{background:var(--rot-text)}
+.toast.ok{background:var(--gruen-text)}
+
+/* ---------- Anmeldung ---------- */
+.login{max-width:460px;margin:6vh auto 30px}
+.login .karte{padding:22px}
+.msg{border-radius:12px;padding:12px 14px;margin:10px 0;font-size:15px;display:none}
+.msg.ok{display:block;background:var(--gruen-bg);color:var(--gruen-text)}
+.msg.err{display:block;background:var(--rot-bg);color:var(--rot-text)}
+.fuss-version{text-align:center;color:var(--sub);font-size:13px;margin-top:10px}
+
+/* ---------- Sonstiges ---------- */
+.zurueck{margin-bottom:10px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:15px}
+.kv dt{color:var(--sub)}
+.kv dd{overflow-wrap:anywhere}
+.leer{text-align:center;padding:30px 10px;color:var(--sub)}
+.abstand{height:10px}
+.sticky-aktion{position:sticky;bottom:0;background:linear-gradient(to top,var(--bg) 70%,rgba(244,248,253,0));padding:14px 0 6px}

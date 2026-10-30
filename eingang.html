@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#007BFF">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Eingang">
+<link rel="manifest" href="eingang.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Fahrzeugeingang &middot; Autohaus Stieber</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="eingang.css">
+<!-- feste Version von supabase-js (wie im Dashboard, nur nicht "@2" schwimmend) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<!-- ============ DEMO-BAND (nur bei ?demo=1) ============ -->
+<div id="demo-band" class="demo-band" hidden>
+  <div class="demo-band-in">
+    <strong>DEMO &ndash; keine echten Daten</strong>
+    <span>Alles bleibt nur in diesem Fenster. Konto:</span>
+    <select id="demo-konto" aria-label="Demo-Konto">
+      <option value="admin">Oli (Admin)</option>
+      <option value="verkauf">Mitarbeiter (Verkauf)</option>
+      <option value="werkstatt">Werkstatt-Konto (werkstatt@)</option>
+    </select>
+    <button class="linklike" id="demo-reset" type="button">Demo zur&uuml;cksetzen</button>
+  </div>
+</div>
+
+<!-- ============ ANMELDUNG ============ -->
+<div id="view-login" class="wrap" hidden>
+  <div class="login">
+    <div class="karte">
+      <h2>Fahrzeugeingang</h2>
+      <p class="muted" style="margin:4px 0 16px">Anmelden mit deinem Konto vom Ankauf-Dashboard.</p>
+      <div class="feld"><label for="login-email">E-Mail</label><input type="email" id="login-email" autocomplete="username" placeholder="name@autohaus-stieber.de"></div>
+      <div class="feld"><label for="login-pass">Passwort</label><input type="password" id="login-pass" autocomplete="current-password"></div>
+      <div id="login-msg" class="msg"></div>
+      <button class="btn btn-primary btn-block" id="login-ok" type="button">Anmelden</button>
+      <div style="text-align:center;margin-top:8px"><button class="linklike" id="login-vergessen" type="button">Passwort vergessen?</button></div>
+      <div class="fuss-version">Autohaus Stieber GmbH &middot; Stuttgart-Stammheim</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NEUES PASSWORT ============ -->
+<div id="view-recovery" class="wrap" hidden>
+  <div class="login">
+    <div class="karte">
+      <h2>Neues Passwort</h2>
+      <p class="muted" style="margin:4px 0 16px">Bitte zweimal eingeben, mindestens 8 Zeichen.</p>
+      <div id="rec-form">
+        <div class="feld"><label for="rec-pass">Neues Passwort</label><input type="password" id="rec-pass" autocomplete="new-password"></div>
+        <div class="feld"><label for="rec-pass2">Noch einmal</label><input type="password" id="rec-pass2" autocomplete="new-password"></div>
+        <div id="rec-msg" class="msg"></div>
+        <button class="btn btn-primary btn-block" id="rec-ok" type="button">Passwort speichern</button>
+      </div>
+      <div id="rec-abgelaufen" hidden>
+        <p>Der Link ist abgelaufen oder wurde schon benutzt.</p>
+        <p style="margin-top:8px">Bitte auf der Anmeldeseite die E-Mail-Adresse eintragen und erneut &bdquo;Passwort vergessen?&ldquo; w&auml;hlen.</p>
+        <button class="btn btn-ghost btn-block" id="rec-zurueck" type="button" style="margin-top:14px">Zur Anmeldung</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ KEIN ZUGRIFF ============ -->
+<div id="view-keinzugriff" class="wrap" hidden>
+  <div class="login">
+    <div class="karte">
+      <h2>Kein Zugriff</h2>
+      <p style="margin:8px 0">Dieses Konto ist f&uuml;r das Fahrzeugeingang-Tool nicht freigeschaltet. Bitte bei Oli melden.</p>
+      <button class="btn btn-ghost btn-block" id="kz-logout" type="button">Abmelden</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="view-app" hidden>
+  <div class="sticky-kopf">
+    <header class="kopf">
+      <div class="kopf-in">
+        <h1>Fahrzeugeingang</h1>
+        <div class="kopf-user">
+          <button class="kopf-name" id="btn-name" type="button" title="Name ändern"></button>
+          <button class="btn btn-klein" id="btn-logout" type="button">Abmelden</button>
+        </div>
+      </div>
+    </header>
+    <nav class="tabs" role="tablist" aria-label="Bereiche">
+      <div class="tabs-in">
+        <button class="tab-knopf" role="tab" id="tabk-anlieferung" data-tab="anlieferung" aria-selected="true" aria-controls="tab-anlieferung" type="button">Anlieferungen</button>
+        <button class="tab-knopf" role="tab" id="tabk-inzahlung" data-tab="inzahlung" aria-selected="false" aria-controls="tab-inzahlung" type="button">Inzahlungnahmen</button>
+      </div>
+    </nav>
+  </div>
+
+  <main class="wrap">
+    <!-- Reiter 1: Lieferantenfahrzeuge (eingang-anlieferung.js) -->
+    <section id="tab-anlieferung" role="tabpanel" aria-labelledby="tabk-anlieferung"></section>
+    <!-- Reiter 2: Inzahlungnahmen (Inhalt kommt aus eingang-inzahlung.js) -->
+    <section id="tab-inzahlung" role="tabpanel" aria-labelledby="tabk-inzahlung" hidden></section>
+  </main>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="eingang-core.js"></script>
+<script src="eingang-anlieferung.js"></script>
+<script src="eingang-inzahlung.js"></script>
+<script>EG.start();</script>
+</body>
+</html>
