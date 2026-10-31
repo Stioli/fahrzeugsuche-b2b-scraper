@@ -1,0 +1,78 @@
+/* Stieber-App – Reiter „Verkauf“: Ergänzungen zu eingang.css (alle Klassen mit Präfix .vk-)
+   Farben nur aus den Variablen von eingang.css (Stieber-CI). Kontrastregeln wie dort:
+   Rot und Gold nie als Schriftfarbe, Ampelfarben nur als Fläche/Rand – der Zustand steht immer auch als Text daneben. */
+
+/* ---------- Ampel-Punkte ---------- */
+.vk-dots{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 4px}
+.vk-dot{display:inline-block;width:16px;height:16px;border-radius:50%;background:#D5DCE6;border:2px solid #AEBACB;flex:0 0 auto}
+.vk-dot.gross{width:20px;height:20px}
+.vk-dot.gelb{background:var(--gold);border-color:#C79A12}
+.vk-dot.gruen{background:var(--gruen);border-color:var(--gruen-text)}
+.vk-dot.rot{background:var(--rot);border-color:var(--rot-text)}
+.vk-karte .karte-kopf{margin-bottom:2px}
+
+/* ---------- Phasenleiste (waagrecht wischbar) ---------- */
+.vk-leiste{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin:0 -2px 8px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+.vk-ph-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;border-radius:999px;border:2px solid var(--border);background:#fff;font-family:var(--font-body);font-size:15px;font-weight:600;color:var(--ink);cursor:pointer;scroll-snap-align:start}
+.vk-ph-chip.aktuell{border-color:var(--blau);background:#E8F0FB}
+.vk-ph-chip:hover{border-color:var(--blau)}
+
+/* ---------- Was fehlt noch ---------- */
+.vk-fehlt h2{margin-bottom:4px}
+.vk-fehlt-liste{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.vk-fehlt-item{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;text-align:left;min-height:48px;padding:8px 12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);font-family:var(--font-body);font-size:15px;color:var(--ink);cursor:pointer}
+.vk-fehlt-item:hover{border-color:var(--blau)}
+.vk-fehlt-phase{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--blau-dark);flex:0 0 auto}
+.vk-fehlt-text{flex:1 1 180px;overflow-wrap:anywhere}
+.vk-fehlt-sperre{background:var(--gold-bg);border:1px solid var(--gold);border-radius:12px;padding:10px 12px;font-size:15px;font-weight:600}
+
+/* ---------- Phase (aufklappbar) ---------- */
+.vk-phase{background:#fff;border:1px solid var(--border);border-left:8px solid #AEBACB;border-radius:var(--radius);box-shadow:var(--schatten);margin-bottom:12px;scroll-margin-top:64px}
+.vk-phase.gelb{border-left-color:var(--gold)}
+.vk-phase.gruen{border-left-color:var(--gruen-text)}
+.vk-phase.rot{border-left-color:var(--rot-text)}
+.vk-phase > summary,.vk-gruppe > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:56px;padding:10px 44px 10px 14px;position:relative}
+.vk-phase > summary::-webkit-details-marker,.vk-gruppe > summary::-webkit-details-marker{display:none}
+.vk-phase > summary::after,.vk-gruppe > summary::after{content:"";position:absolute;right:18px;top:50%;width:10px;height:10px;border-right:3px solid var(--sub);border-bottom:3px solid var(--sub);transform:translateY(-70%) rotate(45deg);transition:transform .15s}
+.vk-phase[open] > summary::after,.vk-gruppe[open] > summary::after{transform:translateY(-30%) rotate(-135deg)}
+.vk-ph-name{font-family:var(--font-heading);font-weight:700;font-size:18px}
+.vk-ph-info{font-size:14px;color:var(--sub);flex:1 1 140px;min-width:0}
+.vk-ph-body{padding:0 14px 14px}
+.vk-ph-body > .banner{margin:10px 0}
+.vk-sperre ul{margin:6px 0 10px 20px}
+.vk-sperre .btn{margin-top:2px}
+
+/* ---------- Punkte ---------- */
+.vk-punkt.vk-nok{border-left:6px solid var(--rot-text)}
+.vk-punkt.vk-lesen .punkt-titel{color:var(--ink)}
+.vk-punkt.vk-lesen{background:#FAFBFD}
+.vk-opt{font-weight:400;font-size:14px;color:var(--sub)}
+.vk-auto{font-size:14px;color:var(--sub);margin-top:2px;padding:6px 10px;background:#EEF1F5;border-radius:10px;overflow-wrap:anywhere}
+.vk-grund{color:var(--ink);margin-top:2px}
+.vk-status{margin-top:8px}
+.vk-eingabe{margin-top:6px;padding-top:8px}
+.vk-eingabe textarea{min-height:72px}
+.vk-knoepfe{display:flex;gap:8px;flex-wrap:wrap}
+.vk-nachlass .banner{margin:0 0 8px}
+.vk-seg .seg-b{min-height:48px}
+
+/* Auslieferungs-Checkliste: kompakte Zeilen */
+.vk-gruppe{background:#F4F8FD;border:1px solid var(--border);border-radius:14px;margin:12px 0}
+.vk-gruppe > summary{min-height:52px}
+.vk-gr-body{padding:0 10px 12px}
+.vk-ac{padding:8px 10px;margin-bottom:8px}
+.vk-ac-zeile{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;justify-content:space-between}
+.vk-ac-zeile .punkt-titel{flex:1 1 150px;min-width:0;overflow-wrap:anywhere}
+.vk-ac-zeile .vk-seg{flex:0 0 auto;margin-top:0;width:210px;max-width:100%}
+.vk-ac .vk-eingabe{margin-top:6px}
+.vk-ac .vk-status{margin-top:4px}
+
+/* Springen aus „Was fehlt noch“ */
+.vk-blink{animation:vk-blink 1.6s ease-out 1}
+@keyframes vk-blink{0%,40%{box-shadow:0 0 0 4px rgba(0,123,255,.55)}100%{box-shadow:0 0 0 0 rgba(0,123,255,0)}}
+
+@media(max-width:420px){
+  .vk-ph-name{font-size:17px}
+  .vk-ac-zeile .vk-seg{width:100%}
+}
+@media(prefers-reduced-motion:reduce){.vk-blink{animation:none;outline:3px solid var(--blau)}.vk-phase > summary::after,.vk-gruppe > summary::after{transition:none}}

@@ -10,11 +10,12 @@
 <meta name="apple-mobile-web-app-title" content="Eingang">
 <link rel="manifest" href="eingang.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Fahrzeugeingang &middot; Autohaus Stieber</title>
+<title>Stieber-App &middot; Autohaus Stieber</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="eingang.css">
+<link rel="stylesheet" href="verkauf.css">
 <!-- feste Version von supabase-js (wie im Dashboard, nur nicht "@2" schwimmend) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
@@ -28,6 +29,7 @@
     <select id="demo-konto" aria-label="Demo-Konto">
       <option value="admin">Oli (Admin)</option>
       <option value="verkauf">Mitarbeiter (Verkauf)</option>
+      <option value="dispo">Dispo</option>
       <option value="werkstatt">Werkstatt-Konto (werkstatt@)</option>
     </select>
     <button class="linklike" id="demo-reset" type="button">Demo zur&uuml;cksetzen</button>
@@ -87,7 +89,7 @@
   <div class="sticky-kopf">
     <header class="kopf">
       <div class="kopf-in">
-        <h1>Fahrzeugeingang</h1>
+        <h1>Stieber-App</h1>
         <div class="kopf-user">
           <button class="kopf-name" id="btn-name" type="button" title="Name ändern"></button>
           <button class="btn btn-klein" id="btn-logout" type="button">Abmelden</button>
@@ -96,6 +98,8 @@
     </header>
     <nav class="tabs" role="tablist" aria-label="Bereiche">
       <div class="tabs-in">
+        <button class="tab-knopf" role="tab" id="tabk-anfragen" data-tab="anfragen" data-rollen="admin,verkauf" aria-selected="false" aria-controls="tab-anfragen" type="button">Anfragen</button>
+        <button class="tab-knopf" role="tab" id="tabk-verkauf" data-tab="verkauf" data-rollen="admin,verkauf,dispo,werkstatt" aria-selected="false" aria-controls="tab-verkauf" type="button">Verkauf</button>
         <button class="tab-knopf" role="tab" id="tabk-anlieferung" data-tab="anlieferung" aria-selected="true" aria-controls="tab-anlieferung" type="button">Anlieferungen</button>
         <button class="tab-knopf" role="tab" id="tabk-inzahlung" data-tab="inzahlung" aria-selected="false" aria-controls="tab-inzahlung" type="button">Inzahlungnahmen</button>
       </div>
@@ -103,6 +107,10 @@
   </div>
 
   <main class="wrap">
+    <!-- Reiter Anfragen: Leads aus der Lead Liste V1 über leads_api (eingang-leads.js) -->
+    <section id="tab-anfragen" role="tabpanel" aria-labelledby="tabk-anfragen" hidden></section>
+    <!-- Reiter Verkauf: Verkaufsakten mit Phasen V1–V10 (verkauf-phasen.js + eingang-verkauf.js) -->
+    <section id="tab-verkauf" role="tabpanel" aria-labelledby="tabk-verkauf" hidden></section>
     <!-- Reiter 1: Lieferantenfahrzeuge (eingang-anlieferung.js) -->
     <section id="tab-anlieferung" role="tabpanel" aria-labelledby="tabk-anlieferung"></section>
     <!-- Reiter 2: Inzahlungnahmen (Inhalt kommt aus eingang-inzahlung.js) -->
@@ -115,6 +123,9 @@
 <script src="eingang-core.js"></script>
 <script src="eingang-anlieferung.js"></script>
 <script src="eingang-inzahlung.js"></script>
+<script src="eingang-leads.js"></script>
+<script src="verkauf-phasen.js"></script>
+<script src="eingang-verkauf.js"></script>
 <script>EG.start();</script>
 </body>
 </html>

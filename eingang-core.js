@@ -508,6 +508,7 @@
   EG.nutzer = function () { return (EG.user && EG.user.email) || ''; };
   EG.istWerkstatt = function () { return /^werkstatt@/i.test(EG.nutzer()); };
   EG.istAdmin = function () { return EG.rolle === 'admin'; };
+  EG.istDispo = function () { return EG.rolle === 'dispo'; };
   /** Name für „erfasst von“/„gesendet von“: bei werkstatt@ der auf dem Gerät gemerkte Name, sonst anzeigename. */
   EG.nutzerName = function () {
     if (EG.istWerkstatt()) return lsGet(LS_NAME) || '';
@@ -548,9 +549,27 @@
     if (!fn) { sec.innerHTML = ''; sec.appendChild(EG.banner('Dieser Reiter wird in Paket P4 ergänzt.', 'info')); return; }
     try { var p = fn(sec); if (p && p.catch) p.catch(EG.fehler); } catch (e) { EG.fehler(e); }
   }
+  /** Alle Reiter laut HTML (Knöpfe .tab-knopf mit data-tab). data-rollen="admin,verkauf" begrenzt die Sichtbarkeit. */
+  function alleTabs() {
+    return Array.prototype.map.call(document.querySelectorAll('.tab-knopf'), function (b) { return b.getAttribute('data-tab'); });
+  }
+  function tabErlaubt(name) {
+    var b = $('tabk-' + name);
+    if (!b) return false;
+    var r = b.getAttribute('data-rollen');
+    return !r || r.split(',').indexOf(EG.rolle || '') >= 0;
+  }
+  /** Blendet Reiterknöpfe aus, die die aktuelle Rolle nicht sehen darf. → Liste der erlaubten Reiter */
+  function tabsFuerRolle() {
+    var erlaubt = alleTabs().filter(tabErlaubt);
+    alleTabs().forEach(function (n) { $('tabk-' + n).hidden = erlaubt.indexOf(n) < 0; });
+    return erlaubt;
+  }
   EG.zeigeTab = function (name) {
+    var erlaubt = tabsFuerRolle();
+    if (erlaubt.indexOf(name) < 0) name = erlaubt[0];
     aktivTab = name;
-    ['anlieferung', 'inzahlung'].forEach(function (n) {
+    alleTabs().forEach(function (n) {
       $('tab-' + n).hidden = n !== name;
       $('tabk-' + n).setAttribute('aria-selected', n === name ? 'true' : 'false');
     });
@@ -620,8 +639,9 @@
     namenAnzeigen();
     ansicht('view-app');
     appBereit = true;
-    var t = lsGet(LS_TAB), hash = (location.hash || '').replace('#', '');
-    EG.zeigeTab(tabFns[hash] || hash === 'inzahlung' || hash === 'anlieferung' ? hash : (t === 'inzahlung' ? 'inzahlung' : 'anlieferung'));
+    var t = lsGet(LS_TAB), hash = (location.hash || '').replace('#', '').split('&')[0];   // z. B. #anfragen&id=12
+    var tabs = alleTabs();
+    EG.zeigeTab(tabs.indexOf(hash) >= 0 ? hash : (tabs.indexOf(t) >= 0 ? t : tabs[0]));
   }
 
   /* ====================================================================
@@ -839,6 +859,7 @@
   var demoKonten = {
     admin: { email: 'oli@demo.example', rolle: 'admin', name: 'Oli (Demo)' },
     verkauf: { email: 'verkauf@demo.example', rolle: 'verkauf', name: 'Verkäufer (Demo)' },
+    dispo: { email: 'dispo@demo.example', rolle: 'dispo', name: 'Dispo (Demo)' },
     werkstatt: { email: 'werkstatt@demo.example', rolle: 'werkstatt', name: '' }
   };
   async function demoKontoSetzen(art) {
@@ -846,7 +867,7 @@
     EG.user = { email: k.email }; EG.rolle = k.rolle; EG.anzeigename = k.name;
     if (art === 'werkstatt' && !lsGet(LS_NAME)) await EG.nameAbfragen(true);
     namenAnzeigen();
-    if (aktivTab) rufeTab(aktivTab);
+    if (aktivTab) EG.zeigeTab(aktivTab);
   }
   async function demoStart() {
     $('demo-band').hidden = false;
