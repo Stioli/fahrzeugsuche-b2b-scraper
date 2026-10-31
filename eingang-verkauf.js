@@ -162,7 +162,9 @@
       var prev = j >= 0 ? res[j] : null;
       var aufgehoben = !!findeFrei(frei, 'sperre_aufheben', ph.key);
       // Nachgetragene Akte: Reihenfolge nicht erzwingen (feste Sperren für Zahlung und Übergabe bleiben)
-      if (prev && !prev.gruen && !aufgehoben && !akte.nachtrag) info.sperren.push({ typ: 'vorphase', text: 'Erst muss die Phase „' + prev.def.name + '“ grün sein.' });
+      // Olis Freigabe öffnet Zahlung und Vorbereitung auch, wenn in der Prüfung noch ein NOK steht (z. B. eVB fehlt)
+      var olisFreigabe = (ph.key === 'v7' || ph.key === 'v8') && eff.v6 && eff.v6.freigabe && eff.v6.freigabe.st === 'ok';
+      if (prev && !prev.gruen && !aufgehoben && !akte.nachtrag && !olisFreigabe) info.sperren.push({ typ: 'vorphase', text: 'Erst muss die Phase „' + prev.def.name + '“ grün sein.' });
       if ((ph.key === 'v7' || ph.key === 'v8') && !aufgehoben && prev && (prev.gruen || akte.nachtrag)) {
         var fr = eff.v6 && eff.v6.freigabe;
         if (!fr || fr.st !== 'ok') info.sperren.push({ typ: 'freigabe', text: 'Wartet auf Olis Freigabe in „Prüfung durch Oli“.' });
@@ -892,8 +894,9 @@
     if (p.textBei && w.auswahl && p.textBei.indexOf(w.auswahl) >= 0 && !String(w.text || '').trim()) return 'Bitte den Grund eintragen.';
     if (p.fotoPflicht && !(neu.fotos || []).length) return 'Dafür brauchst du mindestens ein Foto.';
     if (p.nurNachAllen) {
-      var rest = info.punkte.filter(function (x) { return x.def !== p && x.def.pflicht && x.st !== 'ok' && x.st !== 'entfaellt'; });
-      if (rest.length) return 'Erst müssen die anderen Pflichtpunkte dieser Phase erledigt sein (noch ' + rest.length + ' offen).';
+      // nokReicht (Olis Freigabe): ein Punkt mit NOK und Grund gilt als geprüft – „freigeben, Rest nachholen“ (Oli 31.10.2026)
+      var rest = info.punkte.filter(function (x) { return x.def !== p && x.def.pflicht && x.st !== 'ok' && x.st !== 'entfaellt' && !(p.nokReicht && x.st === 'nok'); });
+      if (rest.length) return 'Erst müssen die anderen Pflichtpunkte dieser Phase ' + (p.nokReicht ? 'geprüft' : 'erledigt') + ' sein (noch ' + rest.length + ' offen).';
     }
     return null;
   }

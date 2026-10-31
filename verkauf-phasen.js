@@ -160,8 +160,8 @@
         { k: 'p_ertrag', text: 'Ertrag plausibel', pflicht: true },
         { k: 'p_zulassung', text: 'Zulassungsunterlagen und Vollmacht', pflicht: true },
         { k: 'p_listen', text: 'Masterliste, Lead Liste, Börsen', pflicht: true },
-        { k: 'freigabe', text: 'Freigabe an die Dispo (oder Rückfrage)', pflicht: true, keinEntfaellt: true, nurNachAllen: true, seg: ['ok', 'nok'],
-          segLabels: { ok: 'Freigeben', nok: 'Rückfrage' }, hinweis: 'Bei „Rückfrage“ schreibst du die Frage als Grund. Erst nach „Freigeben“ öffnet sich die Zahlung.' }
+        { k: 'freigabe', text: 'Freigabe an die Dispo (oder Rückfrage)', pflicht: true, keinEntfaellt: true, nurNachAllen: true, nokReicht: true, seg: ['ok', 'nok'],
+          segLabels: { ok: 'Freigeben', nok: 'Rückfrage' }, hinweis: 'Bei „Rückfrage“ schreibst du die Frage als Grund. Erst nach „Freigeben“ öffnen sich Zahlung und Vorbereitung. Punkte mit NOK (z. B. eVB fehlt) gelten als geprüft – du kannst trotzdem freigeben, sie bleiben rot, bis sie nachgeholt sind.' }
       ]
     },
     /* ============ V7 ============ */
