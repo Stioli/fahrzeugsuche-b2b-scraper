@@ -161,8 +161,9 @@
       while (j > 0 && res[j].phaseEntfaellt) j--;
       var prev = j >= 0 ? res[j] : null;
       var aufgehoben = !!findeFrei(frei, 'sperre_aufheben', ph.key);
-      if (prev && !prev.gruen && !aufgehoben) info.sperren.push({ typ: 'vorphase', text: 'Erst muss die Phase „' + prev.def.name + '“ grün sein.' });
-      if (ph.key === 'v7' && !aufgehoben && prev && prev.gruen) {
+      // Nachgetragene Akte: Reihenfolge nicht erzwingen (feste Sperren für Zahlung und Übergabe bleiben)
+      if (prev && !prev.gruen && !aufgehoben && !akte.nachtrag) info.sperren.push({ typ: 'vorphase', text: 'Erst muss die Phase „' + prev.def.name + '“ grün sein.' });
+      if ((ph.key === 'v7' || ph.key === 'v8') && !aufgehoben && prev && (prev.gruen || akte.nachtrag)) {
         var fr = eff.v6 && eff.v6.freigabe;
         if (!fr || fr.st !== 'ok') info.sperren.push({ typ: 'freigabe', text: 'Wartet auf Olis Freigabe in „Prüfung durch Oli“.' });
       }
@@ -263,7 +264,8 @@
     if (!werk) chips();
     var zeile2 = h('div', { class: 'leiste-zeile' },
       h('button', { type: 'button', class: 'btn btn-ghost', text: 'Liste aktualisieren', onclick: function () { ladeListe().catch(EG.fehler); } }),
-      erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-primary', text: 'Neue Verkaufsakte', onclick: function () { neueAkte().catch(EG.fehler); } }) : null);
+      erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-primary', text: 'Neue Verkaufsakte', onclick: function () { neueAkte().catch(EG.fehler); } }) : null,
+      erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-ghost', text: 'Akte nachtragen', title: 'Für einen Verkauf, der schon passiert ist', onclick: function () { neueAkte({ nachtrag: true }).catch(EG.fehler); } }) : null);
     S.root.appendChild(h('div', { class: 'leiste' }, h('div', { class: 'leiste-zeile' }, suchFeld), zeile2, werk ? null : chipLeiste));
     if (werk) S.root.appendChild(EG.banner('Du siehst nur Fahrzeuge, bei denen die Auslieferungs-Checkliste ansteht.', 'info'));
     S.listenBox = h('div', { class: 'raster' });
@@ -316,8 +318,8 @@
       a.uebergabe_termin ? h('div', { class: 'fz-zeile' + (ueber ? ' rot-text fett' : ''), text: 'Übergabe: ' + EG.fmtDatum(a.uebergabe_termin) + (ueber ? ' (überschritten)' : '') }) : null);
   }
 
-  async function neueAkte() {
-    var id = await akteDialog({}, null);
+  async function neueAkte(vb) {
+    var id = await akteDialog(vb || {}, null);
     if (id) await oeffne(id);
   }
 
@@ -337,8 +339,10 @@
       mail: h('input', { type: 'email', id: 'vk-f-mail', value: v.kunde_email || '', autocomplete: 'off' }),
       verk: h('select', { id: 'vk-f-verk' }, h('option', { value: '', text: '– noch offen –' }), VERKAEUFER.map(function (k) { return h('option', { value: k, text: k }); })),
       termin: h('input', { type: 'date', id: 'vk-f-termin', value: v.uebergabe_termin || '' }),
-      bestell: h('input', { type: 'text', id: 'vk-f-bestell', value: v.bestell_nr || '', placeholder: 'z. B. 2610-12345' })
+      bestell: h('input', { type: 'text', id: 'vk-f-bestell', value: v.bestell_nr || '', placeholder: 'z. B. 2610-12345' }),
+      nachtrag: h('input', { type: 'checkbox', id: 'vk-f-nachtrag' })
     };
+    F.nachtrag.checked = !!v.nachtrag;
     F.verk.value = VERKAEUFER.indexOf(v.verkaeufer) >= 0 ? v.verkaeufer : '';
     var inhalt = h('div', {},
       vorhanden ? null : h('p', { class: 'muted klein', style: 'margin-bottom:10px', text: 'Mit der internen Nr. findest du die Akte später in der Suche. Alles andere kannst du in der Akte nachtragen.' }),
@@ -348,10 +352,13 @@
       EG.feld('Kunde *', F.kunde),
       h('div', { class: 'zeile2' }, EG.feld('Telefon', F.tel), EG.feld('E-Mail', F.mail)),
       h('div', { class: 'zeile2' }, EG.feld('Verkäufer', F.verk), EG.feld('Übergabetermin', F.termin)),
-      EG.feld('Bestell-Nr.', F.bestell));
+      EG.feld('Bestell-Nr.', F.bestell),
+      h('label', { class: 'vk-nachtrag-wahl', style: 'display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer' }, F.nachtrag,
+        h('span', {}, h('strong', { text: 'Akte nachtragen' }), h('br'),
+          h('span', { class: 'muted klein', text: 'Der Verkauf ist schon passiert. Die Phasen müssen nicht der Reihe nach grün sein. Zahlung bleibt bis zu Olis Freigabe gesperrt, Übergabe bis „voll bezahlt“.' }))));
     var neu = { id: null };
     var wert = await EG.dialog({
-      titel: vorhanden ? 'Daten ändern' : 'Neue Verkaufsakte', inhalt: inhalt, breit: true,
+      titel: vorhanden ? 'Daten ändern' : (v.nachtrag ? 'Akte nachtragen' : 'Neue Verkaufsakte'), inhalt: inhalt, breit: true,
       knoepfe: [{ text: 'Abbrechen', art: 'ghost', wert: null }, {
         text: vorhanden ? 'Speichern' : 'Akte anlegen', art: 'primary', wert: 'ok',
         aktion: async function () {
@@ -362,7 +369,8 @@
           var felder = {
             interne_nr: nr || null, autrado_nr: F.autrado.value.trim() || null, hersteller: F.hersteller.value.trim() || null, modell: F.modell.value.trim(),
             farbe: F.farbe.value.trim() || null, fin: fin || null, kunde_name: F.kunde.value.trim(), kunde_telefon: F.tel.value.trim() || null,
-            kunde_email: F.mail.value.trim() || null, verkaeufer: F.verk.value || null, uebergabe_termin: F.termin.value || null, bestell_nr: F.bestell.value.trim() || null
+            kunde_email: F.mail.value.trim() || null, verkaeufer: F.verk.value || null, uebergabe_termin: F.termin.value || null, bestell_nr: F.bestell.value.trim() || null,
+            nachtrag: !!F.nachtrag.checked
           };
           if (vorhanden) {
             felder.updated_at = jetzt();
@@ -482,6 +490,7 @@
       h('div', { class: 'karte-kopf' }, h('h2', { text: akteTitel(a) }), EG.pill(txt, art)),
       (a.farbe || a.fin) ? h('div', { class: 'fz-zeile', text: [a.farbe, a.fin ? 'FIN ' + a.fin : ''].filter(Boolean).join(' · ') }) : null,
       h('div', { class: 'abstand' }), dl,
+      a.nachtrag && istOffen(a) ? EG.banner('Nachgetragene Akte: Du kannst jede Phase sofort abhaken. Zahlung öffnet erst nach Olis Freigabe, Übergabe erst nach „voll bezahlt“.', 'info') : null,
       a.phase_aktuell === 'abgebrochen' ? EG.banner('Dieser Verkauf wurde abgebrochen. Unten kannst du die Akte wieder öffnen.', 'warn') : null,
       !istOffen(a) && a.phase_aktuell === 'abgeschlossen' ? EG.banner('Alle Phasen sind grün. Die Akte ist abgeschlossen.', 'ok') : null,
       erlaubtAnlegen() ? h('div', { style: 'margin-top:10px' }, h('button', { type: 'button', class: 'btn btn-ghost btn-klein', text: 'Daten ändern', onclick: function () { datenAendern().catch(EG.fehler); } })) : null);
