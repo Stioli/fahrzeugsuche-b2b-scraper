@@ -84,6 +84,26 @@
 .ac-lese{font-size:13px;color:var(--sub);margin-top:4px}
 .ac-liste .block-kopf:first-child{margin-top:10px}
 
+/* Zeilenansicht der Fahrzeuge (ein Fahrzeug = eine Zeile) */
+.ac-tabelle{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--schatten);overflow:hidden}
+.ac-zeile{display:grid;grid-template-columns:150px 54px minmax(160px,1.6fr) repeat(5,minmax(70px,.7fr)) 130px;align-items:center;gap:8px;width:100%;min-height:52px;padding:6px 12px;border:0;border-top:1px solid var(--border);border-left:6px solid transparent;background:#fff;font-family:var(--font-body);font-size:15px;color:var(--ink);text-align:left;cursor:pointer}
+.ac-zeile:hover,.ac-zeile:focus-visible{background:#F4F8FD}
+.ac-zeile.rot{border-left-color:var(--rot-text)}
+.ac-zeile.fertig{background:#FAFBFD}
+.ac-kopfzeile{min-height:40px;border-top:0;background:#EEF1F5;font-size:13px;font-weight:700;color:var(--sub);cursor:default}
+.ac-kopfzeile:hover{background:#EEF1F5}
+.ac-zeile > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-c-fz{white-space:normal !important}
+.ac-c-check{display:flex;align-items:center;gap:6px;justify-content:flex-end;font-weight:700}
+.ac-nur-handy{display:none}
+@media(max-width:760px){
+  .ac-zeile{grid-template-columns:92px 1fr auto;padding:8px 10px;font-size:14px}
+  .ac-c-termin{white-space:normal !important}
+  .ac-c-termin .pill{white-space:normal;line-height:1.2}
+  .ac-c-nr,.ac-c-mw,.ac-kopfzeile,.ac-farbe{display:none !important}
+  .ac-nur-handy{display:inline}
+}
+
 @media(max-width:420px){
   .vk-ph-name{font-size:17px}
   .vk-ac-zeile .vk-seg{width:100%}

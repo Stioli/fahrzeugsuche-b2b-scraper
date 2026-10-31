@@ -284,7 +284,15 @@
     zeichneListe();
   }
   function fortschritt(f) { return zaehle(S.zeilen[f.interne_nr]); }
-  function istFertig(f) { var z = fortschritt(f); return z.erledigt >= z.gesamt; }
+  /** Fertig = Checkliste komplett oder Endkontrolle in der Masterliste „fertig“. */
+  function istFertig(f) { var z = fortschritt(f); return z.erledigt >= z.gesamt || /^fertig$/i.test(f.endkontrolle || ''); }
+  /** Oli 31.10.2026: Was als Nächstes ausgeliefert wird und nicht fertig ist, steht oben; fertige Fahrzeuge ans Ende. */
+  function sortiere(a, b) {
+    var fa = istFertig(a) ? 1 : 0, fb = istFertig(b) ? 1 : 0;
+    if (fa !== fb) return fa - fb;
+    return (a.termin || '9999-99-99').localeCompare(b.termin || '9999-99-99') ||
+      String(a.interne_nr).localeCompare(String(b.interne_nr), 'de', { numeric: true });
+  }
   function terminInfo(t) {
     if (!t) return { text: 'Termin offen', art: 'grau' };
     var heute = EG.heute(), d = EG.fmtDatum(t);
@@ -317,18 +325,23 @@
       h('div', { class: 'leiste-zeile' }, suchFeld),
       h('div', { class: 'leiste-zeile ac-aktual' }, neu, h('span', { class: 'klein muted', text: 'Stand: ' + EG.fmtZeit(S.stand) })),
       chipLeiste));
-    S.listenBox = h('div', { class: 'raster' });
+    S.listenBox = h('div', { class: 'ac-tabelle', role: 'list' });
     S.root.appendChild(S.listenBox);
     fuelleListe();
   }
+  /** Spalten der Zeilenansicht: [Kopf, Klasse]. Auf dem Handy bleiben nur Termin, Fahrzeug und Checkliste. */
+  var SPALTEN = [['Termin', 'ac-c-termin'], ['Nr.', 'ac-c-nr'], ['Fahrzeug', 'ac-c-fz'], ['Status', 'ac-c-mw'],
+    ['Innen', 'ac-c-mw'], ['Außen', 'ac-c-mw'], ['Werkstatt', 'ac-c-mw'], ['Endkontr.', 'ac-c-mw'], ['Checkliste', 'ac-c-check']];
   function fuelleListe() {
     var box = S.listenBox; box.innerHTML = '';
     var l = S.fz.filter(function (f) {
       if (!passtSuche(f)) return false;
       return S.filter === 'alle' || (S.filter === 'offen' ? !istFertig(f) : istFertig(f));
-    });
-    if (!l.length) { box.appendChild(h('div', { class: 'leer', style: 'grid-column:1/-1', text: S.fz.length ? 'Keine Fahrzeuge in dieser Ansicht.' : 'Zurzeit steht kein Fahrzeug zur Auslieferung an.' })); return; }
-    l.forEach(function (f) { box.appendChild(fzKarte(f)); });
+    }).sort(sortiere);
+    if (!l.length) { box.appendChild(h('div', { class: 'leer', text: S.fz.length ? 'Keine Fahrzeuge in dieser Ansicht.' : 'Zurzeit steht kein Fahrzeug zur Auslieferung an.' })); return; }
+    box.appendChild(h('div', { class: 'ac-zeile ac-kopfzeile', 'aria-hidden': 'true' },
+      SPALTEN.map(function (s) { return h('span', { class: s[1], text: s[0] }); })));
+    l.forEach(function (f) { box.appendChild(fzZeile(f)); });
   }
   /** Vier Werte aus der Masterliste als kleine Marken (leer = grau). */
   function werteMarken(f) {
@@ -347,13 +360,23 @@
         z.erledigt >= z.gesamt ? EG.pill('Fertig', 'gruen') : null),
       h('div', { class: 'ac-balken', role: 'presentation' }, h('span', { style: 'width:' + proz + '%' })));
   }
-  function fzKarte(f) {
-    var z = fortschritt(f), ti = terminInfo(f.termin), rot = ti.art === 'rot' && z.erledigt < z.gesamt;
-    return h('button', { type: 'button', class: 'karte fz-karte' + (rot ? ' rot' : ''), onclick: function () { oeffne(f.interne_nr).catch(EG.fehler); } },
-      h('div', { class: 'karte-kopf' }, h('div', { class: 'fz-titel', text: fzTitel(f) }), EG.pill(ti.text, ti.art)),
-      h('div', { class: 'fz-zeile', text: ['Nr. ' + f.interne_nr, f.farbe].filter(Boolean).join(' · ') }),
-      werteMarken(f),
-      fortschrittBlock(z));
+  /** Ein Fahrzeug = eine Zeile. Tippen öffnet die Checkliste. */
+  function fzZeile(f) {
+    var z = fortschritt(f), ti = terminInfo(f.termin), fertig = istFertig(f), rot = ti.art === 'rot' && !fertig;
+    function mw(v) { return h('span', { class: 'ac-c-mw' + (v ? '' : ' muted'), text: v || '–' }); }
+    return h('button', {
+      type: 'button', role: 'listitem', class: 'ac-zeile' + (rot ? ' rot' : '') + (fertig ? ' fertig' : ''),
+      'aria-label': fzTitel(f) + ', Nr. ' + f.interne_nr + ', ' + ti.text + ', ' + z.erledigt + ' von ' + z.gesamt + ' Punkten',
+      onclick: function () { oeffne(f.interne_nr).catch(EG.fehler); }
+    },
+      h('span', { class: 'ac-c-termin' }, EG.pill(f.termin ? ti.text.replace(/\.\d{4}/, '.') : 'offen', ti.art)),
+      h('span', { class: 'ac-c-nr', text: f.interne_nr }),
+      h('span', { class: 'ac-c-fz' }, h('strong', { text: fzTitel(f) }), f.farbe ? h('span', { class: 'muted ac-farbe', text: ' · ' + f.farbe }) : null,
+        h('span', { class: 'ac-nur-handy muted', text: ' · Nr. ' + f.interne_nr })),
+      mw(f.status), mw(f.innen), mw(f.aussen), mw(f.werkstatt), mw(f.endkontrolle),
+      h('span', { class: 'ac-c-check' },
+        fertig ? EG.pill('Fertig', 'gruen') : h('span', { text: z.erledigt + '/' + z.gesamt }),
+        z.nok ? EG.pill(z.nok + ' NOK', 'rot') : null));
   }
 
   /* ---------- Detail ---------- */
