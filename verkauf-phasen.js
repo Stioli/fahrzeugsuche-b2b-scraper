@@ -28,21 +28,31 @@
   var AC_ROLLEN = ['dispo', 'admin', 'werkstatt'];   // Aufbereiter/Meister haken über werkstatt@ mit Namenseintrag ab
   var VERK = ['OS', 'NP', 'AI'];                     // Verkäufer-Kürzel (Lead Liste)
 
-  /* ---------- Auslieferungs-Checkliste (Vorlage Auslieferungs-Checkliste.xlsx), steht in V8 an Stelle 5 ---------- */
+  /* ---------- Auslieferungs-Checkliste, steht in V8 an Stelle 5 ----------
+     Quelle (Oli 31.10.2026): Blatt „Auslieferungs-Checkliste“ der Fahrzeugakte (Fahrzeugverkauf/Fahrzeuge/Fahrzeugakte V11042024.xlsx).
+     Texte wörtlich wie in der Vorlage, damit Werkstatt und Aufbereiter dieselbe Liste wie auf Papier sehen. */
   var AC_BLOECKE = [
-    ['Außen', [['folien', 'Folien'], ['waesche', 'Wäsche'], ['motorraum', 'Motorraum'], ['tankklappe', 'Tankklappe'], ['reifen_felgen', 'Reifen/Felgen'], ['kunststoff', 'Kunststoff'], ['politur', 'Politur']]],
-    ['Innen', [['sitzschoner', 'Sitzschoner/Fußmatte'], ['umweltplakette', 'Alte Umweltplakette'], ['tuerfalze', 'Türfalze'], ['saugen', 'Saugen'], ['polster', 'Polster'], ['himmel', 'Himmel'],
-      ['scheiben_pano', 'Scheiben/Pano'], ['faecher', 'Fächer leeren'], ['armaturen', 'Armaturen'], ['fussmatten_sicherheitsset', 'Fußmatten/Sicherheitsset'], ['kopfstuetzen_gurte', 'Kopfstützen/Gurte']]],
-    ['Technik', [['laden', 'E/PHEV laden'], ['batterie', 'Batterie'], ['kraftstoff', '5 l Kraftstoff bei Reserve'], ['kennzeichenhalter', 'Kennzeichenhalter'], ['oel', 'Öl'], ['kuehlmittel', 'Kühlmittel'],
-      ['waschwasser', 'Waschwasser'], ['raeder_nachziehen', 'Räder nachziehen'], ['reifendruck', 'Reifendruck vorne/hinten'], ['service', 'Service-Intervall'], ['sprache', 'Sprache Deutsch'],
-      ['bluetooth_navi', 'Bluetooth/Navi löschen'], ['rdks', 'RDKS'], ['raeder_reinigen', 'Räder reinigen / in Halle / einlagern']]],
-    ['Sonstiges', [['ichfreumich', '„Ich freu mich auf“'], ['preisschild', 'Preisschild'], ['co2_label', 'CO2-Label'], ['verkaufshalle', 'Fahrzeug in die Verkaufshalle']]]
+    ['Außen', [['folien', 'Folien entfernen'], ['waesche', 'Außenwäsche'], ['motorraum', 'Motorraum & Motorhaube innen'], ['tankklappe', 'Tankklappe innen reinigen'],
+      ['reifen_felgen', 'Reifen & Felgen'], ['kunststoff', 'Kunststoffteile aufarbeiten'], ['politur', 'Finish – Politur']]],
+    ['Innenraum', [['sitzschoner', 'Sitzschoner & Papierfußmatte in Kfz legen'], ['umweltplakette', 'Alte Umweltplakette ggf. entfernen'],
+      ['tuerfalze', 'Türfalze & Türrahmen & Innentüren reinigen + Kofferraumfalze'], ['saugen', 'Innenraum & Kofferraum aussaugen'], ['polster', 'Polsterreinigung'],
+      ['himmel', 'Himmel reinigen'], ['scheiben_pano', 'Fensterscheiben & Panoramadach reinigen'], ['faecher', 'Ablagefächer & Mittelkonsole & Handschuhfach leeren & reinigen'],
+      ['armaturen', 'Armaturenbrett reinigen'], ['fussmatten_sicherheitsset', 'Fußmatten & Sicherheitsset ggf. einlegen'], ['kopfstuetzen_gurte', 'Alle Kopfstützen nach unten machen, Sicherheitsgurte lösen']]],
+    ['Technik', [['laden', 'Elektro- & PHEV-Fahrzeuge laden'], ['batterie', 'Batterie laden'], ['kraftstoff', '5 l Kraftstoff auffüllen – nur wenn Fahrzeug auf Reserve ist'],
+      ['kennzeichenhalter', 'Kennzeichenhalter montieren'], ['oel', 'Motoröl prüfen'], ['kuehlmittel', 'Kühlflüssigkeit prüfen'], ['waschwasser', 'Scheibenwaschanlage auffüllen'],
+      ['raeder_nachziehen', 'Räder nachziehen + Aufkleber in Fahrzeug'], ['reifendruck', 'Reifenluftdruck vorne / hinten'], ['service', 'Service-Intervall zurückstellen'],
+      ['sprache', 'Sprache auf Deutsch umstellen'], ['bluetooth_navi', 'Alte Bluetooth-Verbindungen und Navi-Adressen entfernen'], ['rdks', 'RDKS-Programmierung prüfen'],
+      ['raeder_reinigen', 'Winter-/Sommerräder (gebraucht) reinigen'], ['raeder_halle', 'Winter-/Sommerräder in Verkaufshalle stellen'], ['raeder_einlagern', 'Winter-/Sommerräder einlagern']]],
+    ['Sonstiges', [['ichfreumich', '„Ich freu mich auf“ + Preisschild + CO2-Label in Kfz legen'], ['verkaufshalle', 'Verkauftes Fahrzeug nach Aufbereitung in Verkaufshalle'],
+      ['fehlercode', 'Fehlercode auslesen / ausdrucken / in Akte speichern']]]
   ];
   var acPunkte = [];
   AC_BLOECKE.forEach(function (b) {
     b[1].forEach(function (p) {
       var def = { k: 'ac_' + p[0], text: p[1], pflicht: true, gruppe: 'ac', block: b[0], rollen: AC_ROLLEN };
       if (p[0] === 'reifendruck') { def.eingabe = 'text'; def.label = 'Druck vorne / hinten (bar)'; }
+      if (p[0] === 'kuehlmittel') { def.eingabe = 'text'; def.label = 'Frostschutz bis (°C)'; }
+      if (p[0] === 'fehlercode') { def.foto = true; def.hinweis = 'Ausdruck oder Foto des Fehlerspeichers anhängen.'; }
       acPunkte.push(def);
     });
   });
@@ -169,7 +179,9 @@
       key: 'v7', name: 'Zahlung', wer: 'Dispo', rollen: DISPO,
       punkte: [
         { k: 'lief_rechnung', text: 'Lieferantenrechnung da?', pflicht: true, eingabe: 'auswahl', label: 'Rechnung', optionen: ['Liegt vor (mit Einladung)', 'Kommt nach Zahlung'] },
-        { k: 'zahlungseinladung', text: 'Zahlungseinladung an den Kunden gesendet', pflicht: true },
+        { k: 'repdoc_rechnung', text: 'Rechnung in Repdoc erstellt (Handelsakte → „den Verkauf durchführen“)', pflicht: true, eingabe: 'text', label: 'Rechnungsnummer Repdoc',
+          hinweis: 'Liegt die Lieferantenrechnung vor, gleich mit der Zahlungseinladung schicken. Sonst nach vollem Zahlungseingang erstellen und bei der Übergabe mit „bezahlt“ übergeben.' },
+        { k: 'zahlungseinladung', text: 'Zahlungseinladung an den Kunden gesendet (Lagerfahrzeug: Mail mit Repdoc-Rechnung)', pflicht: true },
         { k: 'anzahlung_da', text: 'Anzahlung ist eingegangen', pflicht: true, eingabe: 'betrag', label: 'Eingegangen in €',
           entfaelltWenn: [{ phase: 'v5', k: 'anzahlung', status: 'entfaellt', grund: 'Keine Anzahlung vereinbart' }] },
         { k: 'fin_ausgezahlt', text: 'Finanzierung ausgezahlt', pflicht: true, entfaelltWenn: [KEINE_FIN] },
@@ -190,7 +202,9 @@
         { k: 'auftrag', text: 'Interner Auftrag mit Arbeiten angelegt (z. B. Winterräder bestellen/montieren, Sommerräder einlagern, Durchsicht, Batterie laden, Zubehör/Zugaben)', pflicht: true, eingabe: 'text', label: 'Auftragsnummer' },
         { k: 'arbeiten_erledigt', text: 'Arbeiten erledigt', pflicht: true }
       ].concat(acPunkte, [
-        { k: 'zulassungsdienst', text: 'Zulassungsdienst beauftragt (ZB II aus Tresor, COC, Vollmacht, eVB, SEPA)', pflicht: true },
+        { k: 'zulassungsdienst', text: 'Zulassungsdienst beauftragt (ZB II aus Tresor, COC, Vollmacht, eVB, SEPA)', pflicht: true, eingabe: 'auswahl', label: 'Dienst',
+          optionen: ['Fa. Zeidan (Mail)', 'Kroschke (online)'],
+          hinweis: 'Fa. Zeidan per E-Mail für Stuttgart, Ludwigsburg, Böblingen und Esslingen. Weiter weg: Kroschke über deren Online-Seite.' },
         { k: 'zugelassen', text: 'Zugelassen, Kennzeichen da', pflicht: true },
         { k: 'transport', text: 'Lieferung? Transport gebucht', pflicht: true,
           entfaelltWenn: [{ phase: 'v5', k: 'abholung_lieferung', wert: 'Abholung', grund: 'Kunde holt ab' }] },
