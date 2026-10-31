@@ -14,7 +14,7 @@
              segLabels?:{ok,nok,entfaellt}, nurNachAllen?:bool (OK erst, wenn alle anderen Pflichtpunkte der Phase erledigt sind),
              entfaelltWenn?:[Bedingung] (entfällt automatisch), abgeleitet?:{phase,k} (nur Anzeige, kommt aus anderer Phase),
              setzeUebergabetermin?:bool, setzeVerkaeufer?:bool, setzeBestellNr?:bool, spezial?:'nachlass',
-             gruppe?:'ac', block? (Auslieferungs-Checkliste) }
+             gruppe?:'ac', block? (Auslieferungs-Checkliste: Speicherort verkauf.auslieferung_punkt über die interne Nr., nicht verkauf.punkt) }
    Bedingung: { phase, k, wert:'Nein' }            → Punkt phase.k ist beantwortet (OK) und hat diesen Wert
               { phase, k, status:'ok'|'entfaellt' } → Punkt hat diesen Status
               { phase, k, nichtIn:['Bar',…] }       → Punkt ist beantwortet und der Wert steht NICHT in der Liste
@@ -60,6 +60,11 @@
   acPunkte.push({ k: 'ac_end_aufbereiter', text: 'Aufbereiter bestätigt (Name, Datum)', pflicht: true, gruppe: 'ac', block: 'Endkontrolle', eingabe: 'bestaetigung', rollen: AC_ROLLEN, keinEntfaellt: true, seg: ['ok', 'nok'] });
   acPunkte.push({ k: 'ac_end_meister', text: 'Meister bestätigt (Name, Datum)', pflicht: true, gruppe: 'ac', block: 'Endkontrolle', eingabe: 'bestaetigung', rollen: AC_ROLLEN, keinEntfaellt: true, seg: ['ok', 'nok'] });
   acPunkte.push({ k: 'ac_end_verkaeufer', text: 'Verkäufer bestätigt (Name, Datum)', pflicht: true, gruppe: 'ac', block: 'Endkontrolle', eingabe: 'bestaetigung', rollen: ['verkauf', 'dispo', 'admin'], keinEntfaellt: true, seg: ['ok', 'nok'] });
+
+  /* Dieselbe Liste für beide Reiter: Reiter „Auslieferung“ (eingang-auslieferung.js) zeigt und speichert sie,
+     der Reiter Verkauf nutzt sie in Phase v8 für Ampel und „Was fehlt noch“. Gespeichert wird NICHT in verkauf.punkt,
+     sondern in verkauf.auslieferung_punkt (über die interne Nr. der Akte). */
+  window.VK_AC = { punkte: acPunkte, bloecke: AC_BLOECKE.map(function (b) { return b[0]; }).concat('Endkontrolle'), rollen: AC_ROLLEN };
 
   /* ---------- Bedingungen, die mehrfach vorkommen ---------- */
   var KEIN_INZ = { phase: 'v2', k: 'inzahlung', wert: 'Nein', grund: 'Keine Inzahlungnahme' };

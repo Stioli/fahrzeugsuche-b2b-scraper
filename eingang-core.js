@@ -536,7 +536,7 @@
      Reiter
      ==================================================================== */
   var tabFns = {}, aktivTab = null, appBereit = false;
-  /** EG.onTab('anlieferung' | 'inzahlung', function (container) {...})
+  /** EG.onTab('anfragen' | 'verkauf' | 'auslieferung' | 'anlieferung' | 'inzahlung', function (container) {...})
       Registriert die Zeichenfunktion eines Reiters. Sie wird bei JEDEM Aktivieren des Reiters aufgerufen
       (erstes Zeigen, Wechsel zurück, nach Anmeldung). container = <section id="tab-NAME">. */
   EG.onTab = function (name, fn) {

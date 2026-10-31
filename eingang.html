@@ -99,7 +99,8 @@
     <nav class="tabs" role="tablist" aria-label="Bereiche">
       <div class="tabs-in">
         <button class="tab-knopf" role="tab" id="tabk-anfragen" data-tab="anfragen" data-rollen="admin,verkauf" aria-selected="false" aria-controls="tab-anfragen" type="button">Anfragen</button>
-        <button class="tab-knopf" role="tab" id="tabk-verkauf" data-tab="verkauf" data-rollen="admin,verkauf,dispo,werkstatt" aria-selected="false" aria-controls="tab-verkauf" type="button">Verkauf</button>
+        <button class="tab-knopf" role="tab" id="tabk-verkauf" data-tab="verkauf" data-rollen="admin,verkauf,dispo" aria-selected="false" aria-controls="tab-verkauf" type="button">Verkauf</button>
+        <button class="tab-knopf" role="tab" id="tabk-auslieferung" data-tab="auslieferung" data-rollen="admin,verkauf,dispo,werkstatt" aria-selected="false" aria-controls="tab-auslieferung" type="button">Auslieferung</button>
         <button class="tab-knopf" role="tab" id="tabk-anlieferung" data-tab="anlieferung" aria-selected="true" aria-controls="tab-anlieferung" type="button">Anlieferungen</button>
         <button class="tab-knopf" role="tab" id="tabk-inzahlung" data-tab="inzahlung" aria-selected="false" aria-controls="tab-inzahlung" type="button">Inzahlungnahmen</button>
       </div>
@@ -111,6 +112,8 @@
     <section id="tab-anfragen" role="tabpanel" aria-labelledby="tabk-anfragen" hidden></section>
     <!-- Reiter Verkauf: Verkaufsakten mit Phasen V1–V10 (verkauf-phasen.js + eingang-verkauf.js) -->
     <section id="tab-verkauf" role="tabpanel" aria-labelledby="tabk-verkauf" hidden></section>
+    <!-- Reiter Auslieferung: Fahrzeugliste + Auslieferungs-Checkliste ohne Verkaufsdaten, auch für Aufbereiter/Meister (eingang-auslieferung.js) -->
+    <section id="tab-auslieferung" role="tabpanel" aria-labelledby="tabk-auslieferung" hidden></section>
     <!-- Reiter 1: Lieferantenfahrzeuge (eingang-anlieferung.js) -->
     <section id="tab-anlieferung" role="tabpanel" aria-labelledby="tabk-anlieferung"></section>
     <!-- Reiter 2: Inzahlungnahmen (Inhalt kommt aus eingang-inzahlung.js) -->
@@ -125,6 +128,7 @@
 <script src="eingang-inzahlung.js"></script>
 <script src="eingang-leads.js"></script>
 <script src="verkauf-phasen.js"></script>
+<script src="eingang-auslieferung.js"></script>   <!-- vor eingang-verkauf.js: liefert window.AC_UI -->
 <script src="eingang-verkauf.js"></script>
 <script>EG.start();</script>
 </body>

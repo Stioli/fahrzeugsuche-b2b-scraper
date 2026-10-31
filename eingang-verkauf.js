@@ -1,7 +1,10 @@
 /* Stieber-App – Reiter „Verkauf“ (Verkaufsakten mit 10 Phasen zum Abhaken)
    Stand 31.10.2026. Plan: „Verkauf in Phasen zum Abhaken“, Teil B. Datenvertrag: 08b Fahrzeug-Verkauft/Verkaufs-App/LIESMICH.md
    Daten: Schema verkauf (akte, punkt, freigabe). Haken-Listen: verkauf-phasen.js (window.VK_PHASEN).
-   Baut auf window.EG aus eingang-core.js auf.
+   Ausnahme: Die Auslieferungs-Checkliste (Schlüssel ac_* in Phase v8) liegt in verkauf.auslieferung_punkt (über akte.interne_nr),
+   weil Aufbereiter und Meister sie im eigenen Reiter „Auslieferung“ abhaken (eingang-auslieferung.js, window.AC_UI).
+   Hier wird sie nur gelesen, in die Phase v8 eingemischt (Ampel, „Was fehlt noch“) und über AC_UI angezeigt.
+   Baut auf window.EG aus eingang-core.js auf. Dieser Reiter ist für admin, verkauf, dispo – nicht für werkstatt.
 
    Für andere Reiter (z. B. Anfragen):
      window.VK_AKTE_ANLEGEN(vorbelegung) → Promise<akte_id | null>
@@ -18,9 +21,10 @@
      Übergabe erst, wenn „Voll bezahlt“ in „Zahlung“ abgehakt ist. Nur admin hebt eine Sperre mit Grund auf (verkauf.freigabe). */
 (function () {
   'use strict';
-  var EG = window.EG, h = EG && EG.h, PH = window.VK_PHASEN;
+  var EG = window.EG, h = EG && EG.h, PH = window.VK_PHASEN, AC_UI = window.AC_UI;
   if (!EG) return;
   if (!PH) { console.error('verkauf-phasen.js fehlt – Reiter Verkauf nicht aktiv.'); return; }
+  if (!AC_UI) { console.error('eingang-auslieferung.js fehlt (muss vor eingang-verkauf.js geladen werden) – Reiter Verkauf nicht aktiv.'); return; }
 
   // verkauf.css selbst nachladen, falls die Seite sie nicht eingebunden hat
   try {
@@ -51,7 +55,7 @@
   function chk(r) { if (r && r.error) throw r.error; return r; }
   function jetzt() { return new Date().toISOString(); }
   function akteTitel(a) { return [a.hersteller, a.modell].filter(Boolean).join(' ') || 'Fahrzeug'; }
-  function meineRolle() { return EG.istWerkstatt() ? 'werkstatt' : EG.rolle; }
+  function meineRolle() { return EG.rolle; }
   function erlaubtAnlegen() { return ANLEGEN_ROLLEN.indexOf(meineRolle()) >= 0; }
   function istOffen(a) { return a.phase_aktuell !== 'abgeschlossen' && a.phase_aktuell !== 'abgebrochen'; }
   var queue = Promise.resolve();
@@ -70,10 +74,18 @@
   }
   /** Zahl → Text fürs Eingabefeld: 29900.5 → '29900,50' */
   function betragFeld(n) { return Number(n).toFixed(2).replace('.', ','); }
+  /** Auslieferungs-Punkte (v8, ac_*) kommen aus verkauf.auslieferung_punkt – Altzeilen in verkauf.punkt werden ignoriert. */
+  function istAcZeile(r) { return r.phase === 'v8' && /^ac_/.test(r.punkt_key); }
   function zuMap(rows) {
     var m = {};
-    (rows || []).forEach(function (r) { (m[r.phase] = m[r.phase] || {})[r.punkt_key] = r; });
+    (rows || []).forEach(function (r) { if (istAcZeile(r)) return; (m[r.phase] = m[r.phase] || {})[r.punkt_key] = r; });
     return m;
+  }
+  /** Punkte der Auslieferungs-Checkliste in die Phase v8 der Punkt-Map einmischen (acRows: { punkt_key: Zeile } | null). */
+  function mitAc(pm, acRows) {
+    var v8 = (pm.v8 = pm.v8 || {});
+    Object.keys(acRows || {}).forEach(function (k) { v8[k] = acRows[k]; });
+    return pm;
   }
 
   /* ====================================================================
@@ -226,13 +238,22 @@
     for (var i = 0; i < ids.length; i += 5) teile.push(ids.slice(i, i + 5));
     var res = await Promise.all(teile.map(function (t) { return T.punkt().select('*').in('akte_id', t); }));
     var fr = chk(await T.frei().select('*'));
+    var acAlle = await AC_UI.ladeZeilen(S.akten.filter(istOffen).map(function (a) { return a.interne_nr; }));   // Auslieferungs-Checkliste je interne Nr.
     S.pmAlle = {}; S.freiAlle = {}; S.listCalc = {};
     res.forEach(function (x) {
       chk(x);
-      (x.data || []).forEach(function (row) { var m = (S.pmAlle[row.akte_id] = S.pmAlle[row.akte_id] || {}); (m[row.phase] = m[row.phase] || {})[row.punkt_key] = row; });
+      (x.data || []).forEach(function (row) {
+        if (istAcZeile(row)) return;
+        var m = (S.pmAlle[row.akte_id] = S.pmAlle[row.akte_id] || {}); (m[row.phase] = m[row.phase] || {})[row.punkt_key] = row;
+      });
     });
     (fr.data || []).forEach(function (f) { (S.freiAlle[f.akte_id] = S.freiAlle[f.akte_id] || []).push(f); });
-    S.akten.forEach(function (a) { if (istOffen(a)) S.listCalc[a.id] = berechne(a, S.pmAlle[a.id] || {}, S.freiAlle[a.id] || []); });
+    S.akten.forEach(function (a) {
+      if (!istOffen(a)) return;
+      var pm = S.pmAlle[a.id] = S.pmAlle[a.id] || {};
+      mitAc(pm, a.interne_nr ? acAlle[a.interne_nr] : null);
+      S.listCalc[a.id] = berechne(a, pm, S.freiAlle[a.id] || []);
+    });
     zeichneListe();
   }
 
@@ -240,36 +261,27 @@
     var q = S.suche.trim().toLowerCase(); if (!q) return true;
     return [a.hersteller, a.modell, a.kunde_name, a.interne_nr, a.autrado_nr, a.fin, a.bestell_nr, a.verkaeufer, a.farbe].join(' ').toLowerCase().indexOf(q) >= 0;
   }
-  /** Mitarbeiter der Werkstatt sehen nur Akten, bei denen die Auslieferungs-Checkliste ansteht. */
-  function passtRolle(a) {
-    if (meineRolle() !== 'werkstatt') return true;
-    var c = S.listCalc[a.id]; if (!c) return false;
-    var v8 = c.phasen[PH_BY.v8.idx];
-    return !v8.gruen && !v8.sperren.length && !v8.phaseEntfaellt;
-  }
   function zeichneListe() {
     S.root.innerHTML = '';
-    var werk = meineRolle() === 'werkstatt';
     var suchFeld = h('input', { type: 'search', id: 'vk-suche', placeholder: 'Suchen: Kunde, Fahrzeug, Nr., FIN …', value: S.suche, 'aria-label': 'Suche' });
     suchFeld.addEventListener('input', function () { S.suche = suchFeld.value; fuelleListe(); });
     var chipLeiste = h('div', { class: 'chips' });
     function chips() {
       chipLeiste.innerHTML = '';
       [['offen', 'Offen', istOffen], ['abgeschlossen', 'Abgeschlossen', function (a) { return !istOffen(a); }], ['alle', 'Alle', null]].forEach(function (c) {
-        var n = S.akten.filter(function (a) { return passtRolle(a) && (!c[2] || c[2](a)); }).length;
+        var n = S.akten.filter(function (a) { return !c[2] || c[2](a); }).length;
         chipLeiste.appendChild(h('button', {
           type: 'button', class: 'chip', 'aria-pressed': S.filter === c[0] ? 'true' : 'false', text: c[1] + ' (' + n + ')',
           onclick: function () { S.filter = c[0]; chips(); fuelleListe(); }
         }));
       });
     }
-    if (!werk) chips();
+    chips();
     var zeile2 = h('div', { class: 'leiste-zeile' },
       h('button', { type: 'button', class: 'btn btn-ghost', text: 'Liste aktualisieren', onclick: function () { ladeListe().catch(EG.fehler); } }),
       erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-primary', text: 'Neue Verkaufsakte', onclick: function () { neueAkte().catch(EG.fehler); } }) : null,
       erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-ghost', text: 'Akte nachtragen', title: 'Für einen Verkauf, der schon passiert ist', onclick: function () { neueAkte({ nachtrag: true }).catch(EG.fehler); } }) : null);
-    S.root.appendChild(h('div', { class: 'leiste' }, h('div', { class: 'leiste-zeile' }, suchFeld), zeile2, werk ? null : chipLeiste));
-    if (werk) S.root.appendChild(EG.banner('Du siehst nur Fahrzeuge, bei denen die Auslieferungs-Checkliste ansteht.', 'info'));
+    S.root.appendChild(h('div', { class: 'leiste' }, h('div', { class: 'leiste-zeile' }, suchFeld), zeile2, chipLeiste));
     S.listenBox = h('div', { class: 'raster' });
     S.root.appendChild(S.listenBox);
     fuelleListe();
@@ -277,8 +289,7 @@
   function fuelleListe() {
     var box = S.listenBox; box.innerHTML = '';
     var l = S.akten.filter(function (a) {
-      if (!passtRolle(a) || !passtSuche(a)) return false;
-      if (meineRolle() === 'werkstatt') return true;
+      if (!passtSuche(a)) return false;
       return S.filter === 'alle' || (S.filter === 'offen' ? istOffen(a) : !istOffen(a));
     });
     l.sort(function (a, b) {
@@ -430,6 +441,9 @@
     if (x[0].error || !x[0].data) { EG.toast('Akte nicht gefunden.', 'fehler'); S.id = null; return ladeListe(); }
     chk(x[1]); chk(x[2]);
     S.akte = x[0].data; S.pm = zuMap(x[1].data); S.frei = x[2].data || [];
+    // Auslieferungs-Checkliste: eigene Tabelle, Schlüssel = interne Nr. der Akte
+    var nr = S.akte.interne_nr;
+    mitAc(S.pm, nr ? (await AC_UI.ladeZeilen([nr]))[nr] : null);
     neuBerechnen();
     if (S.geoeffnetFuer !== S.id) {   // beim ersten Öffnen: aktuelle Phase aufklappen
       S.geoeffnetFuer = S.id; S.offen = {};
@@ -534,7 +548,7 @@
         if (pe.def.gruppe === 'ac') { acOffen++; if (!acErste) acErste = pe; return; }
         liste.appendChild(fehltEintrag(info, pe, pe.def.text));
       });
-      if (acOffen) liste.appendChild(fehltEintrag(info, acErste, 'Auslieferungs-Checkliste: ' + acOffen + ' Punkt' + (acOffen === 1 ? '' : 'e') + ' offen'));
+      if (acOffen) liste.appendChild(fehltEintrag(info, acErste, 'Auslieferungs-Checkliste: ' + (a.interne_nr ? acOffen + ' Punkt' + (acOffen === 1 ? '' : 'e') + ' offen' : 'Akte hat keine interne Nr.')));
     }
     var cur = c.phasen[c.aktuellIdx];
     karte.appendChild(h('p', { class: 'muted klein', text: n + ' offene' + (n === 1 ? 'r Punkt' : ' Punkte') + ' bis die Phase „' + cur.def.name + '“ grün ist. Tippe auf einen Eintrag, dann springst du hin.' }));
@@ -595,7 +609,7 @@
           if (!acFertig) { body.appendChild(acGruppe(info)); acFertig = true; }
           return;
         }
-        body.appendChild(punktKarte(info, pe, false));
+        body.appendChild(punktKarte(info, pe));
       });
       if (ph.entfaellbar && darfPhase) {
         body.appendChild(h('div', { style: 'margin-top:12px' }, h('button', { type: 'button', class: 'btn btn-ghost btn-klein', text: 'Ganze Phase entfällt …', onclick: function () { phaseEntfaellt(info, true).catch(EG.fehler); } })));
@@ -659,28 +673,31 @@
   }
 
   /* ---------- Auslieferungs-Checkliste (Gruppe in V8) ---------- */
+  /** Zeigt dieselbe Checkliste wie der Reiter „Auslieferung“ (AC_UI). Gespeichert wird in verkauf.auslieferung_punkt über die interne Nr. */
   function acGruppe(info) {
     var pes = info.punkte.filter(function (pe) { return pe.def.gruppe === 'ac'; });
     var zaehlt = pes.filter(function (pe) { return pe.def.pflicht && !(pe.auto && pe.st === 'entfaellt'); });
     var erl = zaehlt.filter(function (pe) { return pe.st === 'ok' || pe.st === 'entfaellt'; }).length;
-    var key = 'gr_' + info.key;
+    var nr = S.akte.interne_nr, key = 'gr_' + info.key;
     var det = h('details', { class: 'vk-gruppe', 'data-gruppe': 'ac' });
     det.open = !!S.offen[key];
     det.addEventListener('toggle', function () { S.offen[key] = det.open; });
     det.appendChild(h('summary', { class: 'vk-gr-kopf' }, h('span', { class: 'vk-ph-name', text: 'Auslieferungs-Checkliste' }),
-      h('span', { class: 'vk-ph-info', text: erl + ' von ' + zaehlt.length + ' Punkten' }), EG.pill(erl === zaehlt.length ? 'Fertig' : 'Offen', erl === zaehlt.length ? 'gruen' : 'grau')));
+      h('span', { class: 'vk-ph-info', text: nr ? erl + ' von ' + zaehlt.length + ' Punkten' : 'interne Nr. fehlt' }),
+      nr ? EG.pill(erl === zaehlt.length ? 'Fertig' : 'Offen', erl === zaehlt.length ? 'gruen' : 'grau') : EG.pill('Nr. fehlt', 'gold')));
     var body = h('div', { class: 'vk-gr-body' });
-    body.appendChild(h('p', { class: 'klein muted', text: 'Jeder Punkt: OK, NOK oder entfällt – mit Name und Zeit. Die Werkstatt hakt hier über das Werkstatt-Konto mit Namenseintrag ab.' }));
-    var blockName = null;
-    pes.forEach(function (pe) {
-      if (pe.def.block !== blockName) {
-        blockName = pe.def.block;
-        var inBlock = pes.filter(function (x) { return x.def.block === blockName; });
-        var okB = inBlock.filter(function (x) { return x.st === 'ok' || x.st === 'entfaellt'; }).length;
-        body.appendChild(h('div', { class: 'block-kopf' }, h('h3', { text: blockName }), h('span', { class: 'klein muted', text: okB + ' / ' + inBlock.length })));
-      }
-      body.appendChild(punktKarte(info, pe, true));
-    });
+    if (!nr) {
+      body.appendChild(EG.banner('Diese Akte hat noch keine interne Nr. Trage sie oben unter „Daten ändern“ ein, dann erscheint hier die Auslieferungs-Checkliste.', 'warn'));
+    } else {
+      body.appendChild(h('p', { class: 'klein muted', text: 'Jeder Punkt: OK, NOK oder entfällt – mit Name und Zeit. Aufbereiter und Meister haken im Reiter „Auslieferung“ ab, hier siehst du denselben Stand.' }));
+      body.appendChild(AC_UI.liste({
+        interneNr: nr, rows: (S.pm.v8 = S.pm.v8 || {}), gesperrt: info.sperren.length > 0, idPrefix: 'vk-p-v8-',
+        // Haken ist gespeichert → Phase der Akte nachführen, Ampel und „Was fehlt noch“ neu rechnen (neu zeichnen nur bei Statuswechsel)
+        onChange: function (c) {
+          seriell(async function () { await nachSpeichern({}); aktualisiere(c.voll); }).catch(EG.fehler);
+        }
+      }));
+    }
     det.appendChild(body);
     return det;
   }
@@ -708,11 +725,11 @@
     });
     return seg;
   }
-  function punktKarte(info, pe, kompakt) {
+  function punktKarte(info, pe) {
     var p = pe.def, st = pe.st;
     var darf = darfPunkt(info.def, p), ed = darf && !pe.auto && info.sperren.length === 0;
     var karte = h('div', {
-      class: 'punkt vk-punkt' + (st === 'ok' ? ' ok' : st === 'nok' ? ' vk-nok' : st === 'entfaellt' ? ' entfaellt' : '') + (kompakt ? ' vk-ac' : '') + (!ed ? ' vk-lesen' : ''),
+      class: 'punkt vk-punkt' + (st === 'ok' ? ' ok' : st === 'nok' ? ' vk-nok' : st === 'entfaellt' ? ' entfaellt' : '') + (!ed ? ' vk-lesen' : ''),
       id: 'vk-p-' + info.key + '-' + p.k
     });
     var titel = h('div', { class: 'punkt-titel' }, p.text, p.pflicht ? null : h('span', { class: 'vk-opt', text: ' (freiwillig)' }));
@@ -721,13 +738,12 @@
       karte.appendChild(h('div', { class: 'vk-auto', text: (st === 'entfaellt' ? 'Entfällt: ' : st === 'ok' ? 'Erledigt: ' : 'Offen: ') + (pe.grund || '') }));
       return karte;
     }
-    if (kompakt) karte.appendChild(h('div', { class: 'vk-ac-zeile' }, titel, segment(info, pe, ed)));
-    else karte.appendChild(titel);
+    karte.appendChild(titel);
     if (p.hinweis) karte.appendChild(h('div', { class: 'punkt-hinweis', text: p.hinweis }));
     if (p.eingabe) karte.appendChild(eingabeBlock(info, pe, ed));
     if (p.spezial === 'nachlass') karte.appendChild(nachlassBlock(info, pe, ed));
     if (p.foto) karte.appendChild(fotoBereich(info, pe, ed));
-    if (!kompakt) karte.appendChild(segment(info, pe, ed));
+    karte.appendChild(segment(info, pe, ed));
     var sz = statusZeile(pe); if (sz) karte.appendChild(sz);
     return karte;
   }
@@ -901,9 +917,7 @@
     return null;
   }
   async function namePflicht() {
-    var n = EG.nutzerName();
-    if (!n && EG.istWerkstatt()) n = await EG.nameAbfragen(true);
-    return n || EG.nutzer();
+    return EG.nutzerName() || EG.nutzer();
   }
 
   /** Ändert einen Punkt und speichert sofort (upsert verkauf.punkt, Konflikt akte_id,phase,punkt_key).
@@ -955,7 +969,6 @@
   async function nachSpeichern(extra) {
     neuBerechnen();
     var upd = Object.assign({}, extra), a = S.akte;
-    if (EG.istWerkstatt()) return;   // werkstatt darf die Akte nicht ändern (RLS); die Phase führt der nächste Verkauf/Dispo-Aufruf nach
     if (a.phase_aktuell !== 'abgebrochen' && a.phase_aktuell !== S.calc.aktuell) upd.phase_aktuell = S.calc.aktuell;
     if (!Object.keys(upd).length) return;
     upd.updated_at = jetzt();
@@ -1084,7 +1097,7 @@
     fuelle(B, pmB, 'v7', { lief_rechnung: { auswahl: 'Kommt nach Zahlung' }, anzahlung_da: { betrag: 2000 }, abloese: { weglassen: true }, restzahlung: { weglassen: true }, voll_bezahlt: { weglassen: true } });
     fertig(B, pmB);
 
-    // C: Probe, Peter – in der Vorbereitung, Auslieferungs-Checkliste halb abgehakt
+    // C: Probe, Peter – in der Vorbereitung; die Auslieferungs-Checkliste (interne Nr. 90103) ist halb abgehakt – siehe AC_UI.demoSaen()
     fuelle(C, pmC, 'v1', { anfrage_da: { auswahl: 'Website' }, verkaeufer_zugeteilt: { auswahl: 'AI' }, kunde_angerufen: { auswahl: 'nicht erreicht' }, ergebnis: { auswahl: 'Termin steht' }, termin_vereinbart: { datum: tag(-12) } });
     fuelle(C, pmC, 'v2', { kunde_da: { auswahl: 'mit Termin' }, inzahlung: { auswahl: 'Nein' }, finanzierung: { auswahl: 'Ja' }, probefahrt: { auswahl: 'Ja' }, ergebnis: { auswahl: 'Weiter zum Angebot' } });
     fuelle(C, pmC, 'v3', { ergebnis: { auswahl: 'Weiter zum Angebot' } });
@@ -1095,20 +1108,16 @@
     fuelle(C, pmC, 'v6', {});
     frei.push({ id: EG.uuid(), akte_id: C.id, art: 'akte_frei', phase: 'v6', grund: 'Freigabe an die Dispo', betrag: null, von_name: 'Oli (Demo)', am: vor(6) });
     fuelle(C, pmC, 'v7', { lief_rechnung: { auswahl: 'Liegt vor (mit Einladung)' }, anzahlung_da: { betrag: 3000 }, restzahlung: { betrag: 18900 } });
-    // V8: Punkte 1–4 ok, Auslieferungs-Checkliste etwa zur Hälfte, E/PHEV-Laden entfällt
-    var v8 = PH_BY.v8.punkte, m8 = (pmC.v8 = {}), acZaehler = 0;
+    // V8: Punkte 1–4 ok; die ac_*-Punkte stehen in verkauf.auslieferung_punkt (AC_UI.demoSaen), nicht hier
+    var v8 = PH_BY.v8.punkte, m8 = (pmC.v8 = {});
     v8.forEach(function (p) {
-      if (!p.gruppe && ['repdoc_kunde', 'repdoc_fahrzeug', 'auftrag', 'arbeiten_erledigt'].indexOf(p.k) >= 0) { m8[p.k] = zeile(C, 'v8', p.k, { status: 'ok', wert: standardWert(p, { text: p.k === 'auftrag' ? 'Auftrag 90103' : 'Demo' }) }); return; }
-      if (p.gruppe !== 'ac') return;
-      if (p.k === 'ac_laden') { m8[p.k] = zeile(C, 'v8', p.k, { status: 'entfaellt', grund: 'Verbrenner, kein Ladekabel nötig' }); acZaehler++; return; }
-      if (p.k.indexOf('ac_end_') === 0) return;
-      acZaehler++;
-      if (acZaehler <= 20) m8[p.k] = zeile(C, 'v8', p.k, { status: 'ok', wert: standardWert(p, {}) });
+      if (!p.gruppe && ['repdoc_kunde', 'repdoc_fahrzeug', 'auftrag', 'arbeiten_erledigt'].indexOf(p.k) >= 0) m8[p.k] = zeile(C, 'v8', p.k, { status: 'ok', wert: standardWert(p, { text: p.k === 'auftrag' ? 'Auftrag 90103' : 'Demo' }) });
     });
     fertig(C, pmC);
 
     EG.demoSeed('verkauf.akte', [A, B, C]);
     EG.demoSeed('verkauf.punkt', rows);
     EG.demoSeed('verkauf.freigabe', frei);
+    AC_UI.demoSaen();   // Haken der Auslieferungs-Checkliste (gleiche Tabelle wie im Reiter „Auslieferung“)
   }
 })();
