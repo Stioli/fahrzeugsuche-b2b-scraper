@@ -150,7 +150,8 @@
       return h('div', { class: 'ld-pop-zeile' },
         h('strong', { text: vollerName(z) || '(ohne Name)' }),
         h('div', { text: fzg(z) }),
-        h('div', { class: 'muted klein', text: [z.herkunft, z.ueber, z.telefon].filter(Boolean).join(' · ') }));
+        h('div', { class: 'muted klein', text: [z.herkunft, z.ueber, z.telefon].filter(Boolean).join(' · ') }),
+        /^BITTE PRÜFEN/.test(String(z.notiz || '')) ? h('div', { class: 'klein', style: 'margin-top:4px;font-weight:700', text: 'Bitte prüfen, die Mail war nicht eindeutig.' }) : null);
     });
     if (neu.length > 5) zeilen.push(h('p', { class: 'muted', text: 'und ' + (neu.length - 5) + ' weitere' }));
     EG.dialog({
@@ -158,6 +159,11 @@
       knoepfe: [{ text: 'Später', art: 'ghost', wert: null }, { text: 'Öffnen', art: 'primary', wert: 'auf' }]
     }).then(function (w) { if (w) oeffneLead(neu[0].id); });
   }
+  /** Zeigt das Pop-up mit Beispieldaten. Es wird nichts gespeichert und nichts gesendet. */
+  function testPopup() {
+    popupNeu([{ id: null, name: 'Muster', vorname: 'Test', hersteller: 'Testfahrzeug', herkunft: 'Nur ein Test, es wurde nichts gespeichert' }]);
+  }
+  EG.testPopup = testPopup;
   /** Reiter „Anfragen“ zeigen und (optional) einen bestimmten Lead hervorheben. */
   function oeffneLead(id) {
     S.offenId = id || null;
@@ -257,6 +263,8 @@
 
   /* ---------- Zeilenansicht mit Filtern (Oli 01.11.2026) ---------- */
   function istZu(z) { return /^\s*[67]/.test(String(z.status || '')); }
+  /** Der Lead-Eingang war unsicher: Vermerk steht oben in der Notiz, von Hand prüfen. */
+  function bittePruefen(z) { return /^BITTE PRÜFEN/.test(String(z.notiz || '')); }
   /** Schnellfilter oben; „fällig“ gilt nur für offene Anfragen. */
   var SCHNELL = [
     ['alle', 'Alle', function () { return true; }],
@@ -328,6 +336,7 @@
       h('span', { text: kurzDatum(z.anfrage) }),
       h('span', { class: 'ld-c-name' },
         h('strong', { text: vollerName(z) || '(ohne Name)' }),
+        bittePruefen(z) ? ' ' : null, bittePruefen(z) ? EG.pill('prüfen', 'gold') : null,
         h('span', { class: 'ld-m-unter', text: [fzg, z.fahrzeugnr, z.verkaeufer || 'nicht zugeteilt'].filter(Boolean).join(' · ') })),
       x(fzg), x(z.fahrzeugnr), x(z.interne_nr), x(z.verkaeufer),
       h('span', { class: 'ld-c-status' }, EG.pill(z.status || 'ohne', istTermin(z) ? 'gruen' : (istZu(z) ? 'grau' : ''))),
@@ -388,7 +397,8 @@
     out.push(h('div', { class: 'ld-leiste' },
       h('button', { type: 'button', class: 'btn btn-primary', text: '+ Neue Anfrage', onclick: dlgNeu }),
       h('button', { type: 'button', class: 'btn btn-ghost', text: 'Aktualisieren', onclick: function () { laden(false); } }),
-      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Benachrichtigungen einschalten', onclick: function () { pushEinschalten().catch(EG.fehler); } })));
+      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Benachrichtigungen einschalten', onclick: function () { pushEinschalten().catch(EG.fehler); } }),
+      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Test-Pop-up', onclick: testPopup })));
     out.push(h('div', { id: 'ld-push-info' }));
 
     if (!S.alle) {
