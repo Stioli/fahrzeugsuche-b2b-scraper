@@ -1,9 +1,10 @@
 /* Stieber-App – Reiter „Anfragen“ (Leads)
    Umzug aus dem Ankauf-Dashboard (leads.js, Leads 1.0 vom 26.10.2026), Stand 31.10.2026.
-   Fällige Nachkontakte, Kontakt erfassen, Neue Anfrage, Nachfass-Entwurf, Push-Benachrichtigung,
+   Alle Anfragen als Zeilen (neueste oben, Oli 01.11.2026) mit Filtern für alle Felder,
+   Kontakt erfassen, Neue Anfrage, Nachfass-Entwurf, Push-Benachrichtigung,
    neu: „Verkaufsakte anlegen“ bei Status 5 (Termin vereinbart).
-   Alle Daten kommen von der Edge Function leads_api (Rollenprüfung verkauf/admin dort) und werden
-   mit denselben Aktionen und Nutzdaten abgefragt wie im Dashboard:
+   Die Gesamtliste kommt von der Edge Function leads_liste (nur lesend), alles andere von leads_api
+   (Rollenprüfung verkauf/admin in beiden) mit denselben Aktionen und Nutzdaten wie im Dashboard:
      me · faellig · lead · kontakt · neu · entwurf · push_abo · push_test · vapid_init
    Baut auf window.EG aus eingang-core.js auf (EG.h, EG.dialog, EG.onTab …).
    Diese Datei enthält KEINE Schlüssel, Listen-IDs oder Kundendaten. Es wird nie automatisch gesendet:
@@ -19,8 +20,9 @@
      Zustand
      ==================================================================== */
   var S = {
-    root: null, me: null, initP: null, liste: null, sig: '', filter: null,
-    offenId: null, einzel: null, bekannt: null, timer: null, laedt: false, letzte: 0,
+    root: null, me: null, initP: null, liste: null, sig: '', alle: null, alleAm: 0,
+    f: { schnell: 'alle', suche: '', felder: {}, offen: false }, auf: null, max: 100, box: null, zahlEl: null,
+    offenId: null, bekannt: null, timer: null, laedt: false, letzte: 0,
     pushMsg: null, swRegistriert: false, visHook: false
   };
 
@@ -37,7 +39,28 @@
      ==================================================================== */
   var CSS = ''
     + '.ld-leiste{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}'
-    + '.ld-filter{max-width:360px}'
+    + '.ld-zahl:empty{display:none}'
+    + '.ld-suche{margin:0 0 10px}'
+    + '.ld-feldfilter{background:#fff;border:1px solid var(--border);border-radius:14px;margin:0 0 12px}'
+    + '.ld-feldfilter > summary{cursor:pointer;min-height:48px;display:flex;align-items:center;gap:8px;padding:0 14px;font-weight:700}'
+    + '.ld-felder{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 12px;padding:4px 14px 12px}'
+    + '.ld-felder .feld{margin-bottom:6px}'
+    + '.ld-zaehler{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px;font-size:15px;font-weight:600}'
+    + '.ld-tabelle{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--schatten);overflow:hidden}'
+    + '.ld-reihe{display:grid;grid-template-columns:78px minmax(0,1.2fr) minmax(0,1.4fr) 64px 52px 40px minmax(136px,1fr) 78px 64px 112px 92px;align-items:center;gap:8px;width:100%;min-height:48px;padding:6px 12px;border:0;border-top:1px solid var(--border);border-left:6px solid transparent;background:#fff;font-family:var(--font-body);font-size:14px;color:var(--ink);text-align:left;cursor:pointer}'
+    + '.ld-reihe:hover,.ld-reihe:focus-visible{background:#F4F8FD}'
+    + '.ld-reihe > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '.ld-reihe.rot{border-left-color:var(--rot-text)}'
+    + '.ld-reihe.zu{background:#FAFBFD;color:var(--sub)}'
+    + '.ld-reihe.auf{background:#E8F0FB}'
+    + '.ld-kopfreihe{min-height:38px;border-top:0;background:#EEF1F5;font-size:13px;font-weight:700;color:var(--sub);cursor:default}'
+    + '.ld-kopfreihe:hover{background:#EEF1F5}'
+    + '.ld-reihe .pill{font-size:13px;padding:2px 8px}'
+    + '.ld-m-unter{display:none;font-size:13px;color:var(--sub);overflow:hidden;text-overflow:ellipsis}'
+    + '.ld-offen{padding:10px 12px;background:#F4F8FD;border-top:1px solid var(--border)}'
+    + '.ld-offen .ld-karte{margin:0}'
+    + '.ld-mehr{display:flex;justify-content:center;padding:10px}'
+    + '@media (max-width:900px){.ld-reihe{grid-template-columns:62px minmax(0,1fr) auto;padding:8px 10px}.ld-c-x,.ld-kopfreihe{display:none !important}.ld-m-unter{display:block}.ld-c-name{white-space:normal !important}}'
     + '.ld-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-size:18px}'
     + 'summary.ld-h{cursor:pointer;min-height:44px}'
     + '.ld-zahl{background:#E8F0FB;color:var(--blau-dark);border-radius:999px;padding:1px 11px;font-size:14px;font-weight:700}'
@@ -122,6 +145,19 @@
   /* ====================================================================
      Daten laden
      ==================================================================== */
+  var ALLE_MS = 5 * 60 * 1000;
+  /** Alle Anfragen (Edge Function leads_liste, nur lesend). */
+  async function holeAlle() {
+    if (EG.demo) return (await demoApi('alle', {})).leads;
+    var r = await EG.sb.functions.invoke('leads_liste', { body: {} });
+    if (r.error) {
+      var text = '';
+      try { var j = await r.error.context.json(); text = j.fehler || ''; } catch (e) { /* keine JSON-Antwort */ }
+      throw new Error(text || r.error.message);
+    }
+    return (r.data && r.data.leads) || [];
+  }
+
   async function laden(still) {
     if (S.laedt) return;
     S.laedt = true;
@@ -135,8 +171,14 @@
       S.bekannt = ids;
       if (neu.length > 3) neueAnfrageHinweis(neu.length + ' neue Anfragen', neu[0].id);
       else neu.forEach(function (z) { neueAnfrageHinweis('Neue Anfrage: ' + ([z.hersteller, z.modell, z.fahrzeugnr].filter(Boolean).join(' ') || 'Fahrzeug unbekannt'), z.id); });
+      // Gesamtliste: beim Öffnen und Aktualisieren, wenn sich etwas geändert hat, sonst spätestens alle 5 Minuten
+      var alleNeu = !S.alle || !still || geaendert || Date.now() - S.alleAm > ALLE_MS;
+      if (alleNeu) { S.alle = await holeAlle(); S.alleAm = Date.now(); }
       // Während ein Dialog offen ist, nicht neu zeichnen (sonst gehen Eingaben verloren)
-      if (S.root && S.root.offsetParent !== null && !document.querySelector('.dlg-ueber') && (geaendert || !still)) { S.sig = sig; zeichnen(); }
+      if (S.root && S.root.offsetParent !== null && !document.querySelector('.dlg-ueber') && alleNeu) {
+        S.sig = sig;
+        if (still && S.box && S.box.isConnected) fuelleZeilen(); else zeichnen();   // still: Filterfelder und Tastatur bleiben
+      }
     } catch (e) {
       if (S.root && !still) {
         S.root.querySelectorAll('.ld-ladefehler').forEach(function (x) { x.remove(); });
@@ -179,7 +221,8 @@
         h('div', { class: 'ld-pills' },
           z.verkaeufer ? EG.pill(z.verkaeufer, 'grau') : EG.pill('nicht zugeteilt', 'rot'),
           EG.pill(z.status || 'ohne Status', istTermin(z) ? 'gruen' : ''))),
-      h('div', { class: 'ld-zeile' }, fzgEl),
+      h('div', { class: 'ld-zeile' }, fzgEl, z.interne_nr ? ' · Int.-Nr. ' + z.interne_nr : '', z.typ ? ' · ' + z.typ : ''),
+      z.grund ? h('div', { class: 'ld-zeile', text: 'Grund nicht gekauft: ' + z.grund }) : null,
       h('div', { class: 'ld-pills' }, pills),
       tel, mail,
       z.notiz ? h('div', { class: 'ld-notiz', text: z.notiz }) : null,
@@ -189,69 +232,196 @@
         istTermin(z) ? h('button', { type: 'button', class: 'btn btn-ghost ld-akte', text: 'Verkaufsakte anlegen', onclick: function () { verkaufsakteAnlegen(z); } }) : null));
   }
 
+  /* ---------- Zeilenansicht mit Filtern (Oli 01.11.2026) ---------- */
+  function istZu(z) { return /^\s*[67]/.test(String(z.status || '')); }
+  /** Schnellfilter oben; „fällig“ gilt nur für offene Anfragen. */
+  var SCHNELL = [
+    ['alle', 'Alle', function () { return true; }],
+    ['offen', 'Offen', function (z) { return !istZu(z); }],
+    ['heute', 'Heute fällig', function (z, t) { return !istZu(z) && z.wiedervorlage === t; }],
+    ['ueber', 'Überfällig', function (z, t) { return !istZu(z) && !!z.wiedervorlage && z.wiedervorlage < t; }],
+    ['neu', 'Neu, nicht zugeteilt', function (z, t) { return /^\s*1/.test(String(z.status || '')) && !z.verkaeufer && z.anfrage >= ymdPlus(t, -30); }]
+  ];
+  /** Filter je Feld: [Schlüssel, Beschriftung, Art]. text = enthält, wahl = gleich, von/bis = Datumsgrenze. */
+  var FELD_FILTER = [
+    ['name', 'Name', 'text'], ['fahrzeugnr', 'Fahrzeugnummer', 'text'], ['interne_nr', 'Int.-Nr.', 'text'],
+    ['telefon', 'Telefon', 'text'], ['email', 'E-Mail', 'text'], ['hersteller', 'Hersteller', 'text'],
+    ['modell', 'Modell', 'text'], ['typ', 'Typ', 'text'], ['notiz', 'Notiz', 'text'],
+    ['verkaeufer', 'Verkäufer', 'wahl'], ['status', 'Status', 'wahl'], ['herkunft', 'Herkunft', 'wahl'],
+    ['ueber', 'über', 'wahl'], ['grund', 'Grund nicht gekauft', 'wahl'],
+    ['anfrage_von', 'Anfrage von', 'von', 'anfrage'], ['anfrage_bis', 'Anfrage bis', 'bis', 'anfrage'],
+    ['wv_von', 'Wiedervorlage von', 'von', 'wiedervorlage'], ['wv_bis', 'Wiedervorlage bis', 'bis', 'wiedervorlage']
+  ];
+  var KEIN_WERT = '-';   // Auswahl „(leer)“, z. B. nicht zugeteilt
+  function kl(v) { return String(v == null ? '' : v).toLowerCase(); }
+  function nurZiffern(v) { return String(v || '').replace(/\D/g, ''); }
+  function feldPasst(z, def, wert) {
+    if (def[2] === 'von') return !!z[def[3]] && z[def[3]] >= wert;
+    if (def[2] === 'bis') return !!z[def[3]] && z[def[3]] <= wert;
+    if (def[2] === 'wahl') return wert === KEIN_WERT ? !z[def[0]] : z[def[0]] === wert;
+    if (def[0] === 'name') return kl(vollerName(z)).indexOf(kl(wert)) >= 0;
+    if (def[0] === 'telefon' && nurZiffern(wert)) return nurZiffern(z.telefon).indexOf(nurZiffern(wert)) >= 0;
+    return kl(z[def[0]]).indexOf(kl(wert)) >= 0;
+  }
+  function passtSuche(z, q) {
+    var alles = [vollerName(z), z.fahrzeugnr, z.interne_nr, z.telefon, z.email, z.hersteller, z.modell, z.typ, z.verkaeufer, z.status,
+      z.herkunft, z.ueber, z.grund, z.notiz, z.anfrage && EG.fmtDatum(z.anfrage), z.wiedervorlage && EG.fmtDatum(z.wiedervorlage)].join(' ');
+    return kl(alles).indexOf(q) >= 0;
+  }
+  function gefiltert() {
+    var t = heuteBerlin(), f = S.f, q = kl(f.suche).trim();
+    var sch = SCHNELL.filter(function (s) { return s[0] === f.schnell; })[0] || SCHNELL[0];
+    var aktiv = FELD_FILTER.filter(function (d) { return f.felder[d[0]]; });
+    return (S.alle || []).filter(function (z) {
+      if (!sch[2](z, t)) return false;
+      if (q && !passtSuche(z, q)) return false;
+      return aktiv.every(function (d) { return feldPasst(z, d, f.felder[d[0]]); });
+    }).sort(neusteZuerst);
+  }
+  /** Neueste Anfrage oben; am selben Tag entscheidet die höhere ID. */
+  function neusteZuerst(a, b) {
+    return String(b.anfrage || '').localeCompare(String(a.anfrage || '')) || (Number(b.id) - Number(a.id));
+  }
+  function filterAnzahl() { return FELD_FILTER.filter(function (d) { return S.f.felder[d[0]]; }).length; }
+
+  function kurzDatum(ymd) { return ymd ? EG.fmtDatum(ymd).replace(/\.\d{2}(\d{2})$/, '.$1') : '–'; }
+  function wvMarke(z) {
+    if (!z.wiedervorlage) return h('span', { class: 'muted', text: '–' });
+    var t = heuteBerlin(), d = kurzDatum(z.wiedervorlage);
+    if (istZu(z)) return h('span', { class: 'muted', text: d });
+    if (z.wiedervorlage < t) return EG.pill(d, 'rot');
+    if (z.wiedervorlage === t) return EG.pill('heute', 'gold');
+    return h('span', { text: d });
+  }
+  function reihe(z) {
+    var fzg = [z.hersteller, z.modell].filter(Boolean).join(' ') || 'Fahrzeug unbekannt';
+    var t = heuteBerlin(), rot = !istZu(z) && !!z.wiedervorlage && z.wiedervorlage < t;
+    function x(text) { return h('span', { class: 'ld-c-x' + (text ? '' : ' muted'), text: text || '–', title: text || '' }); }
+    return h('button', {
+      type: 'button', role: 'listitem', class: 'ld-reihe' + (rot ? ' rot' : '') + (istZu(z) ? ' zu' : '') + (S.auf === z.id ? ' auf' : ''),
+      'data-id': z.id, 'aria-expanded': S.auf === z.id ? 'true' : 'false',
+      onclick: function () { S.auf = S.auf === z.id ? null : z.id; fuelleZeilen(); }
+    },
+      h('span', { text: kurzDatum(z.anfrage) }),
+      h('span', { class: 'ld-c-name' },
+        h('strong', { text: vollerName(z) || '(ohne Name)' }),
+        h('span', { class: 'ld-m-unter', text: [fzg, z.fahrzeugnr, z.verkaeufer || 'nicht zugeteilt'].filter(Boolean).join(' · ') })),
+      x(fzg), x(z.fahrzeugnr), x(z.interne_nr), x(z.verkaeufer),
+      h('span', { class: 'ld-c-status' }, EG.pill(z.status || 'ohne', istTermin(z) ? 'gruen' : (istZu(z) ? 'grau' : ''))),
+      x(z.herkunft), x(z.ueber), x(z.telefon),
+      h('span', { class: 'ld-c-x' }, wvMarke(z)));
+  }
+  var SPALTEN = ['Anfrage', 'Name', 'Fahrzeug', 'Fzg.-Nr.', 'Int.-Nr.', 'Verk.', 'Status', 'Herkunft', 'über', 'Telefon', 'Wiedervorl.'];
+  /** Zeichnet nur die Zeilen neu: Filterfelder und Tastatur bleiben unberührt. */
+  function fuelleZeilen() {
+    var box = S.box; if (!box) return;
+    var l = gefiltert(), gesamt = (S.alle || []).length;
+    if (S.zahlEl) S.zahlEl.textContent = l.length + ' von ' + gesamt + ' Anfragen';
+    box.replaceChildren();
+    if (!l.length) { box.appendChild(h('div', { class: 'leer', text: gesamt ? 'Keine Anfrage passt zu diesen Filtern.' : 'Noch keine Anfragen.' })); return; }
+    box.appendChild(h('div', { class: 'ld-reihe ld-kopfreihe', 'aria-hidden': 'true' }, SPALTEN.map(function (s) { return h('span', { text: s }); })));
+    l.slice(0, S.max).forEach(function (z) {
+      box.appendChild(reihe(z));
+      if (S.auf === z.id) box.appendChild(h('div', { class: 'ld-offen' }, karte(z, false)));
+    });
+    if (l.length > S.max) {
+      box.appendChild(h('div', { class: 'ld-mehr' }, h('button', {
+        type: 'button', class: 'btn btn-ghost', text: 'Weitere anzeigen (' + (l.length - S.max) + ' übrig)',
+        onclick: function () { S.max += 100; fuelleZeilen(); }
+      })));
+    }
+  }
+  function filterGeaendert() { S.max = 100; fuelleZeilen(); }
+  /** Auswahlwerte aus den vorhandenen Anfragen, damit auch alte Werte filterbar sind. */
+  function werteVon(k) {
+    var w = {};
+    (S.alle || []).forEach(function (z) { if (z[k]) w[z[k]] = true; });
+    return Object.keys(w).sort(function (a, b) { return a.localeCompare(b, 'de', { numeric: true }); });
+  }
+  function feldFilterEl(d) {
+    var id = 'ld-f-' + d[0], wert = S.f.felder[d[0]] || '', el;
+    if (d[2] === 'wahl') {
+      el = h('select', { id: id },
+        h('option', { value: '', text: 'Alle' }),
+        h('option', { value: KEIN_WERT, text: d[0] === 'verkaeufer' ? 'nicht zugeteilt' : '(leer)' }),
+        werteVon(d[0]).map(function (v) { return h('option', { value: v, text: v }); }));
+      el.value = wert;
+    } else {
+      el = h('input', { id: id, type: d[2] === 'text' ? 'search' : 'date', autocomplete: 'off', value: wert });
+    }
+    el.addEventListener(d[2] === 'text' ? 'input' : 'change', function () {
+      if (el.value) S.f.felder[d[0]] = el.value; else delete S.f.felder[d[0]];
+      var z = document.getElementById('ld-f-zahl'); if (z) z.textContent = filterAnzahl() ? String(filterAnzahl()) : '';
+      filterGeaendert();
+    });
+    return EG.feld(d[1], el);
+  }
+
   function zeichnen() {
     var root = S.root; if (!root) return;
     var me = S.me, out = [];
-    if (EG.demo) out.push(EG.banner('Demo: Die fünf Anfragen sind erfunden. Aktionen wirken nur in diesem Fenster.', 'info'));
+    if (EG.demo) out.push(EG.banner('Demo: Die Anfragen sind erfunden. Aktionen wirken nur in diesem Fenster.', 'info'));
     if (me && me.testmodus) out.push(EG.banner([h('strong', { text: 'Testmodus' }), ' – nichts wird gespeichert. Kontakt und Neuanlage zeigen nur eine Vorschau.'], 'warn'));
     out.push(h('div', { class: 'ld-leiste' },
       h('button', { type: 'button', class: 'btn btn-primary', text: '+ Neue Anfrage', onclick: dlgNeu }),
-      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Aktualisieren', onclick: function () { S.einzel = null; laden(false); } }),
+      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Aktualisieren', onclick: function () { laden(false); } }),
       h('button', { type: 'button', class: 'btn btn-ghost', text: 'Benachrichtigungen einschalten', onclick: function () { pushEinschalten().catch(EG.fehler); } })));
     out.push(h('div', { id: 'ld-push-info' }));
 
-    var verk = (me && me.auswahl && me.auswahl.field_2) || [];
-    var sel = h('select', { id: 'ld-filter', 'aria-label': 'Verkäufer filtern' },
-      h('option', { value: '', text: 'Alle' }),
-      verk.map(function (v) { return h('option', { value: v, text: v }); }),
-      h('option', { value: '-', text: 'nicht zugeteilt' }));
-    sel.value = S.filter || '';
-    sel.addEventListener('change', function () { S.filter = sel.value || null; zeichnen(); });
-    out.push(h('div', { class: 'ld-filter' }, EG.feld('Verkäufer', sel)));
-
-    if (!S.liste) {
+    if (!S.alle) {
+      S.box = null; S.zahlEl = null;
       out.push(h('p', { class: 'muted', text: 'Lade …' }));
     } else {
-      var L = S.liste, neu = L.neu_ohne_verkaeufer;
-      var inListe = {};
-      neu.concat(L.faellig).forEach(function (z) { inListe[z.id] = true; });
-      if (S.einzel && !inListe[S.einzel.id]) {
-        out.push(h('h3', { class: 'ld-h', text: 'Geöffnete Anfrage' }));
-        out.push(karte(S.einzel, true));
-      }
-      out.push(h('h3', { class: 'ld-h' }, 'Neu, nicht zugeteilt ', h('span', { class: 'ld-zahl', text: String(neu.length) })));
-      out.push(neu.length ? h('div', { class: 'raster' }, neu.map(function (z) { return karte(z, z.id === S.offenId); }))
-        : h('p', { class: 'muted', text: 'Keine neuen Anfragen ohne Verkäufer.' }));
+      var t = heuteBerlin();
+      var such = h('input', { type: 'search', id: 'ld-suche', placeholder: 'Suchen in allen Feldern …', 'aria-label': 'Suchen in allen Feldern', autocomplete: 'off', value: S.f.suche });
+      such.addEventListener('input', function () { S.f.suche = such.value; filterGeaendert(); });
+      out.push(h('div', { class: 'ld-suche' }, such));
 
-      var heute = heuteBerlin(), grenzeAlt = ymdPlus(heute, -30);
-      var f = L.faellig.filter(function (z) { return !S.filter ? true : S.filter === '-' ? !z.verkaeufer : z.verkaeufer === S.filter; });
-      var aktuell = f.filter(function (z) { return z.wiedervorlage >= grenzeAlt; });
-      var alt = f.filter(function (z) { return z.wiedervorlage < grenzeAlt; });
-      out.push(h('h3', { class: 'ld-h' }, 'Fällig heute / überfällig ', h('span', { class: 'ld-zahl', text: String(aktuell.length) })));
-      out.push(aktuell.length ? h('div', { class: 'raster' }, aktuell.map(function (z) { return karte(z, z.id === S.offenId); }))
-        : h('p', { class: 'muted', text: 'Nichts fällig.' }));
-      if (alt.length) {
-        out.push(h('details', { class: 'klappe' },
-          h('summary', { class: 'ld-h' }, 'Älter als 30 Tage ', h('span', { class: 'ld-zahl', text: String(alt.length) })),
-          h('div', { class: 'raster' }, alt.map(function (z) { return karte(z, z.id === S.offenId); }))));
-      }
+      var chips = h('div', { class: 'chips' });
+      SCHNELL.forEach(function (s) {
+        var n = S.alle.filter(function (z) { return s[2](z, t); }).length;
+        chips.appendChild(h('button', {
+          type: 'button', class: 'chip', 'aria-pressed': S.f.schnell === s[0] ? 'true' : 'false', text: s[1] + ' (' + n + ')',
+          onclick: function () { S.f.schnell = s[0]; S.max = 100; zeichnen(); }
+        }));
+      });
+      out.push(h('div', { class: 'leiste' }, chips));
+
+      var det = h('details', { class: 'ld-feldfilter' },
+        h('summary', {}, 'Filter nach Feldern ', h('span', { class: 'ld-zahl', id: 'ld-f-zahl', text: filterAnzahl() ? String(filterAnzahl()) : '' })),
+        h('div', { class: 'ld-felder' }, FELD_FILTER.map(feldFilterEl)));
+      det.open = S.f.offen;
+      det.addEventListener('toggle', function () { S.f.offen = det.open; });
+      out.push(det);
+
+      S.zahlEl = h('span', {});
+      out.push(h('div', { class: 'ld-zaehler' }, S.zahlEl,
+        h('button', { type: 'button', class: 'linklike', text: 'Alle Filter zurücksetzen', onclick: function () {
+          S.f.schnell = 'alle'; S.f.suche = ''; S.f.felder = {}; S.max = 100; zeichnen();
+        } })));
+      S.box = h('div', { class: 'ld-tabelle', role: 'list' });
+      out.push(S.box);
     }
     root.replaceChildren.apply(root, out);
     pushInfo();
-    if (S.liste && S.offenId) {
-      var id = S.offenId; S.offenId = null;
-      var k = null;
-      root.querySelectorAll('.ld-karte').forEach(function (x) { if (x.getAttribute('data-id') === id) k = x; });
-      if (k) {
-        var det = k.closest('details'); if (det) det.open = true;
-        k.classList.add('ld-hell');
-        k.scrollIntoView({ block: 'center' });
-      } else { ladeEinzelnen(id); }
-    }
+    if (S.box) fuelleZeilen();
+    if (S.alle && S.offenId) zeigeLead(S.offenId);
   }
 
+  /** Eine bestimmte Anfrage aufklappen und hinscrollen (Push-Link, Hinweis). Filter weichen, wenn sie die Anfrage verstecken. */
+  function zeigeLead(id) {
+    S.offenId = null;
+    var z = S.alle.filter(function (x) { return x.id === String(id); })[0];
+    if (!z) { ladeEinzelnen(id); return; }
+    if (gefiltert().indexOf(z) < 0) { S.f.schnell = 'alle'; S.f.suche = ''; S.f.felder = {}; S.offenId = id; zeichnen(); return; }
+    S.auf = z.id;
+    S.max = Math.max(S.max, gefiltert().indexOf(z) + 1);
+    fuelleZeilen();
+    var k = S.box.querySelector('.ld-reihe[data-id="' + z.id + '"]');
+    if (k) k.scrollIntoView({ block: 'center' });
+  }
   async function ladeEinzelnen(id) {
-    try { var r = await api('lead', { id: id }); S.einzel = r.lead; zeichnen(); }
+    try { var r = await api('lead', { id: id }); S.alle.push(r.lead); S.offenId = id; zeichnen(); }
     catch (e) { /* Lead nicht gefunden: kein Eintrag */ }
   }
 
@@ -387,7 +557,6 @@
     await p;
     if (ergebnisR) {
       EG.toast('Kontakt gespeichert', 'ok');
-      S.einzel = null;
       laden(false);
       if (ergebnisWert === 'termin') {
         var ja = await EG.bestaetigen('Termin ist eingetragen. Soll jetzt die Verkaufsakte angelegt werden?', { titel: 'Verkaufsakte anlegen?', ja: 'Verkaufsakte anlegen', nein: 'Später' });
@@ -458,7 +627,6 @@
     await p;
     if (angelegt) {
       EG.toast(angelegt.dublette ? 'Dublette: Notiz im vorhandenen Eintrag ergänzt' : 'Anfrage angelegt', 'ok');
-      S.einzel = null;
       laden(false);
     }
   }
@@ -626,13 +794,13 @@
     if (D) return;
     var t = heuteBerlin();
     var mk = function (id, o) {
-      return Object.assign({ id: String(id), name: '', vorname: '', verkaeufer: '', status: '1 Neu', herkunft: 'Website', ueber: 'Formular', email: '', telefon: '', hersteller: '', modell: '', typ: '', fahrzeugnr: '', notiz: '', anfrage: t, wiedervorlage: '' },
+      return Object.assign({ id: String(id), name: '', vorname: '', verkaeufer: '', status: '1 Neu', herkunft: 'Website', ueber: 'Formular', email: '', telefon: '', hersteller: '', modell: '', typ: '', fahrzeugnr: '', interne_nr: '', grund: '', notiz: '', anfrage: t, wiedervorlage: '' },
         DEMO_FZG[o.fahrzeugnr] || {}, o);
     };
     D = { next: 9100, leads: [
       mk(9001, { name: 'Muster', vorname: 'Erika', herkunft: 'mobile.de', ueber: 'E-Mail', email: 'erika.muster@beispiel.example', telefon: '0711 0000001', fahrzeugnr: '900001', anfrage: t, wiedervorlage: ymdPlus(t, 1), notiz: 'Demo-Anfrage über mobile.de.' }),
       mk(9002, { name: 'Mustermann', vorname: 'Max', herkunft: 'AutoScout24', ueber: 'WhatsApp', telefon: '0171 0000002', fahrzeugnr: '900002', anfrage: ymdPlus(t, -1), wiedervorlage: ymdPlus(t, 0), notiz: 'Fragt nach Probefahrt am Wochenende (Demo).' }),
-      mk(9003, { name: 'Beispiel', vorname: 'Berta', verkaeufer: 'M1', status: '2 Erstkontakt', herkunft: 'Website', ueber: 'Formular', email: 'berta.beispiel@beispiel.example', telefon: '0711 0000003', fahrzeugnr: '900003', anfrage: ymdPlus(t, -4), wiedervorlage: t, notiz: '01.01. - M1: Kunde erreicht\n- will sich Finanzierung ansehen (Demo)' }),
+      mk(9003, { name: 'Beispiel', vorname: 'Berta', verkaeufer: 'M1', status: '2 Erstkontakt', herkunft: 'Website', ueber: 'Formular', email: 'berta.beispiel@beispiel.example', telefon: '0711 0000003', fahrzeugnr: '900003', interne_nr: '9103', anfrage: ymdPlus(t, -4), wiedervorlage: t, notiz: '01.01. - M1: Kunde erreicht\n- will sich Finanzierung ansehen (Demo)' }),
       mk(9004, { name: 'Probe', vorname: 'Paul', verkaeufer: 'M2', status: '3 Beratung', herkunft: 'Telefon', ueber: 'Telefon', telefon: '0711 0000004', fahrzeugnr: '900004', anfrage: ymdPlus(t, -10), wiedervorlage: ymdPlus(t, -3), notiz: 'Nicht erreicht, zweiter Versuch fällig (Demo).' }),
       mk(9005, { name: 'Testfrau', vorname: 'Tina', verkaeufer: 'M1', status: '5 Termin vereinbart', herkunft: 'Showroom', ueber: 'Vor Ort', email: 'tina.testfrau@beispiel.example', telefon: '0171 0000005', fahrzeugnr: '900001', anfrage: ymdPlus(t, -6), wiedervorlage: t, notiz: 'Termin Übergabe/Kaufvertrag vereinbart (Demo).' })
     ] };
@@ -675,6 +843,7 @@
         return { heute: t, faellig: faellig.map(kopieZeile), neu_ohne_verkaeufer: neuOhne.map(kopieZeile) };
       }
       case 'lead': return { lead: kopieZeile(finde(b.id)) };
+      case 'alle': return { leads: D.leads.map(function (x) { return Object.assign({}, x); }) };
       case 'kontakt': {
         var z = finde(b.id), e = b.ergebnis;
         var text = { erreicht: 'Kunde erreicht', termin: 'Termin vereinbart', nicht_erreicht: 'nicht erreicht', kein_interesse: 'kein Interesse' }[e];
