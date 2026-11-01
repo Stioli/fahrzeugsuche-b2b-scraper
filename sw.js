@@ -24,10 +24,12 @@ self.addEventListener("push", function (event) {
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  var ziel = new URL((event.notification.data && event.notification.data.url) || "./index.html#leads", self.registration.scope).href;
+  // Anfragen liegen seit 01.11.2026 in der Stieber-App: alte Links aufs Dashboard dorthin umlenken
+  var roh = ((event.notification.data && event.notification.data.url) || "./eingang.html#anfragen").replace("index.html#leads", "eingang.html#anfragen");
+  var ziel = new URL(roh, self.registration.scope).href;
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (liste) {
     for (var i = 0; i < liste.length; i++) {
-      if (liste[i].url.indexOf(self.registration.scope) === 0) {
+      if (liste[i].url.indexOf(self.registration.scope + "eingang.html") === 0) {
         liste[i].postMessage({ typ: "lead-oeffnen", url: ziel });
         return liste[i].focus();
       }

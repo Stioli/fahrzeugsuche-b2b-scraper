@@ -642,6 +642,7 @@
     var t = lsGet(LS_TAB), hash = (location.hash || '').replace('#', '').split('&')[0];   // z. B. #anfragen&id=12
     var tabs = alleTabs();
     EG.zeigeTab(tabs.indexOf(hash) >= 0 ? hash : (tabs.indexOf(t) >= 0 ? t : tabs[0]));
+    document.dispatchEvent(new Event('eg-bereit'));   // z. B. Pop-up bei neuen Anfragen (eingang-leads.js)
   }
 
   /* ====================================================================

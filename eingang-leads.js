@@ -60,6 +60,8 @@
     + '.ld-offen{padding:10px 12px;background:#F4F8FD;border-top:1px solid var(--border)}'
     + '.ld-offen .ld-karte{margin:0}'
     + '.ld-mehr{display:flex;justify-content:center;padding:10px}'
+    + '.ld-bearb{padding:0}'
+    + '.ld-pop-zeile{padding:10px 12px;margin-bottom:8px;background:#F4F8FD;border-radius:12px;font-size:15px}'
     + '@media (max-width:900px){.ld-reihe{grid-template-columns:62px minmax(0,1fr) auto;padding:8px 10px}.ld-c-x,.ld-kopfreihe{display:none !important}.ld-m-unter{display:block}.ld-c-name{white-space:normal !important}}'
     + '.ld-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-size:18px}'
     + 'summary.ld-h{cursor:pointer;min-height:44px}'
@@ -136,6 +138,26 @@
     box.appendChild(t); ton();
     setTimeout(function () { if (t.parentNode) t.remove(); }, 15000);
   }
+  /** Großes Fenster bei neuer Anfrage, in jedem Reiter. Ist schon ein Dialog offen, nur der kleine Hinweis (Eingaben gehen vor). */
+  function popupNeu(neu) {
+    function fzg(z) { return [z.hersteller, z.modell, z.fahrzeugnr].filter(Boolean).join(' ') || 'Fahrzeug unbekannt'; }
+    if (document.querySelector('.dlg-ueber')) {
+      neueAnfrageHinweis(neu.length > 1 ? neu.length + ' neue Anfragen' : 'Neue Anfrage: ' + fzg(neu[0]), neu[0].id);
+      return;
+    }
+    ton();
+    var zeilen = neu.slice(0, 5).map(function (z) {
+      return h('div', { class: 'ld-pop-zeile' },
+        h('strong', { text: vollerName(z) || '(ohne Name)' }),
+        h('div', { text: fzg(z) }),
+        h('div', { class: 'muted klein', text: [z.herkunft, z.ueber, z.telefon].filter(Boolean).join(' · ') }));
+    });
+    if (neu.length > 5) zeilen.push(h('p', { class: 'muted', text: 'und ' + (neu.length - 5) + ' weitere' }));
+    EG.dialog({
+      titel: neu.length > 1 ? neu.length + ' neue Anfragen' : 'Neue Anfrage', inhalt: zeilen, keinFokus: true,
+      knoepfe: [{ text: 'Später', art: 'ghost', wert: null }, { text: 'Öffnen', art: 'primary', wert: 'auf' }]
+    }).then(function (w) { if (w) oeffneLead(neu[0].id); });
+  }
   /** Reiter „Anfragen“ zeigen und (optional) einen bestimmten Lead hervorheben. */
   function oeffneLead(id) {
     S.offenId = id || null;
@@ -159,7 +181,7 @@
   }
 
   async function laden(still) {
-    if (S.laedt) return;
+    if (S.laedt) { if (!still) S.nochmal = true; return; }   // läuft gerade im Hintergrund: danach sichtbar nachladen
     S.laedt = true;
     try {
       var d = await api('faellig');
@@ -169,10 +191,10 @@
       d.neu_ohne_verkaeufer.forEach(function (z) { ids[z.id] = z; });
       if (S.bekannt) Object.keys(ids).forEach(function (k) { if (!S.bekannt[k]) neu.push(ids[k]); });
       S.bekannt = ids;
-      if (neu.length > 3) neueAnfrageHinweis(neu.length + ' neue Anfragen', neu[0].id);
-      else neu.forEach(function (z) { neueAnfrageHinweis('Neue Anfrage: ' + ([z.hersteller, z.modell, z.fahrzeugnr].filter(Boolean).join(' ') || 'Fahrzeug unbekannt'), z.id); });
-      // Gesamtliste: beim Öffnen und Aktualisieren, wenn sich etwas geändert hat, sonst spätestens alle 5 Minuten
-      var alleNeu = !S.alle || !still || geaendert || Date.now() - S.alleAm > ALLE_MS;
+      if (neu.length) popupNeu(neu);
+      // Gesamtliste nur, wenn der Reiter sichtbar ist: beim Öffnen und Aktualisieren, bei Änderung, sonst spätestens alle 5 Minuten
+      var sichtbar = !!S.root && S.root.offsetParent !== null;
+      var alleNeu = !still || (sichtbar && (!S.alle || geaendert || Date.now() - S.alleAm > ALLE_MS));
       if (alleNeu) { S.alle = await holeAlle(); S.alleAm = Date.now(); }
       // Während ein Dialog offen ist, nicht neu zeichnen (sonst gehen Eingaben verloren)
       if (S.root && S.root.offsetParent !== null && !document.querySelector('.dlg-ueber') && alleNeu) {
@@ -185,15 +207,15 @@
         var b = EG.banner(e.message || 'Laden fehlgeschlagen', 'fehler'); b.classList.add('ld-ladefehler');
         S.root.insertBefore(b, S.root.firstChild);
       }
-    } finally { S.laedt = false; }
+    } finally {
+      S.laedt = false;
+      if (S.nochmal) { S.nochmal = false; laden(false); }
+    }
   }
 
-  /** Nur bei sichtbarem Fenster UND aktivem Reiter nachladen. */
-  function reiterSichtbar() {
-    return !document.hidden && !!S.root && S.root.isConnected && !S.root.hidden && S.root.offsetParent !== null;
-  }
-  function tick() { if (S.me && reiterSichtbar()) laden(true); }
-  function sichtbarkeit() { if (S.me && reiterSichtbar() && Date.now() - S.letzte > 60000) laden(true); }
+  /** Solange das Fenster sichtbar ist, in jedem Reiter nach neuen Anfragen schauen (Pop-up, Oli 01.11.2026). */
+  function tick() { if (S.me && !document.hidden) laden(true); }
+  function sichtbarkeit() { if (S.me && !document.hidden && Date.now() - S.letzte > 60000) laden(true); }
   function timerStarten() {
     if (!S.timer) S.timer = setInterval(tick, 60000);
     if (!S.visHook) { S.visHook = true; document.addEventListener('visibilitychange', sichtbarkeit); }
@@ -228,6 +250,7 @@
       z.notiz ? h('div', { class: 'ld-notiz', text: z.notiz }) : null,
       h('div', { class: 'ld-aktion' },
         h('button', { type: 'button', class: 'btn btn-primary', text: 'Kontakt erfassen', onclick: function () { dlgKontakt(z); } }),
+        h('button', { type: 'button', class: 'btn btn-ghost', text: 'Bearbeiten', onclick: function () { dlgBearbeiten(z); } }),
         h('button', { type: 'button', class: 'btn btn-ghost', text: 'Nachfass-Entwurf', onclick: function () { dlgEntwurf(z, false); } }),
         istTermin(z) ? h('button', { type: 'button', class: 'btn btn-ghost ld-akte', text: 'Verkaufsakte anlegen', onclick: function () { verkaufsakteAnlegen(z); } }) : null));
   }
@@ -632,6 +655,75 @@
   }
 
   /* ====================================================================
+     Anfrage bearbeiten (Edge Function leads_bearbeiten; nur geänderte Felder werden gesendet)
+     ==================================================================== */
+  var BEARB_FELDER = [
+    ['verkaeufer', 'Verkäufer', 'field_2'], ['status', 'Status', 'field_3'], ['wiedervorlage', 'Wiedervorlage', 'datum'],
+    ['name', 'Nachname *'], ['vorname', 'Vorname'], ['telefon', 'Telefon'], ['email', 'E-Mail'],
+    ['fahrzeugnr', 'Fahrzeugnummer'], ['interne_nr', 'Int.-Nr.'], ['hersteller', 'Hersteller'], ['modell', 'Modell'], ['typ', 'Typ'],
+    ['herkunft', 'Herkunft', 'field_4'], ['ueber', 'über', 'field_5'], ['grund', 'Grund nicht gekauft', 'field_19']
+  ];
+  async function speichereBearbeitung(id, felder) {
+    if (EG.demo) return demoApi('bearbeiten', { id: id, felder: felder });
+    var r = await EG.sb.functions.invoke('leads_bearbeiten', { body: { id: id, felder: felder } });
+    if (r.error) {
+      var text = '';
+      try { var j = await r.error.context.json(); text = j.fehler || ''; } catch (e) { /* keine JSON-Antwort */ }
+      throw new Error(text || r.error.message);
+    }
+    return r.data || {};
+  }
+  async function dlgBearbeiten(z) {
+    var auswahl = (S.me && S.me.auswahl) || {}, el = {}, fertig = false, gespeichert = false, prim = null;
+    var meld = h('div', {});
+    var felder = BEARB_FELDER.map(function (d) {
+      var wert = z[d[0]] || '', id = 'ld-b-' + d[0];
+      if (d[2] === 'datum') el[d[0]] = h('input', { type: 'date', id: id, value: wert });
+      else if (d[2]) {
+        var opt = (auswahl[d[2]] || []).slice();
+        if (wert && opt.indexOf(wert) < 0) opt.unshift(wert);
+        el[d[0]] = h('select', { id: id }, h('option', { value: '', text: '–' }), opt.map(function (o) { return h('option', { value: o, text: o }); }));
+        el[d[0]].value = wert;
+      } else el[d[0]] = h('input', { type: d[0] === 'email' ? 'email' : 'text', id: id, autocomplete: 'off', value: wert });
+      return EG.feld(d[1], el[d[0]]);
+    });
+    var p = EG.dialog({
+      titel: 'Anfrage bearbeiten', breit: true, keinFokus: true,
+      inhalt: h('div', {}, h('div', { class: 'ld-felder ld-bearb' }, felder), meld),
+      knoepfe: [
+        { text: 'Schließen', art: 'ghost', wert: null },
+        {
+          text: 'Speichern', art: 'primary', wert: 'ok',
+          aktion: async function () {
+            if (fertig) return true;
+            meld.replaceChildren();
+            var aend = {};
+            BEARB_FELDER.forEach(function (d) {
+              var neu = el[d[0]].value.trim();
+              if (neu !== (z[d[0]] || '')) aend[d[0]] = neu;
+            });
+            if (!Object.keys(aend).length) return true;
+            if (aend.name === '') return 'Bitte den Nachnamen eintragen.';
+            var r;
+            try { r = await speichereBearbeitung(z.id, aend); }
+            catch (err) { meld.appendChild(EG.banner(err.message, 'fehler')); return false; }
+            if (r.trocken) {
+              meld.appendChild(vorschauEl(r) || '');
+              fertig = true; if (prim) prim.textContent = 'Fertig';
+              return false;
+            }
+            gespeichert = true;
+            return true;
+          }
+        }
+      ]
+    });
+    prim = primaerKnopf();
+    await p;
+    if (gespeichert) { EG.toast('Änderung gespeichert', 'ok'); laden(false); }
+  }
+
+  /* ====================================================================
      Nachfass-Entwurf (nichts wird gesendet)
      ==================================================================== */
   function dlgEntwurf(z, trotzdem) {
@@ -741,7 +833,7 @@
     navigator.serviceWorker.register('sw.js').catch(function () { /* sw.js fehlt: nur kein Push */ });
     navigator.serviceWorker.addEventListener('message', function (ev) {
       var d = ev.data || {};
-      if (d.typ === 'lead-neu') neueAnfrageHinweis(d.text || 'Neue Anfrage', null);
+      if (d.typ === 'lead-neu') laden(true);   // Push ist da: gleich nachsehen, das Pop-up kommt aus laden()
       if (d.typ === 'lead-oeffnen') { var m = /id=(\d+)/.exec(d.url || ''); oeffneLead(m ? m[1] : null); }
     });
   }
@@ -755,6 +847,13 @@
     })();
     return S.initP;
   }
+
+  /** Nach dem Anmelden: Verkauf und Admin bekommen das Pop-up in jedem Reiter, nicht erst im Reiter „Anfragen“. */
+  document.addEventListener('eg-bereit', function () {
+    if (EG.rolle !== 'admin' && EG.rolle !== 'verkauf') return;
+    css();
+    init().then(function (ok) { if (ok) { laden(true); timerStarten(); } });
+  });
 
   EG.onTab('anfragen', async function (root) {
     css();
@@ -805,7 +904,9 @@
       mk(9005, { name: 'Testfrau', vorname: 'Tina', verkaeufer: 'M1', status: '5 Termin vereinbart', herkunft: 'Showroom', ueber: 'Vor Ort', email: 'tina.testfrau@beispiel.example', telefon: '0171 0000005', fahrzeugnr: '900001', anfrage: ymdPlus(t, -6), wiedervorlage: t, notiz: 'Termin Übergabe/Kaufvertrag vereinbart (Demo).' })
     ] };
   }
-  function kurzNotiz(n) { return n ? String(n).split(/\r?\n/).filter(function (z) { return z.trim(); }).slice(0, 6).join('\n').slice(0, 420) : ''; }
+  /** Nur Demo: neue Anfrage simulieren, um das Pop-up zu zeigen. */
+  EG.demoNeueAnfrage = async function () { if (EG.demo) { await demoApi('demo_neu', {}); await laden(true); } };
+  function kurzNotiz(n) { return n ?String(n).split(/\r?\n/).filter(function (z) { return z.trim(); }).slice(0, 6).join('\n').slice(0, 420) : ''; }
   function kopieZeile(z) { var k = Object.assign({}, z); k.notiz = kurzNotiz(z.notiz); return k; }
   function waNummer(tel) {
     var d = String(tel || '').replace(/[^\d+]/g, '');
@@ -844,6 +945,17 @@
       }
       case 'lead': return { lead: kopieZeile(finde(b.id)) };
       case 'alle': return { leads: D.leads.map(function (x) { return Object.assign({}, x); }) };
+      case 'bearbeiten': {
+        var bz = finde(b.id), namen = [];
+        Object.keys(b.felder).forEach(function (k) { bz[k] = b.felder[k]; namen.push(k); });
+        bz.notiz = EG.fmtDatum(t) + ' - ' + kuerzel + ': geändert: ' + namen.join(', ') + (bz.notiz ? '\n\n' + bz.notiz : '');
+        return { trocken: false, id: bz.id, gespeichert: namen };
+      }
+      case 'demo_neu': {
+        var dn = { id: String(D.next++), name: 'Neukunde', vorname: 'Nora', verkaeufer: '', status: DEMO_AUSWAHL.field_3[0], herkunft: 'AutoScout24', ueber: 'E-Mail', email: '', telefon: '0711 0000009', hersteller: 'Kia', modell: 'Sportage 1.6 Demo', typ: '', fahrzeugnr: '900002', interne_nr: '', grund: '', notiz: 'Demo: gerade eingegangen.', anfrage: t, wiedervorlage: ymdPlus(t, 1) };
+        D.leads.push(dn);
+        return { id: dn.id };
+      }
       case 'kontakt': {
         var z = finde(b.id), e = b.ergebnis;
         var text = { erreicht: 'Kunde erreicht', termin: 'Termin vereinbart', nicht_erreicht: 'nicht erreicht', kein_interesse: 'kein Interesse' }[e];
