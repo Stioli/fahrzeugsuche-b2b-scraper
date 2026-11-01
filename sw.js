@@ -10,6 +10,7 @@ self.addEventListener("push", function (event) {
   var zeigen = self.registration.showNotification(d.titel || "Neue Anfrage", {
     body: d.text || "",
     tag: d.tag || "lead",
+    renotify: true,   // gleiche Kennung (z. B. Testnachricht): trotzdem wieder aufpoppen statt still ersetzen
     icon: "icon-192.png",
     badge: "icon-192.png",
     requireInteraction: true,
