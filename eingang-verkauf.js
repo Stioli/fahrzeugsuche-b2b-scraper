@@ -45,8 +45,13 @@
   var S = {
     root: null, id: null, akte: null, pm: {}, frei: [], calc: null, offen: {}, geoeffnetFuer: null,
     akten: [], pmAlle: {}, freiAlle: {}, listCalc: {}, filter: 'offen', suche: '', listenBox: null, gesaet: false,
-    kopfBox: null, fehltBox: null, phasenBox: null
+    kopfBox: null, fehltBox: null, phasenBox: null, filterGesetzt: false, pushMe: null, swDa: false
   };
+  // Aus einem Link der Meldung (#verkauf&id=<akte_id>) gleich die Akte öffnen
+  (function hashLesen() {
+    var m = /^#verkauf&id=([0-9a-f-]{36})/i.exec(location.hash || '');
+    if (m) S.id = m[1];
+  })();
   var T = {
     akte: function () { return EG.tab('verkauf', 'akte'); },
     punkt: function () { return EG.tab('verkauf', 'punkt'); },
@@ -205,8 +210,10 @@
   EG.onTab('verkauf', function (root) {
     S.root = root;
     demoSaen();
+    if (!S.filterGesetzt) { S.filterGesetzt = true; if (meineRolle() === 'dispo') S.filter = 'dispo'; }   // Startansicht der Dispo
     return S.id ? ladeDetail() : ladeListe();
   });
+  document.addEventListener('eg-bereit', function () { if (meineRolle() === 'dispo' || meineRolle() === 'admin') swStart(); });
   window.VK_AKTE_OEFFNEN = function (id) { S.id = id; S.geoeffnetFuer = null; EG.zeigeTab('verkauf'); };
   window.VK_AKTE_ANLEGEN = async function (vb) {
     vb = vb || {};
@@ -261,6 +268,76 @@
     var q = S.suche.trim().toLowerCase(); if (!q) return true;
     return [a.hersteller, a.modell, a.kunde_name, a.interne_nr, a.autrado_nr, a.fin, a.bestell_nr, a.verkaeufer, a.farbe].join(' ').toLowerCase().indexOf(q) >= 0;
   }
+  /** Für die Dispo offen: Oli hat freigegeben, Zahlung oder Vorbereitung sind noch nicht grün. → { zahlung, vorbereitung, frei } | null
+      Zählt der Haken „freigabe“ wie bei den Sperren, nicht phase_aktuell: nachgetragene Akten stehen dort oft noch auf einer frühen Phase. */
+  function dispoStand(a) {
+    var c = S.listCalc[a.id];
+    if (!c || !istOffen(a)) return null;
+    var fr = c.eff.v6 && c.eff.v6.freigabe;
+    if (!fr || fr.st !== 'ok') return null;
+    var z = c.phasen.filter(function (p) { return p.key === 'v7'; })[0], v = c.phasen.filter(function (p) { return p.key === 'v8'; })[0];
+    if (z.gruen && v.gruen) return null;
+    return { zahlung: z, vorbereitung: v, frei: findeFrei(S.freiAlle[a.id], 'akte_frei', 'v6') };
+  }
+  function istDispoOffen(a) { return !!dispoStand(a); }
+  function phasenStand(p) { return p.def.name + (p.gruen ? ' fertig' : ' ' + p.pflichtErledigt + ' von ' + p.pflichtGesamt); }
+
+  /* ---------- Benachrichtigungen im Reiter (Rolle dispo; der Reiter „Anfragen“ fehlt ihr) ---------- */
+  async function meldungApi(aktion, body) {
+    var r = await EG.sb.functions.invoke('verkauf_meldung', { body: Object.assign({ aktion: aktion }, body || {}) });
+    if (r.error) {
+      var msg = r.error.message || 'Fehler', ctx = r.error.context;
+      if (ctx && typeof ctx.json === 'function') { try { var j = await ctx.json(); if (j && j.fehler) msg = j.fehler; } catch (e) { /* Text bleibt */ } }
+      throw new Error(msg);
+    }
+    return r.data || {};
+  }
+  function swStart() {
+    if (S.swDa || EG.demo || !('serviceWorker' in navigator)) return;
+    S.swDa = true;
+    navigator.serviceWorker.register('sw.js').catch(function () { /* sw.js fehlt: nur kein Push */ });
+    navigator.serviceWorker.addEventListener('message', function (ev) {
+      var d = ev.data || {};
+      if (d.typ === 'akte-neu' && S.root && !S.id) ladeListe().catch(EG.fehler);
+      if (d.typ === 'akte-oeffnen') { var m = /id=([0-9a-f-]{36})/i.exec(d.url || ''); if (m) window.VK_AKTE_OEFFNEN(m[1]); else EG.zeigeTab('verkauf'); }
+    });
+  }
+  function pushKasten() {
+    var box = h('div', { class: 'vk-push' });
+    function zeige(inhalt, art) { box.replaceChildren(EG.banner(inhalt, art)); }
+    function stand() {
+      var me = S.pushMe; if (!me) return;
+      if (me.push_abos > 0) zeige(['Benachrichtigungen sind auf diesem Konto eingeschaltet (' + me.push_abos + ' Gerät/e). ', h('button', { type: 'button', class: 'linklike', text: 'Testnachricht senden', onclick: testen })], 'ok');
+      else zeige(['Neue Freigaben kommen bisher nur per Mail. ', h('button', { type: 'button', class: 'linklike', text: 'Benachrichtigungen einschalten', onclick: einschalten })], 'warn');
+    }
+    async function testen() {
+      try { var r = await meldungApi('push_test'); zeige(r.gesendet ? 'Testnachricht ist unterwegs.' : 'Kein Gerät erreicht.', r.gesendet ? 'ok' : 'fehler'); }
+      catch (e) { zeige(e.message, 'fehler'); }
+    }
+    async function einschalten() {
+      var P = window.LD_PUSH;
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+          zeige(P.istIos() ? 'Auf dem iPhone geht das nur mit der App auf dem Home-Bildschirm (Teilen → „Zum Home-Bildschirm“).' : 'Dieser Browser unterstützt keine Benachrichtigungen.', 'fehler'); return;
+        }
+        if (P.istIos() && !P.istInstalliert()) { zeige('Auf dem iPhone zuerst „Teilen“ → „Zum Home-Bildschirm“, dann von dort öffnen.', 'fehler'); return; }
+        if (!S.pushMe.vapid_public) { zeige('Die Benachrichtigung ist serverseitig noch nicht eingerichtet.', 'fehler'); return; }
+        if (await Notification.requestPermission() !== 'granted') { zeige('Benachrichtigungen wurden im Browser nicht erlaubt.', 'fehler'); return; }
+        var reg = await P.swBereit(), sub = await reg.pushManager.getSubscription();
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: P.b64uZuBytes(S.pushMe.vapid_public) });
+        var j = sub.toJSON();
+        await meldungApi('push_abo', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth });
+        S.pushMe.push_abos = Math.max(1, S.pushMe.push_abos || 0);
+        EG.toast('Benachrichtigungen sind eingeschaltet.', 'ok');
+        stand();
+      } catch (e) { zeige(e.message || String(e), 'fehler'); }
+    }
+    if (EG.demo) { zeige('Demo: Hier schaltet die Dispo die Benachrichtigungen ein.', 'info'); return box; }
+    if (S.pushMe) stand();
+    else meldungApi('me').then(function (me) { S.pushMe = me; stand(); }).catch(function (e) { zeige(e.message, 'fehler'); });
+    return box;
+  }
+
   function zeichneListe() {
     S.root.innerHTML = '';
     var suchFeld = h('input', { type: 'search', id: 'vk-suche', placeholder: 'Suchen: Kunde, Fahrzeug, Nr., FIN …', value: S.suche, 'aria-label': 'Suche' });
@@ -268,7 +345,7 @@
     var chipLeiste = h('div', { class: 'chips' });
     function chips() {
       chipLeiste.innerHTML = '';
-      [['offen', 'Offen', istOffen], ['abgeschlossen', 'Abgeschlossen', function (a) { return !istOffen(a); }], ['alle', 'Alle', null]].forEach(function (c) {
+      [['offen', 'Offen', istOffen], ['dispo', 'Für Dispo offen', istDispoOffen], ['abgeschlossen', 'Abgeschlossen', function (a) { return !istOffen(a); }], ['alle', 'Alle', null]].forEach(function (c) {
         var n = S.akten.filter(function (a) { return !c[2] || c[2](a); }).length;
         chipLeiste.appendChild(h('button', {
           type: 'button', class: 'chip', 'aria-pressed': S.filter === c[0] ? 'true' : 'false', text: c[1] + ' (' + n + ')',
@@ -281,6 +358,7 @@
       h('button', { type: 'button', class: 'btn btn-ghost', text: 'Liste aktualisieren', onclick: function () { ladeListe().catch(EG.fehler); } }),
       erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-primary', text: 'Neue Verkaufsakte', onclick: function () { neueAkte().catch(EG.fehler); } }) : null,
       erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-ghost', text: 'Akte nachtragen', title: 'Für einen Verkauf, der schon passiert ist', onclick: function () { neueAkte({ nachtrag: true }).catch(EG.fehler); } }) : null);
+    if (meineRolle() === 'dispo') S.root.appendChild(pushKasten());
     S.root.appendChild(h('div', { class: 'leiste' }, h('div', { class: 'leiste-zeile' }, suchFeld), zeile2, chipLeiste));
     S.listenBox = h('div', { class: 'raster' });
     S.root.appendChild(S.listenBox);
@@ -290,6 +368,7 @@
     var box = S.listenBox; box.innerHTML = '';
     var l = S.akten.filter(function (a) {
       if (!passtSuche(a)) return false;
+      if (S.filter === 'dispo') return istDispoOffen(a);
       return S.filter === 'alle' || (S.filter === 'offen' ? istOffen(a) : !istOffen(a));
     });
     l.sort(function (a, b) {
@@ -298,7 +377,7 @@
       if (oa) { var x = a.uebergabe_termin || '9999-12-31', y = b.uebergabe_termin || '9999-12-31'; return x < y ? -1 : x > y ? 1 : 0; }
       var u = a.updated_at || '', v = b.updated_at || ''; return u < v ? 1 : u > v ? -1 : 0;
     });
-    if (!l.length) { box.appendChild(h('div', { class: 'leer', style: 'grid-column:1/-1', text: S.akten.length ? 'Keine Akten in dieser Ansicht.' : 'Noch keine Verkaufsakte. Lege mit „Neue Verkaufsakte“ die erste an.' })); return; }
+    if (!l.length) { box.appendChild(h('div', { class: 'leer', style: 'grid-column:1/-1', text: S.filter === 'dispo' ? 'Gerade keine freigegebene Akte offen.' : S.akten.length ? 'Keine Akten in dieser Ansicht.' : 'Noch keine Verkaufsakte. Lege mit „Neue Verkaufsakte“ die erste an.' })); return; }
     l.forEach(function (a) { box.appendChild(akteKarte(a)); });
   }
   function ampelZeile(phasen) {
@@ -320,6 +399,12 @@
       aktText = cur ? cur.def.name : 'Alles grün'; aktArt = cur ? AMPEL_PILL[cur.ampel] : 'gruen';
       if (cur) zeilePhase = 'Jetzt: ' + cur.def.name + ' – ' + cur.pflichtErledigt + ' von ' + cur.pflichtGesamt + ' Pflichtpunkten erledigt' + (cur.rotGrund ? ' (' + cur.rotGrund + ')' : '');
       rot = c.phasen.some(function (p) { return p.ampel === 'rot'; });
+      var ds = S.filter === 'dispo' ? dispoStand(a) : null;
+      if (ds) {   // Ansicht der Dispo: Stand von Zahlung und Vorbereitung statt der frühesten offenen Phase
+        var dran = ds.zahlung.gruen ? ds.vorbereitung : ds.zahlung;
+        aktText = dran.def.name; aktArt = AMPEL_PILL[dran.ampel];
+        zeilePhase = [ds.frei ? 'Freigegeben am ' + EG.fmtDatum(ds.frei.am) : '', phasenStand(ds.zahlung), phasenStand(ds.vorbereitung)].filter(Boolean).join(' · ');
+      }
     }
     var ueber = istOffen(a) && a.uebergabe_termin && a.uebergabe_termin < EG.heute();
     return h('button', { type: 'button', class: 'karte fz-karte vk-karte' + (rot ? ' rot' : ''), onclick: function () { oeffne(a.id).catch(EG.fehler); } },

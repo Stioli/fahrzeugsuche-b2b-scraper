@@ -1121,6 +1121,8 @@
       new Promise(function (_, nein) { setTimeout(function () { nein(new Error('Der Service Worker (sw.js) ist in dieser App nicht aktiv – Benachrichtigungen sind hier noch nicht eingerichtet.')); }, 8000); })
     ]);
   }
+  // Auch der Reiter „Verkauf“ schaltet Benachrichtigungen ein (Rolle dispo, eingang-verkauf.js)
+  window.LD_PUSH = { b64uZuBytes: b64uZuBytes, istIos: istIos, istInstalliert: istInstalliert, swBereit: swBereit };
   async function pushEinschalten() {
     if (EG.demo) { pushInfo('Im Demo-Modus gibt es keine Benachrichtigungen.', true); return; }
     try {

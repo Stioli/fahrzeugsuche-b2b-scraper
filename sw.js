@@ -4,6 +4,8 @@ self.addEventListener("install", function () { self.skipWaiting(); });
 self.addEventListener("activate", function (e) { e.waitUntil(self.clients.claim()); });
 self.addEventListener("fetch", function () { /* bewusst leer: alles geht direkt ins Netz */ });
 
+function istAkte(url) { return /#verkauf/.test(url || ""); }
+
 self.addEventListener("push", function (event) {
   var d = {};
   try { d = event.data ? event.data.json() : {}; } catch (e) { d = { text: event.data ? event.data.text() : "" }; }
@@ -16,9 +18,9 @@ self.addEventListener("push", function (event) {
     requireInteraction: true,
     data: { url: d.url || "" }
   });
-  // offene Dashboard-Fenster zusaetzlich informieren (Popup mit Ton)
+  // offene Dashboard-Fenster zusaetzlich informieren (Popup mit Ton); Verkaufsakten (#verkauf) haben eigene Nachrichten
   var info = self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (liste) {
-    liste.forEach(function (c) { c.postMessage({ typ: "lead-neu", text: d.text || "", url: d.url || "" }); });
+    liste.forEach(function (c) { c.postMessage({ typ: istAkte(d.url) ? "akte-neu" : "lead-neu", text: d.text || "", url: d.url || "" }); });
   });
   event.waitUntil(Promise.all([zeigen, info]));
 });
@@ -31,7 +33,7 @@ self.addEventListener("notificationclick", function (event) {
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (liste) {
     for (var i = 0; i < liste.length; i++) {
       if (liste[i].url.indexOf(self.registration.scope + "eingang.html") === 0) {
-        liste[i].postMessage({ typ: "lead-oeffnen", url: ziel });
+        liste[i].postMessage({ typ: istAkte(ziel) ? "akte-oeffnen" : "lead-oeffnen", url: ziel });
         return liste[i].focus();
       }
     }
