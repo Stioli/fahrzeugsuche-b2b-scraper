@@ -360,10 +360,13 @@
       erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-ghost', text: 'Akte nachtragen', title: 'Für einen Verkauf, der schon passiert ist', onclick: function () { neueAkte({ nachtrag: true }).catch(EG.fehler); } }) : null);
     if (meineRolle() === 'dispo') S.root.appendChild(pushKasten());
     S.root.appendChild(h('div', { class: 'leiste' }, h('div', { class: 'leiste-zeile' }, suchFeld), zeile2, chipLeiste));
-    S.listenBox = h('div', { class: 'raster' });
+    S.listenBox = h('div', { class: 'ac-tabelle', role: 'list' });
     S.root.appendChild(S.listenBox);
     fuelleListe();
   }
+  /** Spalten der Zeilenansicht: [Kopf, Klasse]. Auf dem Handy bleiben Fahrzeug/Kunde (mit Kurzzeile), Stand und Phasen-Punkte. */
+  var SPALTEN = [['Übergabe', 'vz-c-ueb'], ['Nr.', 'vz-c-nr'], ['Fahrzeug', 'vz-c-fz'], ['FIN', 'vz-c-fin'], ['Kunde', 'vz-c-kunde'],
+    ['Verk.', 'vz-c-verk'], ['Phasen', 'vz-c-dots'], ['Stand', 'vz-c-stand']];
   function fuelleListe() {
     var box = S.listenBox; box.innerHTML = '';
     var l = S.akten.filter(function (a) {
@@ -377,8 +380,10 @@
       if (oa) { var x = a.uebergabe_termin || '9999-12-31', y = b.uebergabe_termin || '9999-12-31'; return x < y ? -1 : x > y ? 1 : 0; }
       var u = a.updated_at || '', v = b.updated_at || ''; return u < v ? 1 : u > v ? -1 : 0;
     });
-    if (!l.length) { box.appendChild(h('div', { class: 'leer', style: 'grid-column:1/-1', text: S.filter === 'dispo' ? 'Gerade keine freigegebene Akte offen.' : S.akten.length ? 'Keine Akten in dieser Ansicht.' : 'Noch keine Verkaufsakte. Lege mit „Neue Verkaufsakte“ die erste an.' })); return; }
-    l.forEach(function (a) { box.appendChild(akteKarte(a)); });
+    if (!l.length) { box.appendChild(h('div', { class: 'leer', text: S.filter === 'dispo' ? 'Gerade keine freigegebene Akte offen.' : S.akten.length ? 'Keine Akten in dieser Ansicht.' : 'Noch keine Verkaufsakte. Lege mit „Neue Verkaufsakte“ die erste an.' })); return; }
+    box.appendChild(h('div', { class: 'ac-zeile vz-zeile ac-kopfzeile', 'aria-hidden': 'true' },
+      SPALTEN.map(function (s) { return h('span', { class: s[1], text: s[0] }); })));
+    l.forEach(function (a) { box.appendChild(akteZeile(a)); });
   }
   function ampelZeile(phasen) {
     var wrap = h('div', { class: 'vk-dots', role: 'list' });
@@ -387,7 +392,8 @@
     });
     return wrap;
   }
-  function akteKarte(a) {
+  /** Eine Verkaufsakte = eine Zeile. Tippen öffnet die Akte. */
+  function akteZeile(a) {
     var c = S.listCalc[a.id], phasen, aktText, aktArt = 'grau', zeilePhase = '', rot = false;
     if (!istOffen(a)) {
       var abg = a.phase_aktuell === 'abgebrochen';
@@ -407,13 +413,29 @@
       }
     }
     var ueber = istOffen(a) && a.uebergabe_termin && a.uebergabe_termin < EG.heute();
-    return h('button', { type: 'button', class: 'karte fz-karte vk-karte' + (rot ? ' rot' : ''), onclick: function () { oeffne(a.id).catch(EG.fehler); } },
-      h('div', { class: 'karte-kopf' }, h('div', { class: 'fz-titel', text: akteTitel(a) }), EG.pill(aktText, aktArt)),
-      h('div', { class: 'fz-zeile fett', text: a.kunde_name || 'Kunde fehlt' }),
-      h('div', { class: 'fz-zeile', text: [a.interne_nr ? 'Nr. ' + a.interne_nr : '', a.autrado_nr ? 'Autrado ' + a.autrado_nr : '', a.verkaeufer ? 'Verkäufer ' + a.verkaeufer : ''].filter(Boolean).join(' · ') || 'ohne Nummer' }),
-      ampelZeile(phasen),
-      zeilePhase ? h('div', { class: 'fz-zeile', text: zeilePhase }) : null,
-      a.uebergabe_termin ? h('div', { class: 'fz-zeile' + (ueber ? ' rot-text fett' : ''), text: 'Übergabe: ' + EG.fmtDatum(a.uebergabe_termin) + (ueber ? ' (überschritten)' : '') }) : null);
+    var ueb = a.uebergabe_termin ? EG.fmtDatum(a.uebergabe_termin) : '';
+    var nrText = [a.interne_nr ? 'Nr. ' + a.interne_nr : '', a.autrado_nr ? 'Autrado ' + a.autrado_nr : ''].filter(Boolean).join(' · ');
+    var dots = ampelZeile(phasen); dots.classList.add('vz-dots');
+    return h('button', {
+      type: 'button', role: 'listitem', class: 'ac-zeile vz-zeile' + (rot ? ' rot' : '') + (istOffen(a) ? '' : ' fertig'),
+      title: zeilePhase || aktText,
+      'aria-label': akteTitel(a) + ', ' + (a.kunde_name || 'Kunde fehlt') + (a.interne_nr ? ', Nr. ' + a.interne_nr : '') + ', ' + (zeilePhase || aktText) + (ueb ? ', Übergabe ' + ueb + (ueber ? ' überschritten' : '') : ''),
+      onclick: function () { oeffne(a.id).catch(EG.fehler); }
+    },
+      h('span', { class: 'vz-c-ueb' + (ueber ? ' rot-text fett' : ueb ? '' : ' muted'), text: ueb ? ueb + (ueber ? ' (überschritten)' : '') : '–' }),
+      h('span', { class: 'vz-c-nr' + (a.interne_nr ? '' : ' muted'), text: a.interne_nr || '–' }),
+      h('span', { class: 'vz-c-fz' }, h('strong', { text: akteTitel(a) }),
+        a.autrado_nr ? h('span', { class: 'vz-sub vz-nur-pc', text: 'Autrado ' + a.autrado_nr }) : null,
+        h('span', { class: 'ac-nur-handy vz-handy fz-fin' + (a.fin ? '' : ' muted'), text: 'FIN ' + (a.fin || '–') }),
+        h('span', { class: 'ac-nur-handy vz-handy fett', text: a.kunde_name || 'Kunde fehlt' }),
+        h('span', { class: 'ac-nur-handy vz-handy muted', text: [nrText, a.verkaeufer, ueb ? 'Übergabe ' + ueb : ''].filter(Boolean).join(' · ') }),
+        ueber ? h('span', { class: 'ac-nur-handy vz-handy rot-text fett', text: 'Übergabe überschritten' }) : null),
+      h('span', { class: 'vz-c-fin fz-fin' + (a.fin ? '' : ' muted'), text: a.fin || '–' }),
+      h('span', { class: 'vz-c-kunde' + (a.kunde_name ? ' fett' : ' muted'), text: a.kunde_name || 'Kunde fehlt' }),
+      h('span', { class: 'vz-c-verk' + (a.verkaeufer ? '' : ' muted'), text: a.verkaeufer || '–' }),
+      h('span', { class: 'vz-c-dots' }, dots),
+      h('span', { class: 'vz-c-stand' }, EG.pill(aktText, aktArt),
+        zeilePhase ? h('span', { class: 'vz-sub', text: zeilePhase.replace(/^Jetzt: [^–]+– /, '') }) : null));
   }
 
   async function neueAkte(vb) {

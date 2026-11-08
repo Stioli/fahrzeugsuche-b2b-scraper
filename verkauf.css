@@ -104,6 +104,36 @@
   .ac-nur-handy{display:inline}
 }
 
+/* Zeilenansicht Reiter Anlieferungen (.an-) und Verkauf (.vz-): gleiche Grundzeile wie oben (.ac-zeile), eigene Spalten */
+.an-zeile{grid-template-columns:172px 58px minmax(150px,1.5fr) minmax(90px,1fr) 150px minmax(80px,.8fr) 196px}
+.an-c-fz{white-space:normal !important;line-height:1.3}
+.an-c-fin{font-size:13px !important}
+.an-c-hinw{white-space:normal !important;font-size:13px;line-height:1.25}
+.an-c-status .pill,.vz-c-stand .pill{font-size:13px;padding:2px 9px;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+.vz-zeile{grid-template-columns:100px 58px minmax(130px,1.3fr) 140px minmax(100px,1.1fr) 56px 140px minmax(140px,1.3fr)}
+.vz-c-fin{font-size:13px !important}
+.vz-c-ueb{white-space:normal !important;line-height:1.25}
+.vz-c-fz,.vz-c-stand{white-space:normal !important}
+.vz-sub{display:block;font-size:13px;line-height:1.3;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vz-c-dots .vk-dots{margin:0;gap:2px;flex-wrap:nowrap}
+.vz-c-dots .vk-dot{width:12px;height:12px}
+.ac-zeile .fett{font-weight:700}
+@media(max-width:760px){
+  .an-zeile,.vz-zeile{grid-template-columns:minmax(0,1fr) auto;align-items:start}
+  .an-c-termin,.an-c-nr,.an-c-lief,.an-c-fin,.an-c-hinw,
+  .vz-c-ueb,.vz-c-nr,.vz-c-fin,.vz-c-kunde,.vz-c-verk,.vz-nur-pc,.vz-c-stand .vz-sub{display:none !important}
+  .ac-zeile .an-handy,.ac-zeile .vz-handy{display:block;font-size:13px;line-height:1.3}
+  .ac-zeile .vz-handy.fett{font-size:14px;color:var(--ink)}
+  .ac-zeile .an-handy.fz-fin,.ac-zeile .vz-handy.fz-fin{font-size:12.5px;color:var(--ink);white-space:nowrap;overflow-wrap:normal}
+  .vz-zeile{grid-template-areas:"fz stand" "fz dots"}
+  .vz-c-fz{grid-area:fz}
+  .vz-c-stand{grid-area:stand;text-align:right}
+  .vz-c-dots{grid-area:dots;align-self:end;justify-self:end;margin-top:6px}
+  .vz-c-dots .vk-dot{width:10px;height:10px;border-width:1.5px}
+  .an-c-status{text-align:right}
+  .an-c-status .pill,.vz-c-stand .pill{max-width:42vw}
+}
+
 @media(max-width:420px){
   .vk-ph-name{font-size:17px}
   .vk-ac-zeile .vk-seg{width:100%}

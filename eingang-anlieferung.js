@@ -147,10 +147,13 @@
       h('div', { class: 'leiste-zeile' }, sync,
         h('button', { type: 'button', class: 'btn btn-ghost', text: 'Fahrzeug von Hand anlegen', onclick: function () { handAnlegen().catch(EG.fehler); } })),
       chipLeiste));
-    S.listenBox = h('div', { class: 'raster' });
+    S.listenBox = h('div', { class: 'ac-tabelle', role: 'list' });
     S.root.appendChild(S.listenBox);
     fuelleListe();
   }
+  /** Spalten der Zeilenansicht: [Kopf, Klasse]. Auf dem Handy bleiben Fahrzeug (mit Kurzzeile) und Status. */
+  var SPALTEN = [['Termin', 'an-c-termin'], ['Nr.', 'an-c-nr'], ['Fahrzeug', 'an-c-fz'], ['Lieferant', 'an-c-lief'],
+    ['FIN', 'an-c-fin'], ['Hinweis', 'an-c-hinw'], ['Status', 'an-c-status']];
   function fuelleListe() {
     var box = S.listenBox; box.innerHTML = '';
     var fl = S.filter === 'offen' ? OFFEN : S.filter === 'erledigt' ? ERLEDIGT : null;
@@ -159,24 +162,46 @@
       var x = a.gepl_anlieferung || '9999-12-31', y = b.gepl_anlieferung || '9999-12-31';
       return x < y ? -1 : x > y ? 1 : 0;
     });
-    if (!l.length) { box.appendChild(h('div', { class: 'leer', style: 'grid-column:1/-1', text: 'Keine Fahrzeuge in dieser Ansicht.' })); return; }
-    l.forEach(function (f) { box.appendChild(fzKarte(f)); });
+    if (!l.length) { box.appendChild(h('div', { class: 'leer', text: 'Keine Fahrzeuge in dieser Ansicht.' })); return; }
+    box.appendChild(h('div', { class: 'ac-zeile an-zeile ac-kopfzeile', 'aria-hidden': 'true' },
+      SPALTEN.map(function (s) { return h('span', { class: s[1], text: s[0] }); })));
+    l.forEach(function (f) { box.appendChild(fzZeile(f)); });
   }
-  function fzKarte(f) {
-    var rot = ueberfaellig(f), st = STATUS[f.status] || [f.status, 'grau'], termin;
+  /** Ein Fahrzeug = eine Zeile. Tippen öffnet die Eingangsprüfung. */
+  function fzZeile(f) {
+    var rot = ueberfaellig(f), st = STATUS[f.status] || [f.status, 'grau'], termin, faellig = false;
     if (f.status === 'erwartet') {
-      var faellig = f.gepl_anlieferung && f.gepl_anlieferung < EG.heute();
-      termin = 'Geplant: ' + (EG.fmtDatum(f.gepl_anlieferung) || 'kein Termin') + (faellig ? ' (Termin überschritten)' : '');
-    } else if (f.geprueft_am) termin = 'Geprüft: ' + EG.fmtZeit(f.geprueft_am);
-    else termin = 'Angeliefert: ' + EG.fmtZeit(f.angeliefert_am);
-    return h('button', { type: 'button', class: 'karte fz-karte' + (rot ? ' rot' : ''), onclick: function () { oeffne(f.id).catch(EG.fehler); } },
-      h('div', { class: 'karte-kopf' }, h('div', { class: 'fz-titel', text: fzTitel(f) }), EG.pill(st[0], st[1])),
-      h('div', { class: 'fz-zeile', text: [f.farbe, f.lieferant].filter(Boolean).join(' · ') }),
-      h('div', { class: 'fz-zeile fz-fin', text: 'FIN ' + (f.fin || '–') + (f.interne_nr ? ' · Nr. ' + f.interne_nr : '') }),
-      h('div', { class: 'fz-zeile', text: termin }),
-      rot ? h('div', { class: 'fz-zeile rot-text fett', text: 'Prüfung überfällig – seit über einem Werktag angeliefert' }) : null,
-      f.nicht_mehr_in_masterliste ? h('div', { class: 'fz-zeile' }, EG.pill('nicht mehr in der Masterliste', 'gold')) : null,
-      f.quelle === 'hand' ? h('div', { class: 'fz-zeile klein', text: 'von Hand angelegt' }) : null);
+      faellig = !!f.gepl_anlieferung && f.gepl_anlieferung < EG.heute();
+      termin = 'Geplant ' + (EG.fmtDatum(f.gepl_anlieferung) || '– kein Termin');
+    } else if (f.geprueft_am) termin = 'Geprüft ' + EG.fmtDatum(f.geprueft_am);
+    else termin = 'Angeliefert ' + (EG.fmtDatum(f.angeliefert_am) || '–');
+    /** Hinweise als neue Knoten (je Aufruf frisch, weil sie am PC und am Handy an verschiedenen Stellen stehen). */
+    function hinweise() {
+      return [
+        rot ? h('span', { class: 'rot-text fett', text: 'Prüfung überfällig' }) : null,
+        faellig ? h('span', { class: 'rot-text fett', text: 'Termin überschritten' }) : null,
+        f.nicht_mehr_in_masterliste ? EG.pill('nicht mehr in der Masterliste', 'gold') : null,
+        f.quelle === 'hand' ? h('span', { class: 'muted', text: 'von Hand angelegt' }) : null
+      ].filter(Boolean).map(function (x, i) { return i ? [' ', x] : x; });
+    }
+    var hatHinweis = rot || faellig || f.nicht_mehr_in_masterliste || f.quelle === 'hand';
+    var titelLang = [termin, faellig ? 'Termin überschritten' : '', rot ? 'Prüfung überfällig – seit über einem Werktag angeliefert' : ''].filter(Boolean).join(' · ');
+    return h('button', {
+      type: 'button', role: 'listitem', class: 'ac-zeile an-zeile' + (rot ? ' rot' : '') + (ERLEDIGT.indexOf(f.status) >= 0 ? ' fertig' : ''),
+      title: titelLang,
+      'aria-label': fzTitel(f) + (f.interne_nr ? ', Nr. ' + f.interne_nr : '') + ', ' + st[0] + ', ' + titelLang,
+      onclick: function () { oeffne(f.id).catch(EG.fehler); }
+    },
+      h('span', { class: 'an-c-termin' + (faellig || rot ? ' rot-text fett' : ''), text: termin }),
+      h('span', { class: 'an-c-nr' + (f.interne_nr ? '' : ' muted'), text: f.interne_nr || '–' }),
+      h('span', { class: 'an-c-fz' }, h('strong', { text: fzTitel(f) }), f.farbe ? h('span', { class: 'muted', text: ' · ' + f.farbe }) : null,
+        h('span', { class: 'ac-nur-handy an-handy fz-fin' + (f.fin ? '' : ' muted'), text: 'FIN ' + (f.fin || '–') }),
+        h('span', { class: 'ac-nur-handy an-handy muted', text: [f.interne_nr ? 'Nr. ' + f.interne_nr : '', f.lieferant, termin].filter(Boolean).join(' · ') }),
+        hatHinweis ? h('span', { class: 'ac-nur-handy an-handy' }, hinweise()) : null),
+      h('span', { class: 'an-c-lief' + (f.lieferant ? '' : ' muted'), title: f.lieferant || null, text: f.lieferant || '–' }),
+      h('span', { class: 'an-c-fin fz-fin' + (f.fin ? '' : ' muted'), text: f.fin || '–' }),
+      h('span', { class: 'an-c-hinw' }, hinweise()),
+      h('span', { class: 'an-c-status' }, EG.pill(st[0], st[1])));
   }
   async function aktualisieren(btn) {
     if (EG.demo) { EG.toast('Demo: Der Abgleich mit der Masterliste wird nur simuliert.'); return; }

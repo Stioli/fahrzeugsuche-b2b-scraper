@@ -545,6 +545,14 @@
       '.iz-tabelle tr.fil input,.iz-tabelle tr.fil select{min-height:38px;padding:6px 10px;font-size:13px;border-radius:8px}',
       '.iz-tabelle td{padding:12px 14px;border-bottom:1px solid var(--iz-rahmen);font-size:14.5px;vertical-align:middle}',
       '.iz-tabelle tbody tr:hover td{background:#f7faff}',
+      '.iz-tabelle tbody tr.iz-zeile-klick{cursor:pointer}',
+      /* Ganze Zeile öffnet die Details, deshalb Spalte „Aktion“ ausgeblendet; Zellen enger, damit alle Spalten Platz haben */
+      '.iz-tabelle{overflow-x:auto}',
+      '.iz-tabelle th,.iz-tabelle td{padding-left:10px;padding-right:10px}',
+      '.iz-tabelle tbody td:nth-child(3){min-width:150px}',
+      '.iz-tabelle th.sort{white-space:normal;letter-spacing:.3px}',
+      '.iz-tabelle thead th:last-child,.iz-tabelle tbody td:last-child{display:none}',
+      '.iz-tabelle tbody tr.iz-zeile-klick:hover{background:#f7faff}',
       '.iz-tabelle tbody tr:last-child td{border-bottom:none}',
       '.iz-nr{font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-weight:700;color:var(--iz-blau-d)}',
       '.iz-fin{font-family:"Courier New",monospace;font-size:12.5px;color:var(--iz-sub)}',
@@ -624,11 +632,18 @@
       '.iz-lb-close{position:absolute;top:16px;right:20px;width:48px;height:48px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:22px;cursor:pointer}',
       /* Handy / Tablet */
       '@media (max-width:900px){.iz-tabelle tr.fil{display:none}.iz-mobilbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.iz-mobilbar select{flex:1;min-width:140px}',
-      ' .iz-tabelle thead{display:none}.iz-tabelle table,.iz-tabelle tbody,.iz-tabelle tr,.iz-tabelle td{display:block;width:100%}',
-      ' .iz-tabelle tbody tr{padding:12px 14px;border-bottom:8px solid var(--iz-bg)}',
-      ' .iz-tabelle td{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border:none}',
-      ' .iz-tabelle td::before{content:attr(data-l);color:var(--iz-sub);font-size:13px;flex-shrink:0}',
-      ' .iz-tabelle td:last-child{justify-content:flex-end;padding-top:8px}.iz-tabelle td:last-child::before{content:none}}',
+      /* Handy: ein Fahrzeug = eine Zeile (zwei Textzeilen). Oben Fahrzeug | Preis, darunter Nr. · Datum · Kennzeichen | Status. Tippen öffnet die Details. */
+      ' .iz-tabelle thead{display:none}.iz-tabelle table,.iz-tabelle tbody{display:block;width:100%}',
+      ' .iz-tabelle tbody tr{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:2px 10px;padding:8px 12px;border-top:1px solid var(--iz-rahmen)}',
+      ' .iz-tabelle tbody tr:first-child{border-top:0}',
+      ' .iz-tabelle td{padding:0;border:none;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      ' .iz-tabelle td:nth-child(3){grid-column:1/4;grid-row:1;font-size:15px;white-space:normal;line-height:1.3}',
+      ' .iz-tabelle td:nth-child(8){grid-column:4;grid-row:1;text-align:right}',
+      ' .iz-tabelle td:nth-child(1){grid-column:1;grid-row:2}',
+      ' .iz-tabelle td:nth-child(2){grid-column:2;grid-row:2;color:var(--iz-sub)}',
+      ' .iz-tabelle td:nth-child(5){grid-column:3;grid-row:2;color:var(--iz-sub)}',
+      ' .iz-tabelle td:nth-child(9){grid-column:4;grid-row:2;text-align:right}',
+      ' .iz-tabelle td:nth-child(4),.iz-tabelle td:nth-child(6),.iz-tabelle td:nth-child(7),.iz-tabelle td:nth-child(10){display:none}}',
       '@media (max-width:720px){.iz-stats{grid-template-columns:repeat(3,1fr);gap:8px}.iz-stat{padding:10px}.iz-stat-v{font-size:24px}.iz-stat-l{font-size:11px;letter-spacing:.4px}',
       ' .iz-root{padding:10px}.iz-sec{padding:16px 14px}.iz-grid{grid-template-columns:1fr}.iz-cbgrid{grid-template-columns:1fr}',
       ' .iz-mn-kopf{display:none}.iz-mn-zeile{grid-template-columns:1fr;gap:6px;padding:12px 0}.iz-mn-zeile .nm{color:var(--iz-blau-d);font-weight:700}',
@@ -777,7 +792,7 @@
     if (!daten.length) { tab.style.display = 'none'; leer.style.display = 'block'; return; }
     leer.style.display = 'none'; tab.style.display = 'table';
     r.querySelector('#iz-body').innerHTML = daten.map(function (a) {
-      return '<tr>' +
+      return '<tr class="iz-zeile-klick" data-detail="' + esc(a.id) + '">' +
         '<td data-l="Interne Nr."><span class="iz-nr">' + esc(a.interne_nr || '–') + '</span></td>' +
         '<td data-l="Datum">' + fmtDatum(a.erstellt_am) + '</td>' +
         '<td data-l="Fahrzeug"><strong>' + esc(fzBez(a)) + '</strong></td>' +
