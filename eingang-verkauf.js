@@ -360,13 +360,23 @@
       erlaubtAnlegen() ? h('button', { type: 'button', class: 'btn btn-ghost', text: 'Akte nachtragen', title: 'Für einen Verkauf, der schon passiert ist', onclick: function () { neueAkte({ nachtrag: true }).catch(EG.fehler); } }) : null);
     if (meineRolle() === 'dispo') S.root.appendChild(pushKasten());
     S.root.appendChild(h('div', { class: 'leiste' }, h('div', { class: 'leiste-zeile' }, suchFeld), zeile2, chipLeiste));
-    S.listenBox = h('div', { class: 'ac-tabelle', role: 'list' });
-    S.root.appendChild(S.listenBox);
+    S.sp = S.sp || { f: {}, sort: null };   // Spaltenfilter und Sortierung bleiben beim Neuzeichnen erhalten
+    S.listenBox = h('div', { role: 'list' });
+    S.root.appendChild(h('div', { class: 'ac-tabelle' }, EG.zeilenKopf('vz-zeile', SPALTEN, S.sp, fuelleListe, S.akten), S.listenBox));
     fuelleListe();
   }
-  /** Spalten der Zeilenansicht: [Kopf, Klasse]. Auf dem Handy bleiben Fahrzeug/Kunde (mit Kurzzeile), Stand und Phasen-Punkte. */
-  var SPALTEN = [['Übergabe', 'vz-c-ueb'], ['Nr.', 'vz-c-nr'], ['Fahrzeug', 'vz-c-fz'], ['FIN', 'vz-c-fin'], ['Kunde', 'vz-c-kunde'],
-    ['Verk.', 'vz-c-verk'], ['Phasen', 'vz-c-dots'], ['Stand', 'vz-c-stand']];
+  /** Spalten der Zeilenansicht (Kopf mit Sortierung und Filter: EG.zeilenKopf). Auf dem Handy bleiben Fahrzeug/Kunde (mit Kurzzeilen), Stand und Phasen-Punkte.
+      „Stand“ als Textfilter, weil er in der Ansicht „Für Dispo offen“ anders lautet. */
+  var SPALTEN = [
+    { t: 'Übergabe', c: 'vz-c-ueb', w: function (a) { return a.uebergabe_termin ? EG.fmtDatum(a.uebergabe_termin) : ''; }, s: function (a) { return a.uebergabe_termin || ''; }, ph: 'z.B. 14.11' },
+    { t: 'Nr.', c: 'vz-c-nr', w: function (a) { return a.interne_nr || ''; }, ph: 'Nr.' },
+    { t: 'Fahrzeug', c: 'vz-c-fz', w: function (a) { return akteTitel(a) + (a.autrado_nr ? ' Autrado ' + a.autrado_nr : ''); }, s: akteTitel, ph: 'Marke/Modell' },
+    { t: 'FIN', c: 'vz-c-fin', w: function (a) { return a.fin || ''; }, ph: 'FIN' },
+    { t: 'Kunde', c: 'vz-c-kunde', w: function (a) { return a.kunde_name || ''; }, ph: 'Name' },
+    { t: 'Verk.', c: 'vz-c-verk', w: function (a) { return a.verkaeufer || ''; }, wahl: true },
+    { t: 'Phasen', c: 'vz-c-dots', aus: true },
+    { t: 'Stand', c: 'vz-c-stand', w: function (a) { var x = standVon(a); return x.aktText + (x.zeilePhase ? ' ' + x.zeilePhase : ''); }, s: function (a) { return standVon(a).aktText; }, ph: 'z.B. Zahlung' }
+  ];
   function fuelleListe() {
     var box = S.listenBox; box.innerHTML = '';
     var l = S.akten.filter(function (a) {
@@ -380,9 +390,8 @@
       if (oa) { var x = a.uebergabe_termin || '9999-12-31', y = b.uebergabe_termin || '9999-12-31'; return x < y ? -1 : x > y ? 1 : 0; }
       var u = a.updated_at || '', v = b.updated_at || ''; return u < v ? 1 : u > v ? -1 : 0;
     });
+    l = EG.zeilenFiltern(l, SPALTEN, S.sp);
     if (!l.length) { box.appendChild(h('div', { class: 'leer', text: S.filter === 'dispo' ? 'Gerade keine freigegebene Akte offen.' : S.akten.length ? 'Keine Akten in dieser Ansicht.' : 'Noch keine Verkaufsakte. Lege mit „Neue Verkaufsakte“ die erste an.' })); return; }
-    box.appendChild(h('div', { class: 'ac-zeile vz-zeile ac-kopfzeile', 'aria-hidden': 'true' },
-      SPALTEN.map(function (s) { return h('span', { class: s[1], text: s[0] }); })));
     l.forEach(function (a) { box.appendChild(akteZeile(a)); });
   }
   function ampelZeile(phasen) {
@@ -392,8 +401,8 @@
     });
     return wrap;
   }
-  /** Eine Verkaufsakte = eine Zeile. Tippen öffnet die Akte. */
-  function akteZeile(a) {
+  /** Stand einer Akte für Zeile, Filter und Sortierung → { phasen, aktText, aktArt, zeilePhase, rot } */
+  function standVon(a) {
     var c = S.listCalc[a.id], phasen, aktText, aktArt = 'grau', zeilePhase = '', rot = false;
     if (!istOffen(a)) {
       var abg = a.phase_aktuell === 'abgebrochen';
@@ -412,6 +421,11 @@
         zeilePhase = [ds.frei ? 'Freigegeben am ' + EG.fmtDatum(ds.frei.am) : '', phasenStand(ds.zahlung), phasenStand(ds.vorbereitung)].filter(Boolean).join(' · ');
       }
     }
+    return { phasen: phasen, aktText: aktText, aktArt: aktArt, zeilePhase: zeilePhase, rot: rot };
+  }
+  /** Eine Verkaufsakte = eine Zeile. Tippen öffnet die Akte. */
+  function akteZeile(a) {
+    var sv = standVon(a), phasen = sv.phasen, aktText = sv.aktText, aktArt = sv.aktArt, zeilePhase = sv.zeilePhase, rot = sv.rot;
     var ueber = istOffen(a) && a.uebergabe_termin && a.uebergabe_termin < EG.heute();
     var ueb = a.uebergabe_termin ? EG.fmtDatum(a.uebergabe_termin) : '';
     var nrText = [a.interne_nr ? 'Nr. ' + a.interne_nr : '', a.autrado_nr ? 'Autrado ' + a.autrado_nr : ''].filter(Boolean).join(' · ');

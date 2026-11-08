@@ -147,13 +147,32 @@
       h('div', { class: 'leiste-zeile' }, sync,
         h('button', { type: 'button', class: 'btn btn-ghost', text: 'Fahrzeug von Hand anlegen', onclick: function () { handAnlegen().catch(EG.fehler); } })),
       chipLeiste));
-    S.listenBox = h('div', { class: 'ac-tabelle', role: 'list' });
-    S.root.appendChild(S.listenBox);
+    S.sp = S.sp || { f: {}, sort: null };   // Spaltenfilter und Sortierung bleiben beim Neuzeichnen erhalten
+    S.listenBox = h('div', { role: 'list' });
+    S.root.appendChild(h('div', { class: 'ac-tabelle' }, EG.zeilenKopf('an-zeile', SPALTEN, S.sp, fuelleListe, S.liste), S.listenBox));
     fuelleListe();
   }
-  /** Spalten der Zeilenansicht: [Kopf, Klasse]. Auf dem Handy bleiben Fahrzeug (mit Kurzzeile) und Status. */
-  var SPALTEN = [['Termin', 'an-c-termin'], ['Nr.', 'an-c-nr'], ['Fahrzeug', 'an-c-fz'], ['Lieferant', 'an-c-lief'],
-    ['FIN', 'an-c-fin'], ['Hinweis', 'an-c-hinw'], ['Status', 'an-c-status']];
+  /** Termintext und -datum je Status (geplant / angeliefert / geprüft). */
+  function terminVon(f) {
+    if (f.status === 'erwartet') return { text: 'Geplant ' + (EG.fmtDatum(f.gepl_anlieferung) || '– kein Termin'), datum: f.gepl_anlieferung || '',
+      faellig: !!f.gepl_anlieferung && f.gepl_anlieferung < EG.heute() };
+    if (f.geprueft_am) return { text: 'Geprüft ' + EG.fmtDatum(f.geprueft_am), datum: String(f.geprueft_am).slice(0, 10), faellig: false };
+    return { text: 'Angeliefert ' + (EG.fmtDatum(f.angeliefert_am) || '–'), datum: f.angeliefert_am ? String(f.angeliefert_am).slice(0, 10) : '', faellig: false };
+  }
+  function hinweisText(f) {
+    return [ueberfaellig(f) ? 'Prüfung überfällig' : '', terminVon(f).faellig ? 'Termin überschritten' : '',
+      f.nicht_mehr_in_masterliste ? 'nicht mehr in der Masterliste' : '', f.quelle === 'hand' ? 'von Hand angelegt' : ''].filter(Boolean).join(' ');
+  }
+  /** Spalten der Zeilenansicht (Kopf mit Sortierung und Filter: EG.zeilenKopf). Auf dem Handy bleiben Fahrzeug (mit Kurzzeilen) und Status. */
+  var SPALTEN = [
+    { t: 'Termin', c: 'an-c-termin', w: function (f) { return terminVon(f).text; }, s: function (f) { return terminVon(f).datum; }, ph: 'z.B. 11.11' },
+    { t: 'Nr.', c: 'an-c-nr', w: function (f) { return f.interne_nr || ''; }, ph: 'Nr.' },
+    { t: 'Fahrzeug', c: 'an-c-fz', w: function (f) { return fzTitel(f) + (f.farbe ? ' · ' + f.farbe : ''); }, ph: 'Marke/Modell' },
+    { t: 'Lieferant', c: 'an-c-lief', w: function (f) { return f.lieferant || ''; }, wahl: true },
+    { t: 'FIN', c: 'an-c-fin', w: function (f) { return f.fin || ''; }, ph: 'FIN' },
+    { t: 'Hinweis', c: 'an-c-hinw', w: hinweisText, ph: 'Hinweis' },
+    { t: 'Status', c: 'an-c-status', w: function (f) { return (STATUS[f.status] || [f.status])[0]; }, wahl: true }
+  ];
   function fuelleListe() {
     var box = S.listenBox; box.innerHTML = '';
     var fl = S.filter === 'offen' ? OFFEN : S.filter === 'erledigt' ? ERLEDIGT : null;
@@ -162,19 +181,13 @@
       var x = a.gepl_anlieferung || '9999-12-31', y = b.gepl_anlieferung || '9999-12-31';
       return x < y ? -1 : x > y ? 1 : 0;
     });
+    l = EG.zeilenFiltern(l, SPALTEN, S.sp);
     if (!l.length) { box.appendChild(h('div', { class: 'leer', text: 'Keine Fahrzeuge in dieser Ansicht.' })); return; }
-    box.appendChild(h('div', { class: 'ac-zeile an-zeile ac-kopfzeile', 'aria-hidden': 'true' },
-      SPALTEN.map(function (s) { return h('span', { class: s[1], text: s[0] }); })));
     l.forEach(function (f) { box.appendChild(fzZeile(f)); });
   }
   /** Ein Fahrzeug = eine Zeile. Tippen öffnet die Eingangsprüfung. */
   function fzZeile(f) {
-    var rot = ueberfaellig(f), st = STATUS[f.status] || [f.status, 'grau'], termin, faellig = false;
-    if (f.status === 'erwartet') {
-      faellig = !!f.gepl_anlieferung && f.gepl_anlieferung < EG.heute();
-      termin = 'Geplant ' + (EG.fmtDatum(f.gepl_anlieferung) || '– kein Termin');
-    } else if (f.geprueft_am) termin = 'Geprüft ' + EG.fmtDatum(f.geprueft_am);
-    else termin = 'Angeliefert ' + (EG.fmtDatum(f.angeliefert_am) || '–');
+    var rot = ueberfaellig(f), st = STATUS[f.status] || [f.status, 'grau'], ti = terminVon(f), termin = ti.text, faellig = ti.faellig;
     /** Hinweise als neue Knoten (je Aufruf frisch, weil sie am PC und am Handy an verschiedenen Stellen stehen). */
     function hinweise() {
       return [

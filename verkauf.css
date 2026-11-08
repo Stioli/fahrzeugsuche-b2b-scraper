@@ -92,9 +92,20 @@
 .ac-zeile:hover,.ac-zeile:focus-visible{background:#F4F8FD}
 .ac-zeile.rot{border-left-color:var(--rot-text)}
 .ac-zeile.fertig{background:#FAFBFD}
-.ac-kopfzeile{min-height:38px;border-top:0;background:#EEF1F5;font-size:13px;font-weight:700;color:var(--sub);cursor:default;position:sticky;top:var(--tabs-h,52px);z-index:20;box-shadow:0 3px 8px rgba(26,35,51,.06)}
+/* Kopf (Überschriften + Filterzeile) bleibt beim Scrollen unter der Reiterleiste stehen */
+.ac-kopfbox{position:sticky;top:var(--tabs-h,52px);z-index:20;box-shadow:0 3px 8px rgba(26,35,51,.06)}
+.ac-kopfzeile{min-height:38px;border-top:0;background:#EEF1F5;font-size:13px;font-weight:700;color:var(--sub);cursor:default}
 .ac-kopfzeile > span{white-space:normal !important;line-height:1.15}
 .ac-zeile .pill{font-size:13px;padding:2px 8px}
+.ac-th{display:block;width:100%;background:none;border:0;padding:2px 0;margin:0;font:inherit;color:inherit;text-align:left;cursor:pointer;line-height:1.15;border-radius:6px}
+.ac-th:hover,.ac-th.an{color:var(--blau-dark)}
+.ac-pf{font-size:11px;color:var(--blau-dark);opacity:.5}
+.ac-th.an .ac-pf{opacity:1}
+.ac-filterzeile{min-height:0;padding-top:6px;padding-bottom:7px;background:#fff;cursor:default}
+.ac-filterzeile:hover{background:#fff}
+.ac-filterzeile > div{min-width:0}
+.ac-filterzeile input,.ac-filterzeile select{min-height:32px;height:32px;padding:2px 8px;font-size:13px;border-radius:8px}
+.ac-filterzeile select{padding-right:2px}
 .ac-kopfzeile:hover{background:#EEF1F5}
 .ac-zeile > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ac-c-fz{white-space:normal !important}
@@ -104,7 +115,7 @@
   .ac-zeile{grid-template-columns:92px 1fr auto;padding:8px 10px;font-size:14px}
   .ac-c-termin{white-space:normal !important}
   .ac-c-termin .pill{white-space:normal;line-height:1.2}
-  .ac-c-nr,.ac-c-mw,.ac-kopfzeile,.ac-farbe{display:none !important}
+  .ac-c-nr,.ac-c-mw,.ac-kopfzeile,.ac-kopfbox,.ac-farbe{display:none !important}
   .ac-nur-handy{display:inline}
 }
 

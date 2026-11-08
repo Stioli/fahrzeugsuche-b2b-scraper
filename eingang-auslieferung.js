@@ -325,22 +325,33 @@
       h('div', { class: 'leiste-zeile' }, suchFeld),
       h('div', { class: 'leiste-zeile ac-aktual' }, neu, h('span', { class: 'klein muted', text: 'Stand: ' + EG.fmtZeit(S.stand) })),
       chipLeiste));
-    S.listenBox = h('div', { class: 'ac-tabelle', role: 'list' });
-    S.root.appendChild(S.listenBox);
+    S.sp = S.sp || { f: {}, sort: null };   // Spaltenfilter und Sortierung bleiben beim Neuzeichnen erhalten
+    S.listenBox = h('div', { role: 'list' });
+    S.root.appendChild(h('div', { class: 'ac-tabelle' }, EG.zeilenKopf('', SPALTEN, S.sp, fuelleListe, S.fz), S.listenBox));
     fuelleListe();
   }
-  /** Spalten der Zeilenansicht: [Kopf, Klasse]. Auf dem Handy bleiben nur Termin, Fahrzeug und Checkliste. */
-  var SPALTEN = [['Termin', 'ac-c-termin'], ['Nr.', 'ac-c-nr'], ['Fahrzeug', 'ac-c-fz'], ['Status', 'ac-c-mw'],
-    ['Innen', 'ac-c-mw'], ['Außen', 'ac-c-mw'], ['Werkstatt', 'ac-c-mw'], ['Endkontr.', 'ac-c-mw'], ['Checkliste', 'ac-c-check']];
+  function wert(k) { return function (f) { return f[k] || ''; }; }
+  /** Spalten der Zeilenansicht (Kopf mit Sortierung und Filter: EG.zeilenKopf). Auf dem Handy bleiben nur Termin, Fahrzeug und Checkliste. */
+  var SPALTEN = [
+    { t: 'Termin', c: 'ac-c-termin', w: function (f) { return f.termin ? EG.fmtDatum(f.termin) : 'offen'; }, s: function (f) { return f.termin || ''; }, ph: 'z.B. 12.11' },
+    { t: 'Nr.', c: 'ac-c-nr', w: wert('interne_nr'), ph: 'Nr.' },
+    { t: 'Fahrzeug', c: 'ac-c-fz', w: function (f) { return fzTitel(f) + (f.farbe ? ' · ' + f.farbe : ''); }, ph: 'Marke/Modell' },
+    { t: 'Status', c: 'ac-c-mw', w: wert('status'), wahl: true },
+    { t: 'Innen', c: 'ac-c-mw', w: wert('innen'), wahl: true },
+    { t: 'Außen', c: 'ac-c-mw', w: wert('aussen'), wahl: true },
+    { t: 'Werkstatt', c: 'ac-c-mw', w: wert('werkstatt'), wahl: true },
+    { t: 'Endkontr.', c: 'ac-c-mw', w: wert('endkontrolle'), wahl: true },
+    { t: 'Checkliste', c: 'ac-c-check', w: function (f) { var z = fortschritt(f); return istFertig(f) ? 'Fertig' : z.erledigt + '/' + z.gesamt; },
+      s: function (f) { var z = fortschritt(f); return z.gesamt ? z.erledigt / z.gesamt : 0; }, ph: 'z.B. Fertig' }
+  ];
   function fuelleListe() {
     var box = S.listenBox; box.innerHTML = '';
     var l = S.fz.filter(function (f) {
       if (!passtSuche(f)) return false;
       return S.filter === 'alle' || (S.filter === 'offen' ? !istFertig(f) : istFertig(f));
     }).sort(sortiere);
+    l = EG.zeilenFiltern(l, SPALTEN, S.sp);
     if (!l.length) { box.appendChild(h('div', { class: 'leer', text: S.fz.length ? 'Keine Fahrzeuge in dieser Ansicht.' : 'Zurzeit steht kein Fahrzeug zur Auslieferung an.' })); return; }
-    box.appendChild(h('div', { class: 'ac-zeile ac-kopfzeile', 'aria-hidden': 'true' },
-      SPALTEN.map(function (s) { return h('span', { class: s[1], text: s[0] }); })));
     l.forEach(function (f) { box.appendChild(fzZeile(f)); });
   }
   /** Vier Werte aus der Masterliste als kleine Marken (leer = grau). */

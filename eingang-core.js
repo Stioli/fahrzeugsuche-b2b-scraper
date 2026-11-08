@@ -79,6 +79,84 @@
   };
   /** Kleine Statusmarke. art: '' | 'grau' | 'gruen' | 'rot' | 'gold' */
   EG.pill = function (text, art) { return h('span', { class: 'pill' + (art ? ' ' + art : ''), text: text }); };
+
+  /* ---------- Zeilenlisten: Kopf mit Sortierung und Filter je Spalte (Version 2.5, Reiter Anlieferungen, Verkauf, Auslieferung) ----------
+     spalten: [{ t: 'Titel', c: 'zellklasse', w: function (x) → Text zum Filtern/Sortieren, s: function (x) → Sortierwert (optional),
+                 ph: 'Platzhalter', wahl: true = Auswahlfeld statt Textfeld, aus: true = kein Filter/keine Sortierung }]
+     st: Zustand je Reiter { f: {Index: Wert}, sort: null | { i, dir: 1 | -1 } }, bleibt beim Neuzeichnen erhalten. */
+  EG.zeilenKopf = function (zeilenKlasse, spalten, st, neu, daten) {
+    st.f = st.f || {};
+    var knoepfe = [];
+    function zeichen() {
+      knoepfe.forEach(function (k) {
+        var an = st.sort && st.sort.i === k.i;
+        k.ind.textContent = an ? (st.sort.dir > 0 ? ' ▲' : ' ▼') : ' ⇅';
+        k.b.classList.toggle('an', !!an);
+        k.b.setAttribute('aria-sort', an ? (st.sort.dir > 0 ? 'ascending' : 'descending') : 'none');
+      });
+    }
+    var kopf = h('div', { class: 'ac-zeile ac-kopfzeile ' + zeilenKlasse },
+      spalten.map(function (sp, i) {
+        if (sp.aus) return h('span', { class: sp.c, text: sp.t });
+        var ind = h('span', { class: 'ac-pf', 'aria-hidden': 'true' });
+        var b = h('button', {
+          type: 'button', class: 'ac-th', title: 'Sortieren nach ' + sp.t,
+          onclick: function () {   // auf → ab → Standard-Reihenfolge
+            if (!st.sort || st.sort.i !== i) st.sort = { i: i, dir: 1 };
+            else if (st.sort.dir > 0) st.sort.dir = -1;
+            else st.sort = null;
+            zeichen(); neu();
+          }
+        }, sp.t, ind);
+        knoepfe.push({ i: i, b: b, ind: ind });
+        return h('span', { class: sp.c }, b);
+      }));
+    var filter = h('div', { class: 'ac-zeile ac-filterzeile ' + zeilenKlasse },
+      spalten.map(function (sp, i) {
+        var zelle = h('div', { class: sp.c });
+        if (sp.aus) return zelle;
+        var feld;
+        if (sp.wahl) {
+          var werte = {};
+          (daten || []).forEach(function (x) { var v = String(sp.w(x) || '').trim(); if (v) werte[v] = true; });
+          feld = h('select', { 'aria-label': 'Filter ' + sp.t, onchange: function () { st.f[i] = feld.value; neu(); } },
+            h('option', { value: '', text: 'Alle' }),
+            Object.keys(werte).sort(function (a, b) { return a.localeCompare(b, 'de', { numeric: true }); })
+              .map(function (v) { return h('option', { value: v, text: v }); }));
+        } else {
+          feld = h('input', { type: 'text', placeholder: sp.ph || 'filtern…', 'aria-label': 'Filter ' + sp.t, autocomplete: 'off',
+            oninput: function () { st.f[i] = feld.value; neu(); } });
+        }
+        feld.value = st.f[i] || '';
+        zelle.appendChild(feld);
+        return zelle;
+      }));
+    zeichen();
+    return h('div', { class: 'ac-kopfbox' }, kopf, filter);
+  };
+  /** Filtert nach den Spaltenfiltern und sortiert nach der gewählten Spalte (sonst bleibt die Reihenfolge der Liste). */
+  EG.zeilenFiltern = function (liste, spalten, st) {
+    var f = st.f || {};
+    var l = liste.filter(function (x) {
+      return spalten.every(function (sp, i) {
+        var q = String(f[i] || '').trim().toLowerCase(); if (!q || sp.aus) return true;
+        var v = String(sp.w(x) || '').toLowerCase();
+        return sp.wahl ? v.trim() === q : v.indexOf(q) >= 0;
+      });
+    });
+    if (st.sort && spalten[st.sort.i]) {
+      var sp = spalten[st.sort.i], dir = st.sort.dir;
+      var wert = function (x) { var v = sp.s ? sp.s(x) : sp.w(x); return v == null ? '' : v; };
+      l = l.map(function (x, n) { return { x: x, n: n, v: wert(x) }; }).sort(function (a, b) {
+        var leerA = a.v === '' , leerB = b.v === '';
+        if (leerA !== leerB) return leerA ? 1 : -1;          // leere Werte immer ans Ende
+        var c = (typeof a.v === 'number' && typeof b.v === 'number') ? a.v - b.v
+          : String(a.v).localeCompare(String(b.v), 'de', { numeric: true, sensitivity: 'base' });
+        return c * dir || a.n - b.n;
+      }).map(function (o) { return o.x; });
+    }
+    return l;
+  };
   /** Hinweiskasten. art: 'info' | 'warn' | 'fehler' | 'ok' */
   EG.banner = function (text, art) {
     var b = h('div', { class: 'banner ' + (art || 'info') });
