@@ -1,4 +1,6 @@
-/* Stieber-App – Reiter „Anfragen“ (Leads), Version 2.0, Stand 01.11.2026
+/* Stieber-App – Reiter „Anfragen“ (Leads), Version 2.2, Stand 08.11.2026
+   2.2: Filter je Spalte, feststehende Kopfzeile mit Sortierung, entprellte Suche, nur die geänderte Zeile neu laden, Konfliktschutz (stand/409),
+   „Mir zuteilen“, Sammelzuteilung (nur Chef), Ranking der Verkäufer.
    Umzug aus dem Ankauf-Dashboard (leads.js, Leads 1.0 vom 26.10.2026).
    Alle Anfragen als Zeilen mit Filtern für alle Felder. Start ist „Heute dran“ (Neues, Überfälliges, heute Fälliges),
    „Alle“ zeigt die neueste Anfrage oben (Oli 01.11.2026). Spalten: letzter Kontakt, besprochen, wie weiter, nächster Kontakt.
@@ -10,7 +12,7 @@
    Baut auf window.EG aus eingang-core.js auf (EG.h, EG.dialog, EG.onTab …).
    Diese Datei enthält KEINE Schlüssel, Listen-IDs oder Kundendaten. Es wird nie automatisch gesendet:
    WhatsApp und Mail öffnen sich nur als Entwurf bzw. als leerer Chat (wa.me / mailto).
-   Im Browser (localStorage) steht nur: der Schalter „Nur meine“ sowie Anfrage-ID und Uhrzeit des letzten Anrufs.
+   Im Browser (localStorage) steht nur: der Schalter „Nur meine“, ob das Ranking aufgeklappt ist, sowie Anfrage-ID und Uhrzeit des letzten Anrufs.
    Demo (?demo=1): keine Netzaufrufe, zwölf erfundene Anfragen, Aktionen wirken nur im Speicher. */
 (function () {
   'use strict';
@@ -19,6 +21,7 @@
   var h = EG.h;
 
   var LS_MEINE = 'eg_anfragen_nur_meine';      // '1' = nur eigene und nicht zugeteilte Anfragen
+  var LS_RANK = 'eg_anfragen_ranking';         // '1' = Ranking aufgeklappt, '0' = eingeklappt
   var LS_ANRUF = 'eg_anfragen_anruf';          // { id, t }: Anfrage, bei der zuletzt auf Telefon/WhatsApp getippt wurde
   var ANRUF_MS = 30 * 60 * 1000;               // so lange gilt der Merker
   var ANRUF_WARTE_MS = 3000;                   // bleibt die Seite so lange sichtbar (PC), öffnet sich das Fenster gleich
@@ -28,8 +31,10 @@
      ==================================================================== */
   var S = {
     root: null, me: null, initP: null, liste: null, sig: '', alle: null, alleAm: 0,
-    f: { schnell: 'heute', suche: '', felder: {}, offen: false, nurMeine: false }, auf: null, max: 100, box: null, zahlEl: null,
+    f: { schnell: 'heute', suche: '', felder: {}, offen: false, nurMeine: false, sortK: null, sortR: 'auf' }, auf: null, max: 100, box: null, zahlEl: null,
     hinweisEl: null, chipEls: [],
+    kopf: null, kopfKnoepfe: [], fEls: {}, dtKnoepfe: [], resetEl: null, dbT: null,
+    waehlen: false, waehl: {}, sammelEl: null, sammelLaeuft: false, rankEl: null, rankBody: null, rankOffen: null, chkAlle: null, zuteilLaeuft: {},
     offenId: null, bekannt: null, timer: null, laedt: false, letzte: 0,
     pushMsg: null, swRegistriert: false, visHook: false, anrufTimer: null, anrufLaeuft: false
   };
@@ -56,7 +61,7 @@
     + '.ld-zaehler{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px;font-size:15px;font-weight:600}'
     + '.ld-tabelle{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--schatten);overflow:hidden}'
     /* Raster am PC: neun Spalten, genau die in SPALTEN (Anfrage | Name | Fahrzeug | Verk. | Status | Letzter Kontakt | Besprochen | Wie weiter | Nächster Kontakt) */
-    + '.ld-reihe{display:grid;grid-template-columns:66px minmax(0,1.3fr) minmax(0,1.2fr) 58px 142px 72px minmax(0,1.25fr) minmax(118px,.8fr) 86px;align-items:center;gap:8px;width:100%;min-height:48px;padding:6px 12px;border:0;border-top:1px solid var(--border);border-left:6px solid transparent;background:#fff;font-family:var(--font-body);font-size:14px;color:var(--ink);text-align:left;cursor:pointer}'
+    + '.ld-reihe{display:grid;grid-template-columns:var(--ld-chk,) 66px minmax(0,1.3fr) minmax(0,1.2fr) 92px 142px 72px minmax(0,1.25fr) minmax(118px,.8fr) 86px;align-items:center;gap:8px;width:100%;min-height:48px;padding:6px 12px;border:0;border-top:1px solid var(--border);border-left:6px solid transparent;background:#fff;font-family:var(--font-body);font-size:14px;color:var(--ink);text-align:left;cursor:pointer}'
     + '.ld-reihe:hover,.ld-reihe:focus-visible{background:#F4F8FD}'
     + '.ld-reihe > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     + '.ld-reihe.rot{border-left-color:var(--rot-text)}'
@@ -64,7 +69,7 @@
     + '.ld-reihe.auf{background:#E8F0FB}'
     + '.ld-kopfreihe{min-height:38px;border-top:0;background:#EEF1F5;font-size:13px;font-weight:700;color:var(--sub);cursor:default}'
     + '.ld-kopfreihe:hover{background:#EEF1F5}'
-    + '.ld-kopfreihe > span{white-space:normal;line-height:1.15}'
+    + '.ld-kopfreihe > span,.ld-kopfreihe > div{white-space:normal;line-height:1.15;min-width:0}'
     + '.ld-reihe .pill{font-size:13px;padding:2px 8px}'
     + '.ld-l1{display:block;overflow:hidden;text-overflow:ellipsis}'
     + '.ld-sub{display:block;font-size:13px;line-height:1.3;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
@@ -81,16 +86,68 @@
     + '.ld-hinweis{font-size:14px;font-weight:400;color:var(--sub)}'
     /* Zwischenbreite: gleiche neun Spalten, enger */
     + '.ld-c-bes,.ld-c-ww{white-space:normal !important;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.25}'
-    + '@media (min-width:900px) and (max-width:1099px){.ld-reihe{grid-template-columns:58px minmax(0,1.2fr) minmax(0,1.1fr) 54px 124px 68px minmax(0,1.1fr) minmax(100px,.8fr) 78px;gap:6px;padding:6px 10px;font-size:13px}}'
+    + '@media (min-width:900px) and (max-width:1099px){.ld-reihe{grid-template-columns:var(--ld-chk,) 58px minmax(0,1.2fr) minmax(0,1.1fr) 82px 124px 68px minmax(0,1.1fr) minmax(100px,.8fr) 78px;gap:6px;padding:6px 10px;font-size:13px}}'
     /* Handy (unter 900 px): drei Zeilen. Name | Status + nächster Kontakt / Fahrzeug · Verkäufer · IZ · Fin / letzter Kontakt: besprochen → wie weiter */
     + '@media (max-width:899px){.ld-reihe{grid-template-columns:minmax(0,1fr) fit-content(58%);grid-template-areas:"n r" "f f" "l l";gap:0 8px;padding:8px 10px;align-items:start}'
-    +   '.ld-reihe > .ld-c-x,.ld-reihe > .ld-c-an,.ld-kopfreihe,.ld-c-name .ld-sub{display:none !important}'
+    +   '.ld-reihe > .ld-c-x,.ld-reihe > .ld-c-an,.ld-kopfreihe,.ld-kopfbox,.ld-c-chk,.ld-sammel,.ld-auswahlknopf,.ld-c-name .ld-sub{display:none !important}'
     +   '.ld-c-name{grid-area:n;white-space:normal !important;font-size:16px;line-height:1.3}'
     +   '.ld-c-name .ld-l1{overflow:visible;white-space:normal}'
     +   '.ld-reihe > .ld-m{display:block}'
     +   '.ld-reihe > .ld-m-rechts{grid-area:r;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:4px 6px}'
     +   '.ld-reihe > .ld-m-fzg{grid-area:f;margin-top:2px;font-size:14px}'
     +   '.ld-reihe > .ld-m-letzt{grid-area:l;margin-top:2px;font-size:13px;color:var(--sub)}}'
+    /* ---------- Version 2.2: Kopf mit Filtern, Sammelzuteilung, Ranking ---------- */
+    + '.ld-waehlen{--ld-chk:26px}'
+    + '.ld-kopfbox{position:sticky;top:var(--ld-top,52px);z-index:20;background:#fff;border:1px solid var(--border);border-bottom:0;border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 3px 8px rgba(26,35,51,.06)}'
+    + '.ld-tabelle.ld-mitkopf{border-top:0;border-radius:0 0 var(--radius) var(--radius)}'
+    + '@media (max-width:899px){.ld-tabelle.ld-mitkopf{border-top:1px solid var(--border);border-radius:var(--radius)}}'
+    + '.ld-kopfbox .ld-kopfreihe{border-radius:var(--radius) var(--radius) 0 0}'
+    + '.ld-th{display:block;width:100%;background:none;border:0;padding:2px 0;margin:0;font:inherit;color:inherit;text-align:left;cursor:pointer;line-height:1.15;border-radius:6px}'
+    + '.ld-th:hover{color:var(--blau-dark)}'
+    + '.ld-th[data-sort]{color:var(--blau-dark)}'
+    + '.ld-pf{display:inline-block;margin-left:3px;font-size:11px;color:var(--blau-dark)}'
+    + '.ld-filterreihe{min-height:0;padding-top:6px;padding-bottom:7px;background:#fff;border-top:1px solid var(--border);cursor:default}'
+    + '.ld-filterreihe:hover{background:#fff}'
+    + '.ld-filterreihe > div{min-width:0;position:relative}'
+    + '.ld-filterreihe input,.ld-filterreihe select{min-height:32px;height:32px;padding:2px 8px;font-size:13px;border-radius:8px}'
+    + '.ld-filterreihe select{padding-right:2px}'
+    + '.ld-dtknopf{width:100%;height:32px;border:1px solid #C9D5E6;border-radius:8px;background:#fff;color:var(--sub);font:inherit;font-size:12px;padding:0 4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '.ld-dtknopf.an{background:var(--blau);border-color:var(--blau);color:#fff;font-weight:600}'
+    + '.ld-pop{position:absolute;top:36px;left:0;z-index:25;width:210px;padding:10px 12px;background:#fff;border:1px solid #C9D5E6;border-radius:12px;box-shadow:0 8px 24px rgba(26,35,51,.18);text-align:left}'
+    + '.ld-pop.rechts{left:auto;right:0}'
+    + '.ld-pop label{display:block;margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--sub)}'
+    + '.ld-pop input{margin-top:3px}'
+    + '.ld-pop .linklike{min-height:32px;font-size:13px;padding:0}'
+    + '.ld-c-chk{display:none;align-items:center;justify-content:center}'
+    + '.ld-waehlen .ld-c-chk{display:flex}'
+    + '.ld-c-chk input{width:18px;height:18px;min-height:0;accent-color:#007BFF;cursor:pointer;margin:0;padding:0}'
+    + '.ld-reihe.gew{background:#E8F0FB}'
+    + '.ld-c-verk{display:flex !important;align-items:center;gap:4px}'
+    + '.ld-c-verk > .ld-vt{min-width:0;overflow:hidden;text-overflow:ellipsis}'
+    + '.ld-c-verk.ld-nz > .ld-vt{white-space:normal;line-height:1.1}'
+    + '.ld-mir{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;min-height:0;border:1px solid var(--blau);border-radius:999px;background:#fff;color:var(--blau-dark);font:700 14px/1 var(--font-body);cursor:pointer;padding:0}'
+    + '.ld-mir:hover{background:var(--blau);color:#fff}'
+    + '.ld-mir:disabled{opacity:.5;cursor:wait}'
+    + '.ld-m-rechts .ld-mir{width:28px;height:28px}'
+    + '.ld-sammel{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 10px;padding:10px 14px;background:#E8F0FB;border:1px solid #9CC3F5;border-radius:14px;font-size:15px}'
+    + '.ld-sammel select{width:auto;min-width:110px;min-height:40px}'
+    + '.ld-sammel .btn{min-height:40px;font-size:15px;padding:0 14px}'
+    + '.ld-sammel .btn-primary{font-size:16px}'
+    + '.ld-rank{background:#fff;border:1px solid var(--border);border-radius:14px;margin:0 0 12px}'
+    + '.ld-rank > summary{cursor:pointer;min-height:48px;display:flex;align-items:center;gap:8px;padding:0 14px;font-weight:700}'
+    + '.ld-rank-hinweis{font-weight:400;font-size:13px;color:var(--sub)}'
+    + '.ld-rank-wrap{overflow-x:auto;padding:0 14px 12px}'
+    + '.ld-rank table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}'
+    + '.ld-rank th{padding:6px 8px;text-align:right;font-size:12px;font-weight:700;letter-spacing:.03em;color:var(--sub);border-bottom:1px solid var(--border);white-space:normal;line-height:1.15;vertical-align:bottom}'
+    + '.ld-rank td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}'
+    + '.ld-rank th:first-child,.ld-rank td:first-child{text-align:left;width:30px;padding-right:0}'
+    + '.ld-rank th:nth-child(2),.ld-rank td:nth-child(2){text-align:left}'
+    + '.ld-rank tr.platz1 td{background:var(--gold-bg);font-weight:600}'
+    + '.ld-rank tr.rest td{color:var(--sub)}'
+    + '.ld-rank tr:last-child td{border-bottom:0}'
+    + '.ld-rank td .linklike{min-height:32px;padding:0;font-weight:700;text-decoration:none;font-size:14px}'
+    + '.ld-rank td .linklike[aria-pressed=true]{background:var(--blau);color:#fff;border-radius:8px;padding:0 8px}'
+    + '.ld-rank td.warn{color:var(--rot-text);font-weight:700}'
     + '.ld-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-size:18px}'
     + 'summary.ld-h{cursor:pointer;min-height:44px}'
     + '.ld-zahl{background:#E8F0FB;color:var(--blau-dark);border-radius:999px;padding:1px 11px;font-size:14px;font-weight:700}'
@@ -177,19 +234,26 @@
   }
   function wochentag(ymd) { return new Date(ymd + 'T12:00:00Z').toLocaleDateString('de-DE', { weekday: 'long', timeZone: 'UTC' }); }
 
+  var KONFLIKT_TEXT = 'Diese Anfrage wurde inzwischen von jemand anderem geändert. Die Liste wird neu geladen – bitte Eintrag prüfen und erneut speichern.';
+  /** Fehlerantwort einer Edge Function → Error mit .status und .konflikt (HTTP 409 bzw. {fehler:"konflikt", text:"…"}). */
+  async function fehlerLesen(error) {
+    var msg = (error && error.message) || 'Fehler', status = null, konflikt = false;
+    var ctx = error && error.context;
+    if (ctx && typeof ctx.json === 'function') {
+      status = ctx.status || null;
+      try {
+        var j = await ctx.json();
+        if (j && (j.fehler === 'konflikt' || status === 409)) { konflikt = true; msg = j.text || KONFLIKT_TEXT; }
+        else if (j && j.fehler) msg = j.fehler;
+      } catch (e) { if (status === 409) { konflikt = true; msg = KONFLIKT_TEXT; } }
+    }
+    var err = new Error(msg); err.status = status; err.konflikt = konflikt; return err;
+  }
   /** Ruft die Edge Function leads_api auf – gleiche Aktion und gleiche Nutzdaten wie im Dashboard. */
   async function api(aktion, body) {
     if (EG.demo) return demoApi(aktion, body || {});
     var r = await EG.sb.functions.invoke('leads_api', { body: Object.assign({ aktion: aktion }, body || {}) });
-    if (r.error) {
-      var msg = r.error.message || 'Fehler', status = null;
-      var ctx = r.error.context;
-      if (ctx && typeof ctx.json === 'function') {
-        status = ctx.status || null;
-        try { var j = await ctx.json(); if (j && j.fehler) msg = j.fehler; } catch (e) { /* Text bleibt */ }
-      }
-      var err = new Error(msg); err.status = status; throw err;
-    }
+    if (r.error) throw await fehlerLesen(r.error);
     return r.data || {};
   }
 
@@ -388,6 +452,7 @@
       z.notiz ? h('div', { class: 'ld-notiz', text: z.notiz }) : null,
       h('div', { class: 'ld-aktion' },
         h('button', { type: 'button', class: 'btn btn-primary', text: 'Kontakt erfassen', onclick: function () { dlgKontakt(z); } }),
+        kannZuteilen(z) ? h('button', { type: 'button', class: 'btn btn-ghost', text: 'Mir zuteilen', title: 'Verkäufer = ' + S.me.kuerzel, onclick: function (ev) { mirZuteilen(z, ev.currentTarget); } }) : null,
         h('button', { type: 'button', class: 'btn btn-ghost', text: 'Bearbeiten', onclick: function () { dlgBearbeiten(z); } }),
         h('button', { type: 'button', class: 'btn btn-ghost', text: 'Nachfass-Entwurf', onclick: function () { dlgEntwurf(z, false); } }),
         istTermin(z) ? h('button', { type: 'button', class: 'btn btn-ghost ld-akte', text: 'Verkaufsakte anlegen', onclick: function () { verkaufsakteAnlegen(z); } }) : null));
@@ -411,7 +476,7 @@
   ];
   /** Filter je Feld: [Schlüssel, Beschriftung, Art]. text = enthält, wahl = gleich, janein = Ja/Nein (Schalter), von/bis = Datumsgrenze. */
   var FELD_FILTER = [
-    ['name', 'Name', 'text'], ['fahrzeugnr', 'Fahrzeugnummer', 'text'], ['interne_nr', 'Int.-Nr.', 'text'],
+    ['name', 'Name', 'text'], ['fahrzeug', 'Fahrzeug (Hersteller, Modell, Nr.)', 'text'], ['fahrzeugnr', 'Fahrzeugnummer', 'text'], ['interne_nr', 'Int.-Nr.', 'text'],
     ['telefon', 'Telefon', 'text'], ['email', 'E-Mail', 'text'], ['hersteller', 'Hersteller', 'text'],
     ['modell', 'Modell', 'text'], ['typ', 'Typ', 'text'], ['besprochen', 'Besprochen', 'text'],
     ['naechster_schritt', 'Wie weiter', 'text'], ['notiz', 'Kontaktverlauf', 'text'],
@@ -431,9 +496,11 @@
     if (def[2] === 'janein') return wert === 'ja' ? !!z[def[0]] : !z[def[0]];
     if (def[2] === 'wahl') {
       if (wert === KEIN_WERT) return def[0] === 'verkaeufer' ? !zugeteilt(z) : !z[def[0]];
+      if (def[0] === 'verkaeufer') return kz(z.verkaeufer) === kz(wert);
       return z[def[0]] === wert;
     }
     if (def[0] === 'name') return kl(vollerName(z)).indexOf(kl(wert)) >= 0;
+    if (def[0] === 'fahrzeug') return kl([z.hersteller, z.modell, z.fahrzeugnr].filter(Boolean).join(' ')).indexOf(kl(wert)) >= 0;
     if (def[0] === 'telefon' && nurZiffern(wert)) return nurZiffern(z.telefon).indexOf(nurZiffern(wert)) >= 0;
     return kl(z[def[0]]).indexOf(kl(wert)) >= 0;
   }
@@ -463,6 +530,7 @@
       if (q && !passtSuche(z, q)) return false;
       return aktiv.every(function (d) { return feldPasst(z, d, f.felder[d[0]]); });
     });
+    if (f.sortK) return l.sort(spaltenSortierung(f.sortK, f.sortR));
     return l.sort(sch[0] === 'heute' && !ueberAlle ? heuteSortierung(t) : neusteZuerst);
   }
   /** Neueste Anfrage oben; am selben Tag entscheidet die höhere ID. */
@@ -490,17 +558,27 @@
     if (z.wiedervorlage === t) return EG.pill('heute', 'gold');
     return h('span', { text: d });
   }
-  /** Eine Zeile (ein <button>, keine Links darin). Am PC neun Spalten wie SPALTEN, am Handy drei Zeilen (.ld-m-…, siehe CSS). */
+  /** Keine aktive Zuteilung: Verkäufer leer, „sonstige“ oder nicht unter den aktiven. Nur dann gibt es „Mir zuteilen“. */
+  function kannZuteilen(z) { return !!(S.me && S.me.kuerzel) && !zugeteilt(z); }
+  /** Eine Zeile (ein <div role="listitem">, damit echte Knöpfe darin sitzen dürfen). Am PC neun Spalten wie SPALTEN (bei „Auswählen“ plus Kästchen), am Handy drei Zeilen (.ld-m-…, siehe CSS). */
   function reihe(z) {
     var fzg = [z.hersteller, z.modell].filter(Boolean).join(' ') || 'Fahrzeug unbekannt';
     var t = heuteBerlin(), zu = istZu(z), rot = !zu && !!z.wiedervorlage && z.wiedervorlage < t;
     var nz = !zugeteilt(z), verkText = nz ? 'nicht zugeteilt' : z.verkaeufer;
     var herk = [z.herkunft, z.ueber].filter(Boolean).join(' · ');
     var besprochen = flach(z.besprochen), schritt = flach(z.naechster_schritt);
+    var kannMir = kannZuteilen(z);
     function zelle(klasse, text, titel) { return h('span', { class: 'ld-c-x ' + klasse + (text ? '' : ' muted'), text: text || '–', title: titel || text || '' }); }
     function statusPill() {
       var p = EG.pill(z.status || 'ohne', istTermin(z) ? 'gruen' : (zu ? 'grau' : ''));
       p.title = z.status || 'ohne Status'; return p;
+    }
+    function mirKnopf() {
+      var b = h('button', {
+        type: 'button', class: 'ld-mir', text: '+', title: 'Mir zuteilen', 'aria-label': 'Mir zuteilen: ' + (vollerName(z) || 'Anfrage'),
+        onclick: function (ev) { ev.stopPropagation(); mirZuteilen(z, b); }   // klappt die Zeile nicht zusätzlich auf
+      });
+      return b;
     }
     var marken = [];
     if (z.inzahlungnahme) marken.push(h('span', { class: 'ld-mk', text: 'IZ', title: 'Inzahlungnahme' }));
@@ -511,11 +589,23 @@
       var teile = [besprochen, schritt].filter(Boolean);
       letzt = h('span', { class: 'ld-m ld-m-letzt', text: tagMonat(z.letzter_kontakt) + ': ' + (teile.length ? teile.join(' → ') : 'Kontakt') });
     }
-    return h('button', {
-      type: 'button', role: 'listitem', class: 'ld-reihe' + (rot ? ' rot' : '') + (zu ? ' zu' : '') + (S.auf === z.id ? ' auf' : ''),
+    var gewaehlt = !!S.waehl[z.id];
+    var cb = h('input', {
+      type: 'checkbox', checked: gewaehlt, 'aria-label': 'Auswählen: ' + (vollerName(z) || 'Anfrage'),
+      onclick: function (ev) { ev.stopPropagation(); },
+      onchange: function () {
+        if (cb.checked) S.waehl[z.id] = true; else delete S.waehl[z.id];
+        row.classList.toggle('gew', cb.checked); sammelAktualisieren();
+      }
+    });
+    function umschalten() { S.auf = S.auf === z.id ? null : z.id; fuelleZeilen(); }
+    var row = h('div', {
+      role: 'listitem', tabindex: '0', class: 'ld-reihe' + (rot ? ' rot' : '') + (zu ? ' zu' : '') + (S.auf === z.id ? ' auf' : '') + (gewaehlt ? ' gew' : ''),
       'data-id': z.id, 'aria-expanded': S.auf === z.id ? 'true' : 'false',
-      onclick: function () { S.auf = S.auf === z.id ? null : z.id; fuelleZeilen(); }
+      onclick: umschalten,
+      onkeydown: function (ev) { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === ev.currentTarget) { ev.preventDefault(); umschalten(); } }
     },
+      h('span', { class: 'ld-c-chk', onclick: function (ev) { ev.stopPropagation(); } }, cb),
       h('span', { class: 'ld-c-an', text: kurzDatum(z.anfrage) }),
       h('span', { class: 'ld-c-name', title: [vollerName(z), herk].filter(Boolean).join(' · ') },
         h('span', { class: 'ld-l1' },
@@ -525,18 +615,54 @@
       h('span', { class: 'ld-c-x ld-c-fzg', title: [fzg, z.fahrzeugnr].filter(Boolean).join(' · ') },
         h('span', { class: 'ld-l1', text: fzg }),
         h('span', { class: 'ld-sub' }, z.fahrzeugnr || (marken.length ? '' : '–'), marken)),
-      h('span', { class: 'ld-c-x ld-c-verk' + (nz ? ' ld-nz' : ''), text: verkText || '–', title: nz ? 'nicht zugeteilt' + (z.verkaeufer ? ' (eingetragen: ' + z.verkaeufer + ')' : '') : verkText }),
+      h('span', { class: 'ld-c-x ld-c-verk' + (nz ? ' ld-nz' : ''), title: nz ? 'nicht zugeteilt' + (z.verkaeufer ? ' (eingetragen: ' + z.verkaeufer + ')' : '') : verkText },
+        h('span', { class: 'ld-vt' + (verkText ? '' : ' muted'), text: verkText || '–' }), kannMir ? mirKnopf() : null),
       h('span', { class: 'ld-c-x ld-c-status' }, statusPill()),
       zelle('ld-c-lk', z.letzter_kontakt ? kurzDatum(z.letzter_kontakt) : '', z.letzter_kontakt ? EG.fmtDatum(z.letzter_kontakt) : ''),
       zelle('ld-c-bes', besprochen, z.besprochen ? String(z.besprochen).trim().slice(0, 600) : ''),
       zelle('ld-c-ww', schritt, z.naechster_schritt),
       h('span', { class: 'ld-c-x ld-c-wv' }, wvMarke(z)),
       // nur am Handy sichtbar
-      h('span', { class: 'ld-m ld-m-rechts' }, statusPill(), z.wiedervorlage ? wvMarke(z) : null),
+      h('span', { class: 'ld-m ld-m-rechts' }, statusPill(), z.wiedervorlage ? wvMarke(z) : null, kannMir ? mirKnopf() : null),
       h('span', { class: 'ld-m ld-m-fzg', text: [fzg, verkText, z.inzahlungnahme ? 'IZ' : '', z.finanzierung ? 'Fin' : ''].filter(Boolean).join(' · ') }),
       letzt);
+    return row;
   }
-  var SPALTEN = ['Anfrage', 'Name', 'Fahrzeug', 'Verk.', 'Status', 'Letzter Kontakt', 'Besprochen', 'Wie weiter', 'Nächster Kontakt'];
+  /** Spalten: t = Überschrift, k = Sortierschlüssel, typ 'datum' = nach Datum sortieren, f = Filter [Art, Schlüssel(, Schlüssel bis)].
+      Die Filterschlüssel sind dieselben wie in FELD_FILTER / S.f.felder (Block „Filter nach Feldern“), beide sind synchron. */
+  var SPALTEN = [
+    { t: 'Anfrage', k: 'anfrage', typ: 'datum', f: ['datum', 'anfrage_von', 'anfrage_bis'] },
+    { t: 'Name', k: 'name', f: ['text', 'name'] },
+    { t: 'Fahrzeug', k: 'fzg', f: ['text', 'fahrzeug'] },
+    { t: 'Verk.', k: 'verk', f: ['wahl', 'verkaeufer'] },
+    { t: 'Status', k: 'status', f: ['wahl', 'status'] },
+    { t: 'Letzter Kontakt', k: 'letzter_kontakt', typ: 'datum', f: ['datum', 'lk_von', 'lk_bis'] },
+    { t: 'Besprochen', k: 'besprochen', f: ['text', 'besprochen'] },
+    { t: 'Wie weiter', k: 'naechster_schritt', f: ['text', 'naechster_schritt'] },
+    { t: 'Nächster Kontakt', k: 'wiedervorlage', typ: 'datum', f: ['datum', 'wv_von', 'wv_bis'] }
+  ];
+  var KOLL = (typeof Intl !== 'undefined' && Intl.Collator) ? new Intl.Collator('de', { numeric: true, sensitivity: 'base' }) : null;
+  function sortWert(z, k) {
+    switch (k) {
+      case 'name': return [z.name, z.vorname].filter(Boolean).join(' ');
+      case 'fzg': return [z.hersteller, z.modell].filter(Boolean).join(' ');
+      case 'verk': return z.verkaeufer || '';
+      case 'letzter_kontakt': return z.letzter_kontakt ? z.letzter_kontakt + 'T' + (z.letzter_kontakt_zeit || '') : '';
+      default: return String(z[k] == null ? '' : z[k]);
+    }
+  }
+  /** Sortierung nach Spalte: Leere stehen immer unten, Datum nach Datum, Rest alphabetisch (de). Gleichstand: neueste Anfrage zuerst. */
+  function spaltenSortierung(k, richtung) {
+    var sp = SPALTEN.filter(function (x) { return x.k === k; })[0], datum = !!(sp && sp.typ === 'datum'), v = richtung === 'ab' ? -1 : 1;
+    return function (a, b) {
+      var x = sortWert(a, k), y = sortWert(b, k);
+      if (!x && !y) return neusteZuerst(a, b);
+      if (!x) return 1;
+      if (!y) return -1;
+      var c = datum ? (x < y ? -1 : (x > y ? 1 : 0)) : (KOLL ? KOLL.compare(x, y) : String(x).localeCompare(String(y), 'de'));
+      return c ? c * v : neusteZuerst(a, b);
+    };
+  }
   function leerText(gesamt) {
     if (!gesamt) return 'Noch keine Anfragen.';
     if (S.f.schnell === 'heute' && !kl(S.f.suche).trim() && !filterAnzahl()) {
@@ -555,16 +681,20 @@
     });
     var m = document.getElementById('ld-meine'); if (m) m.setAttribute('aria-pressed', S.f.nurMeine ? 'true' : 'false');
   }
-  /** Zeichnet nur die Zeilen neu: Filterfelder und Tastatur bleiben unberührt. */
+  /** Zeichnet nur die Zeilen neu: Kopf, Filterfelder und Tastatur bleiben unberührt. */
   function fuelleZeilen() {
     var box = S.box; if (!box) return;
     var l = gefiltert(), gesamt = (S.alle || []).length;
+    S.angezeigt = l;
     if (S.zahlEl) S.zahlEl.textContent = l.length + ' von ' + gesamt + ' Anfragen';
     if (S.hinweisEl) S.hinweisEl.textContent = sucheUeberAlle() ? 'Gesucht wird in allen Anfragen, nicht nur in „Heute dran“.' : '';
     chipsAktualisieren();
+    kopfAktualisieren();
+    zaehlerAktualisieren();
+    rankingZeichnen();
+    sammelAktualisieren();
     box.replaceChildren();
     if (!l.length) { box.appendChild(h('div', { class: 'leer', text: leerText(gesamt) })); return; }
-    box.appendChild(h('div', { class: 'ld-reihe ld-kopfreihe', 'aria-hidden': 'true' }, SPALTEN.map(function (s) { return h('span', { text: s }); })));
     l.slice(0, S.max).forEach(function (z) {
       box.appendChild(reihe(z));
       if (S.auf === z.id) box.appendChild(h('div', { class: 'ld-offen' }, karte(z, false)));
@@ -576,46 +706,381 @@
       })));
     }
   }
-  function filterGeaendert() { S.max = 100; fuelleZeilen(); }
+  function filterGeaendert() { S.max = 100; clearTimeout(S.dbT); S.dbT = null; fuelleZeilen(); }
+  /** Tippen in Suchfeld und Textfiltern: erst ca. 200 ms nach der letzten Eingabe filtern (Auswahlfelder sofort). */
+  function verzoegert() { clearTimeout(S.dbT); S.dbT = setTimeout(filterGeaendert, 200); }
   /** Auswahlwerte aus den vorhandenen Anfragen, damit auch alte Werte filterbar sind. */
   function werteVon(k) {
     var w = {};
     (S.alle || []).forEach(function (z) { if (z[k]) w[z[k]] = true; });
     return Object.keys(w).sort(function (a, b) { return a.localeCompare(b, 'de', { numeric: true }); });
   }
-  function feldFilterEl(d) {
-    var id = 'ld-f-' + d[0], wert = S.f.felder[d[0]] || '', el;
+  /** Auswahl für „wahl“-Filter. Verkäufer: die Liste aus dem Bearbeiten-Dialog (field_2), dazu aktive und vorkommende Kürzel. */
+  function wahlWerte(k) {
+    if (k !== 'verkaeufer') return werteVon(k);
+    var seen = {}, out = [];
+    function add(v) { v = String(v == null ? '' : v).trim(); if (v && !seen[kz(v)]) { seen[kz(v)] = true; out.push(v); } }
+    ((S.me && S.me.auswahl && S.me.auswahl.field_2) || []).forEach(add);
+    ((S.me && S.me.verkaeufer_aktiv) || []).forEach(add);
+    werteVon('verkaeufer').forEach(add);
+    return out;
+  }
+  function feldDef(k) { return FELD_FILTER.filter(function (d) { return d[0] === k; })[0]; }
+  function filterAktiv() { return filterAnzahl() > 0 || !!kl(S.f.suche).trim() || S.f.schnell !== 'heute'; }
+  /** Zähler am Block „Filter nach Feldern“ und der Knopf „Filter zurücksetzen“ nachziehen. */
+  function zaehlerAktualisieren() {
+    var z = document.getElementById('ld-f-zahl'); if (z) z.textContent = filterAnzahl() ? String(filterAnzahl()) : '';
+    if (S.resetEl) S.resetEl.hidden = !filterAktiv();
+  }
+  /** Wert in S.f.felder übernehmen und alle anderen Eingabefelder mit demselben Schlüssel angleichen. */
+  function filterWert(key, wert, quelle) {
+    if (wert) S.f.felder[key] = wert; else delete S.f.felder[key];
+    felderSync(quelle);
+    zaehlerAktualisieren();
+  }
+  function felderSync(quelle) {
+    Object.keys(S.fEls).forEach(function (k) {
+      var w = S.f.felder[k] || '';
+      S.fEls[k].forEach(function (el) { if (el !== quelle && el.value !== w) el.value = w; });
+    });
+    S.dtKnoepfe.forEach(function (d) { d.aktual(); });
+  }
+  /** Eingabefeld für einen Filterschlüssel (Block und Spaltenfilter teilen sich S.f.felder). idPrefix trennt die IDs, kompakt = Spaltenfilter. */
+  function filterEingabe(d, idPrefix, kompakt) {
+    var key = d[0], wert = S.f.felder[key] || '', el;
+    var id = idPrefix + key;
     if (d[2] === 'wahl') {
-      el = h('select', { id: id },
+      el = h('select', { id: id, 'aria-label': d[1] },
         h('option', { value: '', text: 'Alle' }),
-        h('option', { value: KEIN_WERT, text: d[0] === 'verkaeufer' ? 'nicht zugeteilt' : '(leer)' }),
-        werteVon(d[0]).map(function (v) { return h('option', { value: v, text: v }); }));
+        h('option', { value: KEIN_WERT, text: d[0] === 'verkaeufer' ? (kompakt ? '(leer)' : 'nicht zugeteilt') : '(leer)', title: d[0] === 'verkaeufer' ? 'nicht zugeteilt: leer, „sonstige“ oder nicht mehr aktiv' : '' }),
+        wahlWerte(d[0]).map(function (v) { return h('option', { value: v, text: v }); }));
       el.value = wert;
     } else if (d[2] === 'janein') {
-      el = h('select', { id: id },
+      el = h('select', { id: id, 'aria-label': d[1] },
         h('option', { value: '', text: 'Alle' }), h('option', { value: 'ja', text: 'Ja' }), h('option', { value: 'nein', text: 'Nein' }));
       el.value = wert;
     } else {
-      el = h('input', { id: id, type: d[2] === 'text' ? 'search' : 'date', autocomplete: 'off', value: wert });
+      el = h('input', { id: id, type: d[2] === 'text' ? 'search' : 'date', autocomplete: 'off', value: wert, 'aria-label': d[1], placeholder: kompakt && d[2] === 'text' ? 'Filter' : null });
     }
-    el.addEventListener(d[2] === 'text' ? 'input' : 'change', function () {
-      if (el.value) S.f.felder[d[0]] = el.value; else delete S.f.felder[d[0]];
-      var z = document.getElementById('ld-f-zahl'); if (z) z.textContent = filterAnzahl() ? String(filterAnzahl()) : '';
-      filterGeaendert();
+    (S.fEls[key] = S.fEls[key] || []).push(el);
+    var text = d[2] === 'text';
+    el.addEventListener(text ? 'input' : 'change', function () {
+      filterWert(key, el.value, el);
+      if (text) verzoegert(); else filterGeaendert();
     });
-    return EG.feld(d[1], el);
+    return el;
+  }
+  function feldFilterEl(d) { return EG.feld(d[1], filterEingabe(d, 'ld-f-', false)); }
+
+  /* ---------- Kopfzeile (Sortierung) und Filterzeile (je Spalte), einmal in zeichnen() gebaut ---------- */
+  function sortWechsel(k) {
+    var f = S.f;
+    if (f.sortK !== k) { f.sortK = k; f.sortR = 'auf'; }
+    else if (f.sortR === 'auf') f.sortR = 'ab';
+    else { f.sortK = null; f.sortR = 'auf'; }
+    S.max = 100; fuelleZeilen();
+  }
+  function kopfAktualisieren() {
+    S.kopfKnoepfe.forEach(function (e) {
+      var an = S.f.sortK === e.sp.k, ab = an && S.f.sortR === 'ab';
+      if (an) e.b.setAttribute('data-sort', ab ? 'ab' : 'auf'); else e.b.removeAttribute('data-sort');
+      e.pf.textContent = an ? (ab ? '▼' : '▲') : '';
+      e.b.setAttribute('aria-label', e.sp.t + (an ? (ab ? ', absteigend sortiert' : ', aufsteigend sortiert') : ', nicht sortiert') + '. Klick ändert die Sortierung.');
+    });
+  }
+  function dtZu() {
+    document.querySelectorAll('.ld-pop').forEach(function (p) { p.hidden = true; });
+    document.querySelectorAll('.ld-dtknopf').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+  var dtHook = false;
+  /** Datumsbereich (von/bis) als kleines Popover hinter einem schmalen Knopf – die Filterzeile bleibt einzeilig. */
+  function datumFilter(vonK, bisK, titel, rechts) {
+    var knopf = h('button', { type: 'button', class: 'ld-dtknopf', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' });
+    var iv = h('input', { type: 'date', id: 'ld-s-' + vonK, value: S.f.felder[vonK] || '', 'aria-label': titel + ' von' });
+    var ib = h('input', { type: 'date', id: 'ld-s-' + bisK, value: S.f.felder[bisK] || '', 'aria-label': titel + ' bis' });
+    var pop = h('div', { class: 'ld-pop' + (rechts ? ' rechts' : ''), role: 'dialog', 'aria-label': titel + ': Zeitraum', hidden: true },
+      h('label', { for: iv.id, text: 'von' }, iv), h('label', { for: ib.id, text: 'bis' }, ib),
+      h('button', { type: 'button', class: 'linklike', text: 'Zeitraum löschen', onclick: function () {
+        delete S.f.felder[vonK]; delete S.f.felder[bisK];
+        felderSync(null); zaehlerAktualisieren(); filterGeaendert();
+      } }));
+    (S.fEls[vonK] = S.fEls[vonK] || []).push(iv);
+    (S.fEls[bisK] = S.fEls[bisK] || []).push(ib);
+    function aktual() {
+      var v = S.f.felder[vonK], b = S.f.felder[bisK];
+      var txt = (v ? 'ab ' + tagMonat(v) : '') + (v && b ? ' ' : '') + (b ? 'bis ' + tagMonat(b) : '');
+      knopf.textContent = txt || 'von–bis'; knopf.classList.toggle('an', !!txt);
+      knopf.title = txt ? titel + ': ' + (v ? 'von ' + EG.fmtDatum(v) : '') + (v && b ? ' ' : '') + (b ? 'bis ' + EG.fmtDatum(b) : '') : titel + ' nach Zeitraum filtern';
+      knopf.setAttribute('aria-label', knopf.title);
+    }
+    [[vonK, iv], [bisK, ib]].forEach(function (p) {
+      p[1].addEventListener('change', function () { filterWert(p[0], p[1].value, p[1]); filterGeaendert(); });
+    });
+    knopf.addEventListener('click', function () {
+      var offen = !pop.hidden; dtZu();
+      if (!offen) { pop.hidden = false; knopf.setAttribute('aria-expanded', 'true'); iv.focus(); }
+    });
+    S.dtKnoepfe.push({ aktual: aktual });
+    aktual();
+    if (!dtHook) {
+      dtHook = true;
+      document.addEventListener('mousedown', function (e) { if (!(e.target.closest && e.target.closest('.ld-dt'))) dtZu(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') dtZu(); });
+    }
+    return h('div', { class: 'ld-dt' }, knopf, pop);
+  }
+  function kopfBauen() {
+    S.kopfKnoepfe = []; S.dtKnoepfe = [];
+    S.chkAlle = h('input', { type: 'checkbox', 'aria-label': 'Alle gefilterten Anfragen auswählen', onchange: function () { alleWaehlen(S.chkAlle.checked); } });
+    var kopf = h('div', { class: 'ld-reihe ld-kopfreihe' }, h('span', { class: 'ld-c-chk' }, S.chkAlle));
+    SPALTEN.forEach(function (sp) {
+      var pf = h('span', { class: 'ld-pf', 'aria-hidden': 'true' });
+      var b = h('button', { type: 'button', class: 'ld-th', onclick: function () { sortWechsel(sp.k); } }, sp.t, pf);
+      S.kopfKnoepfe.push({ b: b, pf: pf, sp: sp });
+      kopf.appendChild(h('div', {}, b));
+    });
+    var fr = h('div', { class: 'ld-reihe ld-filterreihe', role: 'group', 'aria-label': 'Filter je Spalte' }, h('span', { class: 'ld-c-chk' }));
+    SPALTEN.forEach(function (sp, i) {
+      var f = sp.f, zelle;
+      if (f[0] === 'datum') zelle = datumFilter(f[1], f[2], sp.t, i === SPALTEN.length - 1);
+      else zelle = filterEingabe(feldDef(f[1]), 'ld-s-', true);
+      fr.appendChild(h('div', {}, zelle));
+    });
+    kopfAnpassen();
+    return h('div', { class: 'ld-kopfbox' }, kopf, fr);
+  }
+  /** Abstand der festen Kopfzeile nach oben = Höhe der Reiterleiste (die ist selbst fest). */
+  function kopfAnpassen() {
+    if (!S.root) return;
+    var tabs = document.querySelector('.tabs');
+    S.root.style.setProperty('--ld-top', (tabs ? tabs.offsetHeight : 52) + 'px');
+  }
+  window.addEventListener('resize', kopfAnpassen);
+
+  /* ---------- Zeile im Speicher ersetzen (nach Speichern kommt die geänderte Zeile als antwort.lead) ---------- */
+  function zeileSpeichern(lead) {
+    if (!lead || lead.id == null || !S.alle) return false;
+    var lid = String(lead.id), neu = Object.assign({}, lead, { id: lid }), i = -1;
+    delete neu._h;                                  // gemerkter Suchtext gilt nicht mehr
+    S.alle.forEach(function (x, n) { if (x.id === lid) i = n; });
+    if (i >= 0) S.alle[i] = neu; else S.alle.push(neu);
+    return true;
+  }
+  /** Nach dem Speichern: mit antwort.lead nur die eine Zeile ersetzen, sonst (älteres Backend) die Liste voll neu laden. */
+  function zeileUebernehmen(lead) {
+    if (zeileSpeichern(lead)) { if (S.box && S.box.isConnected) fuelleZeilen(); return true; }
+    laden(false); return false;
+  }
+  /** Nach einem Konflikt (409): Gesamtliste neu holen. Liefert den frischen Stand (geaendert) der Anfrage, sonst null. */
+  async function listeNeuHolen(id) {
+    try {
+      S.alle = await holeAlle(); S.alleAm = Date.now();
+      if (S.box && S.box.isConnected) fuelleZeilen();
+      var x = S.alle.filter(function (z) { return z.id === String(id); })[0];
+      return (x && x.geaendert) || null;
+    } catch (e) { return null; }
+  }
+
+  /* ---------- Mir zuteilen ---------- */
+  async function mirZuteilen(z, knopf) {
+    var ich = S.me && S.me.kuerzel; if (!ich || S.zuteilLaeuft[z.id]) return;
+    S.zuteilLaeuft[z.id] = true; if (knopf) knopf.disabled = true;
+    try {
+      var r = await speichereBearbeitung(z.id, { verkaeufer: ich }, z.geaendert);
+      if (r.trocken) { EG.toast('Testmodus: nichts gespeichert'); return; }
+      EG.toast('Die Anfrage gehört jetzt dir (' + ich + ').', 'ok');
+      zeileUebernehmen(r.lead);
+    } catch (err) {
+      if (err.konflikt) { EG.toast(err.message, 'fehler'); await listeNeuHolen(z.id); }
+      else EG.fehler(err);
+    } finally { delete S.zuteilLaeuft[z.id]; if (knopf) knopf.disabled = false; }
+  }
+
+  /* ---------- Sammelzuteilung (nur Chef) ---------- */
+  /** Chef = Rolle admin (me.rolle); ein künftiges Feld me.ist_chef gilt ebenfalls. */
+  function istChef() { return !!S.me && (S.me.ist_chef === true || S.me.rolle === 'admin'); }
+  function alleWaehlen(an) {
+    (S.angezeigt || []).forEach(function (z) { if (an) S.waehl[z.id] = true; else delete S.waehl[z.id]; });
+    fuelleZeilen();
+  }
+  function sammelAktualisieren() {
+    if (!S.root) return;
+    S.root.classList.toggle('ld-waehlen', !!S.waehlen && istChef());
+    var n = Object.keys(S.waehl).length, box = S.sammelEl; if (!box) return;
+    box.hidden = !S.waehlen;
+    if (box.zahl) box.zahl.textContent = n + ' ausgewählt';
+    if (box.ausf) box.ausf.disabled = S.sammelLaeuft || !n || !box.sel.value;
+    if (S.chkAlle) {
+      var l = S.angezeigt || [], g = l.filter(function (z) { return S.waehl[z.id]; }).length;
+      S.chkAlle.checked = !!l.length && g === l.length; S.chkAlle.indeterminate = g > 0 && g < l.length;
+    }
+  }
+  function sammelBauen() {
+    var aktiv = (S.me && Array.isArray(S.me.verkaeufer_aktiv) && S.me.verkaeufer_aktiv.length) ? S.me.verkaeufer_aktiv : ((S.me && S.me.auswahl && S.me.auswahl.field_2) || []);
+    var sel = h('select', { id: 'ld-sammel-sel', 'aria-label': 'Zuteilen an' }, h('option', { value: '', text: 'bitte wählen' }),
+      aktiv.map(function (v) { return h('option', { value: v, text: v }); }));
+    var zahl = h('strong', { text: '0 ausgewählt' });
+    var fort = h('span', { class: 'muted', 'aria-live': 'polite' });
+    var ausf = h('button', { type: 'button', class: 'btn btn-primary', text: 'Ausführen', onclick: function () { sammelAusfuehren(sel, fort); } });
+    var box = h('div', { class: 'ld-sammel', hidden: !S.waehlen },
+      zahl, ' · ', h('label', { for: 'ld-sammel-sel', text: 'Zuteilen an' }), sel, ausf,
+      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Alle gefilterten', onclick: function () { alleWaehlen(true); } }),
+      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Keine', onclick: function () { S.waehl = {}; fuelleZeilen(); } }),
+      fort);
+    box.zahl = zahl; box.sel = sel; box.ausf = ausf;
+    sel.addEventListener('change', sammelAktualisieren);
+    return box;
+  }
+  async function sammelAusfuehren(sel, fort) {
+    var ziel = sel.value, ids = Object.keys(S.waehl);
+    if (S.sammelLaeuft || !ziel || !ids.length) return;
+    var ok = await EG.bestaetigen(ids.length + ' Anfrage(n) an ' + ziel + ' zuteilen?', { titel: 'Sammelzuteilung', ja: 'Zuteilen' });
+    if (!ok) return;
+    S.sammelLaeuft = true; sammelAktualisieren();
+    var fehler = [], erledigt = 0, gleich = 0, trocken = 0, nachladen = false;
+    for (var i = 0; i < ids.length; i++) {          // nacheinander, nicht parallel
+      var id = ids[i];
+      var z = (S.alle || []).filter(function (x) { return x.id === id; })[0];
+      fort.textContent = (i + 1) + ' von ' + ids.length + ' …';
+      if (!z) { fehler.push({ name: 'Nr. ' + id, text: 'nicht mehr in der Liste' }); delete S.waehl[id]; continue; }
+      if (kz(z.verkaeufer) === kz(ziel)) { gleich++; delete S.waehl[id]; continue; }
+      try {
+        var r = await speichereBearbeitung(id, { verkaeufer: ziel }, z.geaendert);
+        if (r.trocken) { trocken++; continue; }
+        erledigt++; delete S.waehl[id];
+        if (!zeileSpeichern(r.lead)) nachladen = true;
+        if (S.box && S.box.isConnected) fuelleZeilen();
+      } catch (err) {
+        fehler.push({ name: vollerName(z) || ('Nr. ' + id), text: err.message });
+        if (err.konflikt) nachladen = true;
+      }
+    }
+    S.sammelLaeuft = false; fort.textContent = '';
+    if (nachladen) await listeNeuHolen(null);
+    fuelleZeilen();
+    var kopfText = erledigt + ' zugeteilt an ' + ziel + (gleich ? ', ' + gleich + ' hatten ihn schon' : '') + (trocken ? ', ' + trocken + ' nur Testmodus (nichts gespeichert)' : '') + '.';
+    if (!fehler.length) { EG.toast(kopfText, 'ok'); return; }
+    EG.dialog({
+      titel: 'Sammelzuteilung: ' + fehler.length + ' Fehler',
+      inhalt: h('div', {}, h('p', { text: kopfText }), h('ul', { style: 'margin:10px 0 0 18px' }, fehler.map(function (f) { return h('li', { text: f.name + ': ' + f.text }); }))),
+      knoepfe: [{ text: 'Schließen', art: 'primary', wert: true }]
+    });
+  }
+
+  /* ---------- Ranking der Verkäufer ---------- */
+  function minLokal(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(String(s || ''));
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+  }
+  /** Anfragezeit (UTC-Zeitstempel) als Berliner Ortszeit, vergleichbar mit erste_reaktion (Ortszeit ohne Zone). */
+  function anfrageLokal(z) {
+    if (!z.anfrage_iso) return null;
+    var d = new Date(z.anfrage_iso); if (isNaN(d.getTime())) return null;
+    return minLokal(d.toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }));
+  }
+  function fmtDauer(min) {
+    if (min < 90) return Math.round(min) + ' Min.';
+    if (min < 48 * 60) return (Math.round(min / 6) / 10).toFixed(1).replace('.', ',') + ' Std.';
+    return (Math.round(min / 144) / 10).toFixed(1).replace('.', ',') + ' Tage';
+  }
+  var SF = {}; SCHNELL.forEach(function (s) { SF[s[0]] = s[2]; });   // „Offen“ und „Überfällig“ genau wie bei den Schnellfiltern
+  function rankingDaten() {
+    var t = heuteBerlin(), vor7 = ymdPlus(t, -7), vor30 = ymdPlus(t, -30);
+    var akt = S.me && Array.isArray(S.me.verkaeufer_aktiv) ? S.me.verkaeufer_aktiv.slice() : [];
+    var gr = {}, reihenfolge = [];
+    function gruppe(label) {
+      var k = kz(label);
+      if (!gr[k]) { gr[k] = { key: k, label: label, offen: 0, heute: 0, ueber: 0, ohne7: 0, kontaktHeute: 0, rs: 0, rn: 0 }; reihenfolge.push(k); }
+      return gr[k];
+    }
+    akt.forEach(gruppe);
+    var rest = { key: '', label: 'nicht zugeteilt / sonstige', offen: 0, heute: 0, ueber: 0, ohne7: 0, kontaktHeute: 0, rs: 0, rn: 0 };
+    (S.alle || []).forEach(function (z) {
+      var g = zugeteilt(z) ? gruppe(z.verkaeufer) : rest;
+      if (SF.offen(z, t)) {
+        g.offen++;
+        if (z.wiedervorlage === t) g.heute++;                         // wie die „heute“-Marke in der Liste (wvMarke)
+        if (SF.ueber(z, t)) g.ueber++;
+        var ref = z.letzter_kontakt || z.anfrage;                     // ohne Kontakt: seit der Anfrage
+        if (ref && ref < vor7) g.ohne7++;
+      }
+      if (z.letzter_kontakt === t) g.kontaktHeute++;
+      if (z.anfrage && z.anfrage >= vor30 && z.erste_reaktion) {
+        var a = anfrageLokal(z), e = minLokal(z.erste_reaktion);
+        if (a != null && e != null && e >= a) { g.rs += (e - a) / 60000; g.rn++; }
+      }
+    });
+    var liste = reihenfolge.map(function (k) { return gr[k]; });
+    liste.sort(function (a, b) { return b.offen - a.offen || a.label.localeCompare(b.label, 'de'); });
+    return { liste: liste, rest: rest };
+  }
+  function rankingZeichnen() {
+    var body = S.rankBody; if (!body || !S.alle) return;
+    var d = rankingDaten(), sel = S.f.felder.verkaeufer || '';
+    function zeile(g, platz, istRest) {
+      var an = istRest ? sel === KEIN_WERT : kz(sel) === g.key && !!sel;
+      var knopf = h('button', {
+        type: 'button', class: 'linklike', text: g.label, 'aria-pressed': an ? 'true' : 'false',
+        title: an ? 'Filter Verk. wieder aufheben' : 'Anfragen von ' + g.label + ' zeigen (Filter Verk.)',
+        onclick: function () { verkaeuferFilter(istRest ? KEIN_WERT : g.label); }
+      });
+      return h('tr', { class: (platz === 1 && g.offen > 0 ? 'platz1' : '') + (istRest ? ' rest' : '') },
+        h('td', { text: istRest ? '' : String(platz) }),
+        h('td', {}, knopf, platz === 1 && g.offen > 0 && !istRest ? ' ' : null, platz === 1 && g.offen > 0 && !istRest ? EG.pill('Platz 1', 'gold') : null),
+        h('td', { text: String(g.offen) }),
+        h('td', { text: String(g.heute) }),
+        h('td', { class: g.ueber ? 'warn' : '', text: String(g.ueber) }),
+        h('td', { class: g.ohne7 ? 'warn' : '', text: String(g.ohne7) }),
+        h('td', { text: String(g.kontaktHeute) }),
+        h('td', { text: g.rn ? fmtDauer(g.rs / g.rn) : '–', title: g.rn ? 'Mittel aus ' + g.rn + ' Anfragen der letzten 30 Tage' : 'keine Daten' }));
+    }
+    body.replaceChildren.apply(body, d.liste.map(function (g, i) { return zeile(g, i + 1, false); }).concat([zeile(d.rest, 0, true)]));
+  }
+  function verkaeuferFilter(wert) {
+    if (S.f.felder.verkaeufer && kz(S.f.felder.verkaeufer) === kz(wert)) delete S.f.felder.verkaeufer; else S.f.felder.verkaeufer = wert;
+    felderSync(null); zaehlerAktualisieren(); filterGeaendert();
+  }
+  function rankingBauen() {
+    S.rankBody = h('tbody');
+    var th = ['', 'Verkäufer', 'Offen', 'Heute fällig', 'Überfällig', 'Über 7 Tage ohne Kontakt', 'Heute kontaktiert', 'Ø Reaktion (30 Tage)'];
+    var det = h('details', { class: 'ld-rank' },
+      h('summary', {}, 'Ranking Verkäufer ', h('span', { class: 'ld-rank-hinweis', text: '– sortiert nach offenen Anfragen; Klick auf einen Namen filtert die Liste' })),
+      h('div', { class: 'ld-rank-wrap' }, h('table', {},
+        h('thead', {}, h('tr', {}, th.map(function (x) { return h('th', { scope: 'col', text: x }); }))), S.rankBody)));
+    if (S.rankOffen === null) {
+      var gesp = lsGet(LS_RANK);
+      S.rankOffen = gesp === null ? !(window.matchMedia && matchMedia('(max-width:899px)').matches) : gesp === '1';
+    }
+    det.open = S.rankOffen;
+    det.addEventListener('toggle', function () {
+      if (det.open === S.rankOffen) return;          // das erste „toggle“ kommt vom Aufbau, nicht vom Klick: nichts merken
+      S.rankOffen = det.open; lsSet(LS_RANK, det.open ? '1' : '0');
+    });
+    return det;
   }
 
   function zeichnen() {
     var root = S.root; if (!root) return;
     var me = S.me, out = [];
+    S.fEls = {}; S.kopf = null; S.sammelEl = null; S.rankBody = null; S.resetEl = null; clearTimeout(S.dbT); S.dbT = null;
     if (EG.demo) out.push(EG.banner('Demo: Die Anfragen sind erfunden. Aktionen wirken nur in diesem Fenster.', 'info'));
     if (me && me.testmodus) out.push(EG.banner([h('strong', { text: 'Testmodus' }), ' – nichts wird gespeichert. Kontakt und Neuanlage zeigen nur eine Vorschau.'], 'warn'));
-    out.push(h('div', { class: 'ld-leiste' },
+    var leiste = [
       h('button', { type: 'button', class: 'btn btn-primary', text: '+ Neue Anfrage', onclick: dlgNeu }),
       h('button', { type: 'button', class: 'btn btn-ghost', text: 'Aktualisieren', onclick: function () { laden(false); } }),
       h('button', { type: 'button', class: 'btn btn-ghost', text: 'Benachrichtigungen einschalten', onclick: function () { pushEinschalten().catch(EG.fehler); } }),
-      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Test-Pop-up', onclick: testPopup })));
+      h('button', { type: 'button', class: 'btn btn-ghost', text: 'Test-Pop-up', onclick: testPopup })];
+    if (istChef() && S.alle) {
+      var ak = h('button', { type: 'button', class: 'btn btn-ghost ld-auswahlknopf', text: S.waehlen ? 'Auswahl beenden' : 'Auswählen', 'aria-pressed': S.waehlen ? 'true' : 'false',
+        title: 'Mehrere Anfragen markieren und gemeinsam einem Verkäufer zuteilen',
+        onclick: function () {
+          S.waehlen = !S.waehlen; if (!S.waehlen) S.waehl = {};
+          ak.textContent = S.waehlen ? 'Auswahl beenden' : 'Auswählen'; ak.setAttribute('aria-pressed', S.waehlen ? 'true' : 'false');
+          fuelleZeilen();
+        } });
+      leiste.push(ak);
+    }
+    out.push(h('div', { class: 'ld-leiste' }, leiste));
     out.push(h('div', { id: 'ld-push-info' }));
 
     S.chipEls = [];
@@ -623,8 +1088,11 @@
       S.box = null; S.zahlEl = null; S.hinweisEl = null;
       out.push(h('p', { class: 'muted', text: 'Lade …' }));
     } else {
+      out.push(rankingBauen());
+      if (istChef()) { S.sammelEl = sammelBauen(); out.push(S.sammelEl); }
+
       var such = h('input', { type: 'search', id: 'ld-suche', placeholder: 'Suchen in allen Feldern …', 'aria-label': 'Suchen in allen Feldern', autocomplete: 'off', value: S.f.suche });
-      such.addEventListener('input', function () { S.f.suche = such.value; filterGeaendert(); });
+      such.addEventListener('input', function () { S.f.suche = such.value; zaehlerAktualisieren(); verzoegert(); });
       out.push(h('div', { class: 'ld-suche' }, such));
 
       var chips = h('div', { class: 'chips' });
@@ -646,6 +1114,7 @@
       }
       out.push(h('div', { class: 'leiste' }, chips));
 
+      S.kopf = kopfBauen();       // Kopf- und Filterzeile nur hier (nicht in fuelleZeilen): der Eingabefokus bleibt beim Tippen erhalten
       var det = h('details', { class: 'ld-feldfilter' },
         h('summary', {}, 'Filter nach Feldern ', h('span', { class: 'ld-zahl', id: 'ld-f-zahl', text: filterAnzahl() ? String(filterAnzahl()) : '' })),
         h('div', { class: 'ld-felder' }, FELD_FILTER.map(feldFilterEl)));
@@ -655,14 +1124,16 @@
 
       S.zahlEl = h('span', {});
       S.hinweisEl = h('span', { class: 'ld-hinweis' });
-      out.push(h('div', { class: 'ld-zaehler' }, S.zahlEl, S.hinweisEl,
-        h('button', { type: 'button', class: 'linklike', text: 'Alle Filter zurücksetzen', onclick: function () {
-          S.f.schnell = 'heute'; S.f.suche = ''; S.f.felder = {}; S.max = 100; zeichnen();
-        } })));
-      S.box = h('div', { class: 'ld-tabelle', role: 'list' });
+      S.resetEl = h('button', { type: 'button', class: 'linklike', text: 'Filter zurücksetzen', hidden: !filterAktiv(), onclick: function () {
+        S.f.schnell = 'heute'; S.f.suche = ''; S.f.felder = {}; S.max = 100; zeichnen();
+      } });
+      out.push(h('div', { class: 'ld-zaehler' }, S.zahlEl, S.hinweisEl, S.resetEl));
+      out.push(S.kopf);
+      S.box = h('div', { class: 'ld-tabelle ld-mitkopf', role: 'list' });
       out.push(S.box);
     }
     root.replaceChildren.apply(root, out);
+    kopfAnpassen();
     pushInfo();
     if (S.box) fuelleZeilen();
     if (S.alle && S.offenId) zeigeLead(S.offenId);
@@ -749,7 +1220,7 @@
     var me = S.me, heute = heuteBerlin();
     var grund = (me.auswahl && me.auswahl.field_19) || [];
     var folge = Number(z.nicht_erreicht_folge) || 0;   // so oft hintereinander „nicht erreicht“
-    var wvManuell = false, fertig = false, ergebnisR = null, ergebnisWert = null;
+    var wvManuell = false, fertig = false, ergebnisR = null, ergebnisWert = null, stand = z.geaendert || '';
 
     // Ergebnis
     var radios = h('div', { class: 'ld-radio' });
@@ -863,13 +1334,20 @@
               if (wvInp.value < heute) { wvInp.focus(); return 'Der nächste Kontakt liegt in der Vergangenheit. Bitte ein Datum ab heute wählen.'; }
             }
             var daten = { id: z.id, ergebnis: e, notiz: notiz.value, grund: e === 'kein_interesse' ? grundSel.value : '', uebernehmen: !!(uebern && uebern.checked) };
+            if (stand) daten.stand = stand;   // Konfliktschutz
             if (e === 'termin') { daten.schritt = 'Termin'; daten.termin_am = terminAm; daten.wiedervorlage = tDatum.value; }
             else if (e === 'kein_interesse') { daten.schritt = ''; daten.wiedervorlage = ''; }
             else { daten.schritt = weiter.value.trim(); daten.wiedervorlage = wvInp.value; }
             meld.replaceChildren();
             var r;
             try { r = await api('kontakt', daten); }
-            catch (err) { meld.appendChild(EG.banner(err.message, 'fehler')); return false; }
+            catch (err) {
+              if (err.konflikt) {   // Eingaben bleiben stehen; Liste neu laden, Stand für das erneute Speichern übernehmen
+                meld.appendChild(EG.banner(err.message, 'warn'));
+                var neuStand = await listeNeuHolen(z.id); if (neuStand) stand = neuStand;
+              } else meld.appendChild(EG.banner(err.message, 'fehler'));
+              return false;
+            }
             if (r.trocken) {
               var vo = vorschauEl(r); if (vo) meld.appendChild(vo);
               fertig = true; if (prim) prim.textContent = 'Fertig';
@@ -886,7 +1364,7 @@
     if (!ergebnisR && !S.box && S.alle && S.root && S.root.offsetParent !== null && !document.querySelector('.dlg-ueber')) zeichnen();   // Liste nachholen, falls der Dialog schon beim Start offen war
     if (ergebnisR) {
       EG.toast('Kontakt gespeichert', 'ok');
-      laden(false);
+      zeileUebernehmen(ergebnisR.lead);   // nur die Zeile; ohne lead (älteres Backend): volles Neuladen
       if (ergebnisWert === 'termin') {
         var ja = await EG.bestaetigen('Termin ist eingetragen. Soll jetzt die Verkaufsakte angelegt werden?', { titel: 'Verkaufsakte anlegen?', ja: 'Verkaufsakte anlegen', nein: 'Später' });
         if (ja) verkaufsakteAnlegen(z);
@@ -974,18 +1452,17 @@
   ];
   /** Aktueller Wert eines Feldes als Text, so wie das Eingabefeld ihn zeigt. */
   function bearbWert(z, d) { return d[2] === 'janein' ? (z[d[0]] ? 'ja' : 'nein') : (z[d[0]] || ''); }
-  async function speichereBearbeitung(id, felder) {
-    if (EG.demo) return demoApi('bearbeiten', { id: id, felder: felder });
-    var r = await EG.sb.functions.invoke('leads_bearbeiten', { body: { id: id, felder: felder } });
-    if (r.error) {
-      var text = '';
-      try { var j = await r.error.context.json(); text = j.fehler || ''; } catch (e) { /* keine JSON-Antwort */ }
-      throw new Error(text || r.error.message);
-    }
+  /** Speichert Änderungen; stand = geaendert der Zeile beim Öffnen (Konfliktschutz, das Backend antwortet bei Abweichung mit 409). */
+  async function speichereBearbeitung(id, felder, stand) {
+    if (EG.demo) return demoApi('bearbeiten', { id: id, felder: felder, stand: stand });
+    var body = { id: id, felder: felder };
+    if (stand) body.stand = stand;
+    var r = await EG.sb.functions.invoke('leads_bearbeiten', { body: body });
+    if (r.error) throw await fehlerLesen(r.error);
     return r.data || {};
   }
   async function dlgBearbeiten(z) {
-    var auswahl = (S.me && S.me.auswahl) || {}, el = {}, fertig = false, gespeichert = false, prim = null;
+    var auswahl = (S.me && S.me.auswahl) || {}, el = {}, fertig = false, gespeichert = null, prim = null, stand = z.geaendert || '';
     var meld = h('div', {});
     var felder = BEARB_FELDER.map(function (d) {
       var wert = bearbWert(z, d), id = 'ld-b-' + d[0];
@@ -1020,14 +1497,20 @@
             if (!Object.keys(aend).length) return true;
             if (aend.name === '') return 'Bitte den Nachnamen eintragen.';
             var r;
-            try { r = await speichereBearbeitung(z.id, aend); }
-            catch (err) { meld.appendChild(EG.banner(err.message, 'fehler')); return false; }
+            try { r = await speichereBearbeitung(z.id, aend, stand); }
+            catch (err) {
+              if (err.konflikt) {   // Eingaben bleiben stehen; Liste neu laden, Stand für das erneute Speichern übernehmen
+                meld.appendChild(EG.banner(err.message, 'warn'));
+                var neuStand = await listeNeuHolen(z.id); if (neuStand) stand = neuStand;
+              } else meld.appendChild(EG.banner(err.message, 'fehler'));
+              return false;
+            }
             if (r.trocken) {
               meld.appendChild(vorschauEl(r) || '');
               fertig = true; if (prim) prim.textContent = 'Fertig';
               return false;
             }
-            gespeichert = true;
+            gespeichert = r;
             return true;
           }
         }
@@ -1035,7 +1518,7 @@
     });
     prim = primaerKnopf();
     await p;
-    if (gespeichert) { EG.toast('Änderung gespeichert', 'ok'); laden(false); }
+    if (gespeichert) { EG.toast('Änderung gespeichert', 'ok'); zeileUebernehmen(gespeichert.lead); }
   }
 
   /* ====================================================================
@@ -1225,16 +1708,24 @@
   /** Alle Felder einer Anfrage mit leeren Vorgaben, so wie leads_liste sie liefert. */
   function demoStandard(t) {
     return { id: '', name: '', vorname: '', verkaeufer: '', status: DEMO_AUSWAHL.field_3[0], herkunft: 'Website', ueber: 'Formular', email: '', telefon: '', hersteller: '', modell: '', typ: '', fahrzeugnr: '', interne_nr: '', grund: '', notiz: '',
-      anfrage: t, anfrage_iso: '', wiedervorlage: '', inzahlungnahme: false, finanzierung: false, anlagen: false, sp_url: '',
+      anfrage: t, anfrage_iso: '', geaendert: '', wiedervorlage: '', inzahlungnahme: false, finanzierung: false, anlagen: false, sp_url: '',
       letzter_kontakt: '', letzter_kontakt_zeit: '', besprochen: '', naechster_schritt: '', termin_am: '', erste_reaktion: '', nicht_erreicht_folge: 0 };
   }
   /** Zwölf erfundene Anfragen, jede zeigt eine andere Anzeige: neu, überfällig, heute, Alt, Termin, dritter Versuch, Anlage, nicht zugeteilt … */
+  /** Fortlaufender Zeitstempel für „geaendert“ (jede Änderung gibt einen neuen). */
+  var demoTick = 0;
+  function demoStempel() { demoTick++; return new Date(Date.now() + demoTick).toISOString(); }
+  /** Demo: Konfliktschutz wie im Backend – weicht stand ab, kommt HTTP 409 {fehler:'konflikt', text}. */
+  function demoStandPruefen(z, stand) {
+    if (stand && z.geaendert && stand !== z.geaendert) { var e = new Error(KONFLIKT_TEXT); e.status = 409; e.konflikt = true; throw e; }
+  }
   function demoStart() {
     if (D) return;
     var t = heuteBerlin();
     var mk = function (id, o) {
       var r = Object.assign(demoStandard(t), { id: String(id) }, DEMO_FZG[o.fahrzeugnr] || {}, o);
-      if (!r.anfrage_iso) r.anfrage_iso = r.anfrage + 'T08:30:00Z';
+      if (!r.anfrage_iso) r.anfrage_iso = r.anfrage + 'T06:30:00Z';   // 07:30 bzw. 08:30 Uhr Berliner Zeit
+      r.geaendert = demoStempel();
       return r;
     };
     var T = function (n) { return ymdPlus(t, n); };
@@ -1277,6 +1768,8 @@
     ] };
   }
   /** Nur Demo: neue Anfrage simulieren, um das Pop-up zu zeigen. */
+  /** Nur Demo: eine andere Person ändert die Anfrage – das nächste Speichern mit altem Stand ergibt 409. */
+  EG.demoKonflikt = function (id) { demoStart(); var z = D.leads.filter(function (x) { return x.id === String(id); })[0]; if (z) { z.geaendert = demoStempel(); z.besprochen = 'von jemand anderem geändert (Demo)'; } return !!z; };
   EG.demoNeueAnfrage = async function () { if (EG.demo) { await demoApi('demo_neu', {}); await laden(true); } };
   function kurzNotiz(n) { return n ?String(n).split(/\r?\n/).filter(function (z) { return z.trim(); }).slice(0, 6).join('\n').slice(0, 420) : ''; }
   function kopieZeile(z) { var k = Object.assign({}, z); k.notiz = kurzNotiz(z.notiz); return k; }
@@ -1319,13 +1812,15 @@
       case 'alle': return { leads: D.leads.map(function (x) { return Object.assign({}, x); }) };
       case 'bearbeiten': {
         var bz = finde(b.id), namen = [];
+        demoStandPruefen(bz, b.stand);
         Object.keys(b.felder).forEach(function (k) {
           var w = b.felder[k];
           if (k === 'inzahlungnahme' || k === 'finanzierung') w = w === 'ja';   // Ja/Nein kommt als 'ja'/'nein'
           bz[k] = w; namen.push(k);
         });
         bz.notiz = EG.fmtDatum(t) + ' - ' + kuerzel + ': geändert: ' + namen.join(', ') + (bz.notiz ? '\n\n' + bz.notiz : '');
-        return { trocken: false, id: bz.id, gespeichert: namen };
+        bz.geaendert = demoStempel();
+        return { trocken: false, id: bz.id, gespeichert: namen, lead: Object.assign({}, bz) };
       }
       case 'demo_neu': {
         var dn = Object.assign(demoStandard(t), { id: String(D.next++), name: 'Neukunde', vorname: 'Nora', herkunft: 'AutoScout24', ueber: 'E-Mail', telefon: '0711 0000099', hersteller: 'Kia', modell: 'Sportage 1.6 Demo', fahrzeugnr: '900002', notiz: 'Demo: gerade eingegangen.', anfrage_iso: t + 'T08:30:00Z', wiedervorlage: ymdPlus(t, 1) });
@@ -1335,6 +1830,7 @@
       case 'kontakt': {
         // Verhalten wie im Vertrag zur Aktion „kontakt“ (Backend), hier nur im Speicher
         var z = finde(b.id), e = b.ergebnis;
+        demoStandPruefen(z, b.stand);
         var text = { erreicht: 'Kunde erreicht', termin: 'Termin vereinbart', angebot: 'Angebot geschickt', nicht_erreicht: 'nicht erreicht', kein_interesse: 'kein Interesse' }[e];
         if (!text) throw new Error('unbekanntes Ergebnis');
         var jetzt = jetztBerlin(), terminText = '', mitTermin = false;
@@ -1368,7 +1864,8 @@
         var nb = block(text, [terminText, e === 'kein_interesse' ? 'Grund: ' + b.grund : ''].concat(notizText.split(/\r?\n/).map(function (x) { return x.trim(); }),
           [b.schritt ? 'Weiter: ' + b.schritt : '', e !== 'kein_interesse' && z.wiedervorlage ? 'Nächster Kontakt: ' + EG.fmtDatum(z.wiedervorlage) : '']));
         z.notiz = nb + (z.notiz ? '\n\n' + z.notiz : '');
-        return { trocken: false, id: z.id, gespeichert: ['demo'] };
+        z.geaendert = demoStempel();
+        return { trocken: false, id: z.id, gespeichert: ['demo'], lead: Object.assign({}, z) };
       }
       case 'neu': {
         if (!String(b.name || '').trim()) throw new Error('Name fehlt');
