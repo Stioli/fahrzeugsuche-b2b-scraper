@@ -881,4 +881,17 @@
     EG.user = { email: k.email }; EG.rolle = k.rolle; EG.anzeigename = k.name;
     await startApp();
   }
+
+  /* Feste Kopfzeilen der Listen (Version 2.4): Abstand nach oben = Höhe der Reiterleiste, die selbst fest oben steht.
+     Als --tabs-h am <html>, damit alle Reiter (eingang.css, verkauf.css, Inzahlungnahmen) denselben Wert nutzen. */
+  function tabsHoeheSetzen() {
+    var tabs = document.querySelector('.tabs');
+    if (tabs && tabs.offsetHeight) document.documentElement.style.setProperty('--tabs-h', tabs.offsetHeight + 'px');
+  }
+  window.addEventListener('resize', tabsHoeheSetzen);
+  window.addEventListener('load', tabsHoeheSetzen);
+  document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.tab-knopf')) setTimeout(tabsHoeheSetzen, 0); });
+  if (window.ResizeObserver) document.addEventListener('DOMContentLoaded', function () {
+    var tabs = document.querySelector('.tabs'); if (tabs) new ResizeObserver(tabsHoeheSetzen).observe(tabs);
+  });
 })();

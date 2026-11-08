@@ -85,12 +85,16 @@
 .ac-liste .block-kopf:first-child{margin-top:10px}
 
 /* Zeilenansicht der Fahrzeuge (ein Fahrzeug = eine Zeile) */
-.ac-tabelle{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--schatten);overflow:hidden}
-.ac-zeile{display:grid;grid-template-columns:150px 54px minmax(160px,1.6fr) repeat(5,minmax(70px,.7fr)) 130px;align-items:center;gap:8px;width:100%;min-height:52px;padding:6px 12px;border:0;border-top:1px solid var(--border);border-left:6px solid transparent;background:#fff;font-family:var(--font-body);font-size:15px;color:var(--ink);text-align:left;cursor:pointer}
+/* Optik wie Reiter Anfragen (.ld-reihe): 14 px, Zeilenhöhe 48 px, Kopfzeile 38 px grau und beim Scrollen fest unter der Reiterleiste.
+   overflow:clip statt hidden – schneidet die runden Ecken, ohne die feste Kopfzeile auszuschalten. */
+.ac-tabelle{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--schatten);overflow:clip}
+.ac-zeile{display:grid;grid-template-columns:150px 54px minmax(160px,1.6fr) repeat(5,minmax(70px,.7fr)) 130px;align-items:center;gap:8px;width:100%;min-height:48px;padding:6px 12px;border:0;border-top:1px solid var(--border);border-left:6px solid transparent;background:#fff;font-family:var(--font-body);font-size:14px;color:var(--ink);text-align:left;cursor:pointer}
 .ac-zeile:hover,.ac-zeile:focus-visible{background:#F4F8FD}
 .ac-zeile.rot{border-left-color:var(--rot-text)}
 .ac-zeile.fertig{background:#FAFBFD}
-.ac-kopfzeile{min-height:40px;border-top:0;background:#EEF1F5;font-size:13px;font-weight:700;color:var(--sub);cursor:default}
+.ac-kopfzeile{min-height:38px;border-top:0;background:#EEF1F5;font-size:13px;font-weight:700;color:var(--sub);cursor:default;position:sticky;top:var(--tabs-h,52px);z-index:20;box-shadow:0 3px 8px rgba(26,35,51,.06)}
+.ac-kopfzeile > span{white-space:normal !important;line-height:1.15}
+.ac-zeile .pill{font-size:13px;padding:2px 8px}
 .ac-kopfzeile:hover{background:#EEF1F5}
 .ac-zeile > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ac-c-fz{white-space:normal !important}
@@ -109,7 +113,7 @@
 .an-c-fz{white-space:normal !important;line-height:1.3}
 .an-c-fin{font-size:13px !important}
 .an-c-hinw{white-space:normal !important;font-size:13px;line-height:1.25}
-.an-c-status .pill,.vz-c-stand .pill{font-size:13px;padding:2px 9px;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+.an-c-status .pill,.vz-c-stand .pill{font-size:13px;padding:2px 8px;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .vz-zeile{grid-template-columns:100px 58px minmax(130px,1.3fr) 140px minmax(100px,1.1fr) 56px 140px minmax(140px,1.3fr)}
 .vz-c-fin{font-size:13px !important}
 .vz-c-ueb{white-space:normal !important;line-height:1.25}
