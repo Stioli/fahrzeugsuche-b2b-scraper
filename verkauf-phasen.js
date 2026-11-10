@@ -1,5 +1,5 @@
 /* Stieber-App – Reiter „Verkauf“: Haken je Phase (window.VK_PHASEN)
-   Stand 31.10.2026. Quelle: Plan „Verkauf in Phasen zum Abhaken“, Teil B (mit Oli abgestimmt).
+   Stand 10.11.2026 (v7: neuer freiwilliger Punkt zahlungsbestaetigung). Quelle: Plan „Verkauf in Phasen zum Abhaken“, Teil B (mit Oli abgestimmt).
    Gehört zu eingang-verkauf.js. Hier stehen NUR Daten, keine Logik.
 
    Phase:  { key:'v1'…'v10', name, wer (Anzeige), rollen:[…], hinweis?,
@@ -193,6 +193,7 @@
         { k: 'fin_ausgezahlt', text: 'Finanzierung ausgezahlt', pflicht: true, entfaelltWenn: [KEINE_FIN] },
         { k: 'abloese', text: 'Ablöse an die Altbank überwiesen', pflicht: true, entfaelltWenn: [KEIN_INZ] },
         { k: 'restzahlung', text: 'Restzahlung eingegangen (→ Masterliste Geldeingang)', pflicht: true, eingabe: 'betrag', label: 'Eingegangen in €' },
+        { k: 'zahlungsbestaetigung', text: 'Zahlungsbestätigung an den Kunden gesendet', pflicht: false },
         { k: 'bar_beleg', text: 'Bar: Beleg und GwG-Bogen', pflicht: true, foto: true,
           entfaelltWenn: [{ phase: 'v5', k: 'zahlungsart', nichtIn: ['Bar', 'Gemischt'], grund: 'Keine Barzahlung' }] },
         { k: 'voll_bezahlt', text: 'Voll bezahlt – Übergabe frei', pflicht: true, keinEntfaellt: true, nurNachAllen: true, seg: ['ok'], segLabels: { ok: 'Voll bezahlt' },

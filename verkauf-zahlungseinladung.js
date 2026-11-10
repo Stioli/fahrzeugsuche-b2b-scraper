@@ -1,4 +1,5 @@
 /* Stieber-App – Reiter „Verkauf“: Zahlungseinladung erstellen (window.VK_ZE)
+   Version 3.0 (10.11.2026): Mail-Bausteine als VK_ZE.bau freigegeben, emlAus() ausgekoppelt (für VK_ZB), Ausgabe unverändert.
    Stand 10.11.2026. Gehört zu Phase v7 „Zahlung“, Punkt v7.zahlungseinladung (Knopf in eingang-verkauf.js).
    Die App SENDET NICHTS: Sie baut die Mail (HTML + Klartext) mit Live-Vorschau, der Nutzer kopiert sie und fügt sie in Outlook ein.
 
@@ -159,14 +160,44 @@
     };
   }
 
-  /** d: { anrede, vor, nach, positionen, frist, zweck, schritte, absender:{name,email,tel}, logoUrl? } → HTML-Fragment (äußere Tabelle) */
-  function baueHtml(d) {
-    var r = rechne(d.positionen), st = schritteAktiv(d.schritte), ab = d.absender || {};
-    var logo = d.logoUrl != null ? d.logoUrl : LOGO_URL;
-    var ein = einleitung(d);
-    var out = '';
-
-    // Betragstabelle
+  /* ---------- Bausteine (window.VK_ZE.bau, auch für andere Mails, z. B. VK_ZB) – geben HTML-Strings zurück ---------- */
+  /** Zeile (<tr>) mit weißer Zelle und Innenabstand, z. B. zeile('28px 24px 8px 24px', inhalt) */
+  function zeile(padding, inhalt) { return '<tr>' + td('padding:' + padding + ';background-color:' + C.weiss + ';', inhalt) + '</tr>'; }
+  /** Kopf mit Logo (Zeile). Ohne URL bleibt die Zelle leer. */
+  function kopfLogo(logoUrl) {
+    return '<tr>' + td('padding:20px 0 16px 0;text-align:center;background-color:' + C.weiss + ';',
+      logoUrl ? '<img src="' + esc(logoUrl) + '" width="400" alt="Autohaus Stieber GmbH" style="display:block;margin:0 auto;width:400px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;font-family:' + FONT_H + ';font-size:20px;color:' + C.text + ';">' : '', 'align="center"') + '</tr>';
+  }
+  /** Blaue Linie unter dem Logo (Zeile) */
+  function linie() {
+    return '<tr>' + td('height:4px;font-size:0;line-height:0;background-color:' + C.blau + ';', '&nbsp;', 'height="4" bgcolor="' + C.blau + '"') + '</tr>';
+  }
+  /** Hervorgehobener Kasten mit blauem Balken: Titel links, Betrag rechts */
+  function summenKasten(titel, betragText) {
+    return tabelle('100%',
+      '<tr>' +
+      td('width:4px;background-color:' + C.blau + ';font-size:0;line-height:0;', '&nbsp;', 'width="4" bgcolor="' + C.blau + '"') +
+      td('padding:14px 16px;background-color:' + C.hell + ';', tabelle('100%',
+        '<tr>' +
+        td('font-family:' + FONT_H + ';font-size:17px;line-height:24px;font-weight:700;color:' + C.text + ';vertical-align:middle;', esc(titel)) +
+        td('font-family:' + FONT_H + ';font-size:26px;line-height:32px;font-weight:800;color:' + C.blauDunkel + ';text-align:right;white-space:nowrap;vertical-align:middle;', esc(betragText), 'align="right"') +
+        '</tr>'), 'bgcolor="' + C.hell + '"') +
+      '</tr>');
+  }
+  /** Kasten mit den Bankdaten und dem Verwendungszweck */
+  function bankKasten(zweck) {
+    function bankZeile(k, v, fett) {
+      return '<tr>' +
+        td('padding:4px 12px 4px 0;font-family:' + FONT + ';font-size:14px;line-height:20px;color:' + C.sub + ';white-space:nowrap;vertical-align:top;', esc(k)) +
+        td('padding:4px 0;font-family:' + FONT + ';font-size:16px;line-height:22px;color:' + C.text + ';' + (fett ? 'font-weight:700;' : 'font-weight:500;'), esc(v)) +
+        '</tr>';
+    }
+    return tabelle('100%', '<tr>' + td('padding:14px 16px;border:1px solid ' + C.rahmen + ';border-radius:16px;', tabelle('100%',
+      bankZeile('Kontoinhaber', BANK.inhaber) + bankZeile('Bank', BANK.bank) + bankZeile('IBAN', BANK.iban, true) + bankZeile('BIC', BANK.bic) +
+      bankZeile('Verwendungszweck', zweck || '', true))) + '</tr>');
+  }
+  /** Tabelle der Beträge aus dem Ergebnis von rechne(): Bezeichnung links, Betrag rechts (− bzw. + vor dem Betrag) */
+  function betragsTabelle(r) {
     var zeilen = '';
     r.zeilen.forEach(function (z, i) {
       var vz = z.vz === '-' ? '− ' : (i > 0 ? '+ ' : '');
@@ -176,72 +207,64 @@
         '</tr>';
     });
     if (!zeilen) zeilen = '<tr>' + td('padding:9px 0;font-family:' + FONT + ';font-size:16px;color:' + C.sub + ';', 'Keine Positionen ausgewählt.', 'colspan="2"') + '</tr>';
-    var summeBox = tabelle('100%',
-      '<tr>' +
-      td('width:4px;background-color:' + C.blau + ';font-size:0;line-height:0;', '&nbsp;', 'width="4" bgcolor="' + C.blau + '"') +
-      td('padding:14px 16px;background-color:' + C.hell + ';', tabelle('100%',
-        '<tr>' +
-        td('font-family:' + FONT_H + ';font-size:17px;line-height:24px;font-weight:700;color:' + C.text + ';vertical-align:middle;', 'Überweisungsbetrag') +
-        td('font-family:' + FONT_H + ';font-size:26px;line-height:32px;font-weight:800;color:' + C.blauDunkel + ';text-align:right;white-space:nowrap;vertical-align:middle;', esc(fmtCent(r.cent)), 'align="right"') +
-        '</tr>'), 'bgcolor="' + C.hell + '"') +
-      '</tr>');
-
-    // Bankkasten
-    function bankZeile(k, v, fett) {
-      return '<tr>' +
-        td('padding:4px 12px 4px 0;font-family:' + FONT + ';font-size:14px;line-height:20px;color:' + C.sub + ';white-space:nowrap;vertical-align:top;', esc(k)) +
-        td('padding:4px 0;font-family:' + FONT + ';font-size:16px;line-height:22px;color:' + C.text + ';' + (fett ? 'font-weight:700;' : 'font-weight:500;'), esc(v)) +
-        '</tr>';
-    }
-    var bankKasten = tabelle('100%', '<tr>' + td('padding:14px 16px;border:1px solid ' + C.rahmen + ';border-radius:16px;', tabelle('100%',
-      bankZeile('Kontoinhaber', BANK.inhaber) + bankZeile('Bank', BANK.bank) + bankZeile('IBAN', BANK.iban, true) + bankZeile('BIC', BANK.bic) +
-      bankZeile('Verwendungszweck', d.zweck || '', true))) + '</tr>');
-
-    // Schritte
-    var schrittHtml = '';
-    st.forEach(function (t, i) {
-      schrittHtml += '<tr>' +
-        td('padding:0 12px 12px 0;vertical-align:top;width:36px;', tabelle(36, '<tr>' + td('width:36px;height:36px;background-color:' + C.blau + ';border-radius:18px;text-align:center;vertical-align:middle;font-family:' + FONT_H + ';font-size:19px;line-height:36px;font-weight:700;color:#FFFFFF;', String(i + 1), 'width="36" height="36" bgcolor="' + C.blau + '" align="center"') + '</tr>'), 'width="48"') +
+    return tabelle('100%', zeilen);
+  }
+  /** Nummerierte Schritte. optionen.erledigt = Anzahl der ersten Schritte, die statt der Nummer einen Haken zeigen (Standard 0). */
+  function schrittListe(texte, optionen) {
+    var erledigt = (optionen && optionen.erledigt) || 0, out = '';
+    (texte || []).forEach(function (t, i) {
+      out += '<tr>' +
+        td('padding:0 12px 12px 0;vertical-align:top;width:36px;', tabelle(36, '<tr>' + td('width:36px;height:36px;background-color:' + C.blau + ';border-radius:18px;text-align:center;vertical-align:middle;font-family:' + FONT_H + ';font-size:19px;line-height:36px;font-weight:700;color:#FFFFFF;', i < erledigt ? '&#10003;' : String(i + 1), 'width="36" height="36" bgcolor="' + C.blau + '" align="center"') + '</tr>'), 'width="48"') +
         td('padding:0 0 12px 0;vertical-align:middle;font-family:' + FONT + ';font-size:16px;line-height:24px;color:' + C.text + ';', esc(t)) +
         '</tr>';
     });
-
-    // Signatur
-    var sig = '<p style="margin:0;font-family:' + FONT_H + ';font-size:16px;line-height:24px;font-weight:700;color:' + C.text + ';">' + esc(ab.name || '') + '</p>' +
+    return tabelle('100%', out);
+  }
+  /** Signatur (Absender = angemeldeter Nutzer) */
+  function signatur(ab) {
+    ab = ab || {};
+    return '<p style="margin:0;font-family:' + FONT_H + ';font-size:16px;line-height:24px;font-weight:700;color:' + C.text + ';">' + esc(ab.name || '') + '</p>' +
       '<p style="margin:0;font-family:' + FONT + ';font-size:15px;line-height:22px;color:' + C.text + ';">Autohaus Stieber GmbH<br>' + esc(ANSCHRIFT) + '<br>' +
       'Telefon: ' + esc(ab.tel || TELEFON) + '<br>' +
       (ab.email ? 'E-Mail: <a href="mailto:' + esc(ab.email) + '" style="color:' + C.blauDunkel + ';text-decoration:underline;">' + esc(ab.email) + '</a><br>' : '') +
       '<a href="https://' + WEB + '" style="color:' + C.blauDunkel + ';text-decoration:underline;">' + WEB + '</a></p>';
+  }
+  /** Fußzeile (Zeile) */
+  function fuss() {
+    return '<tr>' + td('padding:12px 24px;background-color:' + C.hell + ';border-top:1px solid ' + C.rahmen + ';text-align:center;font-family:' + FONT + ';font-size:12px;line-height:18px;color:' + C.sub + ';', esc(FUSSZEILE), 'align="center" bgcolor="' + C.hell + '"') + '</tr>';
+  }
+  /** Äußere 600-px-Tabelle um die Zeilen (Array oder String) */
+  function seite(inhaltZeilen) {
+    var z = Array.isArray(inhaltZeilen) ? inhaltZeilen.join('') : String(inhaltZeilen || '');
+    return tabelle(600, z, 'max-width:600px;background-color:' + C.weiss + ';margin:0 auto;');
+  }
 
-    var inhalt =
-      // Logo + Linie
-      '<tr>' + td('padding:20px 0 16px 0;text-align:center;background-color:' + C.weiss + ';',
-        logo ? '<img src="' + esc(logo) + '" width="400" alt="Autohaus Stieber GmbH" style="display:block;margin:0 auto;width:400px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;font-family:' + FONT_H + ';font-size:20px;color:' + C.text + ';">' : '', 'align="center"') + '</tr>' +
-      '<tr>' + td('height:4px;font-size:0;line-height:0;background-color:' + C.blau + ';', '&nbsp;', 'height="4" bgcolor="' + C.blau + '"') + '</tr>' +
+  /** d: { anrede, vor, nach, positionen, frist, zweck, schritte, absender:{name,email,tel}, logoUrl? } → HTML-Fragment (äußere Tabelle) */
+  function baueHtml(d) {
+    var r = rechne(d.positionen), st = schritteAktiv(d.schritte), ab = d.absender || {};
+    var logo = d.logoUrl != null ? d.logoUrl : LOGO_URL;
+    var ein = einleitung(d);
+
+    return seite([
+      kopfLogo(logo), linie(),
       // Text
-      '<tr>' + td('padding:28px 24px 8px 24px;background-color:' + C.weiss + ';',
+      zeile('28px 24px 8px 24px',
         absatz(esc(briefAnrede(d.anrede, d.vor, d.nach))) +
         absatz(esc(ein.dank)) +
-        absatz(esc(ein.bitte) + '<strong>' + esc(fristText(d.frist)) + '</strong>' + esc(ein.bitteEnde))) + '</tr>' +
+        absatz(esc(ein.bitte) + '<strong>' + esc(fristText(d.frist)) + '</strong>' + esc(ein.bitteEnde))),
       // Schritte (erst der Ablauf, dann die Zahlung – Oli 10.11.2026)
-      (st.length ? '<tr>' + td('padding:0 24px 12px 24px;background-color:' + C.weiss + ';',
-        zwischen('So geht es weiter') + tabelle('100%', schrittHtml)) + '</tr>' : '') +
+      (st.length ? zeile('0 24px 12px 24px', zwischen('So geht es weiter') + schrittListe(st)) : ''),
       // Beträge
-      '<tr>' + td('padding:0 24px 20px 24px;background-color:' + C.weiss + ';', zwischen('Ihre Zahlung') + tabelle('100%', zeilen) + '<div style="height:12px;line-height:12px;font-size:0;">&nbsp;</div>' + summeBox) + '</tr>' +
+      zeile('0 24px 20px 24px', zwischen('Ihre Zahlung') + betragsTabelle(r) + '<div style="height:12px;line-height:12px;font-size:0;">&nbsp;</div>' + summenKasten('Überweisungsbetrag', fmtCent(r.cent))),
       // Bank
-      '<tr>' + td('padding:0 24px 24px 24px;background-color:' + C.weiss + ';', bankKasten) + '</tr>' +
+      zeile('0 24px 24px 24px', bankKasten(d.zweck)),
       // Schluss
-      '<tr>' + td('padding:4px 24px 8px 24px;background-color:' + C.weiss + ';',
-        absatz(esc(ein.danach)) +
-        absatz(esc(ein.fragen)) +
-        absatz(esc(ein.gruss))) + '</tr>' +
+      zeile('4px 24px 8px 24px', absatz(esc(ein.danach)) + absatz(esc(ein.fragen)) + absatz(esc(ein.gruss))),
       // Signatur
-      '<tr>' + td('padding:0 24px 24px 24px;background-color:' + C.weiss + ';', sig) + '</tr>' +
+      zeile('0 24px 24px 24px', signatur(ab)),
       // Fuß
-      '<tr>' + td('padding:12px 24px;background-color:' + C.hell + ';border-top:1px solid ' + C.rahmen + ';text-align:center;font-family:' + FONT + ';font-size:12px;line-height:18px;color:' + C.sub + ';', esc(FUSSZEILE), 'align="center" bgcolor="' + C.hell + '"') + '</tr>';
-
-    out = tabelle(600, inhalt, 'max-width:600px;background-color:' + C.weiss + ';margin:0 auto;');
-    return out;
+      fuss()
+    ]);
   }
 
   /* ---------- Mail-Klartext ---------- */
@@ -326,24 +349,25 @@
   }
   function zeilen76(s) { return String(s).replace(/(.{76})/g, '$1\r\n'); }
   function kopfWort(s) { return /^[\x20-\x7E]*$/.test(String(s)) ? String(s) : '=?UTF-8?B?' + b64Utf8(s) + '?='; }
-  function baueEml(d) {
-    var grenze = '----=_Stieber_ZE_' + Date.now().toString(36);
-    var empf = String(d.empfaenger || '').replace(/[\r\n<>,;"]/g, '').trim();
+  /** Baut die .eml aus fertigem HTML-Fragment und Klartext. o: { html, text, betreff, empfaenger, grenzePrefix? } */
+  function emlAus(o) {
+    var grenze = (o.grenzePrefix || '----=_Stieber_ZE_') + Date.now().toString(36);
+    var empf = String(o.empfaenger || '').replace(/[\r\n<>,;"]/g, '').trim();
     var html = '<!DOCTYPE html><html lang="de"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">' +
-      '<meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc(d.betreff || '') + '</title></head>' +
-      '<body style="margin:0;padding:0;background-color:#FFFFFF;">' + baueHtml(d) + '</body></html>';
+      '<meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc(o.betreff || '') + '</title></head>' +
+      '<body style="margin:0;padding:0;background-color:#FFFFFF;">' + o.html + '</body></html>';
     return [
       'MIME-Version: 1.0',
       'X-Unsent: 1',
       (empf ? 'To: ' + empf : 'To: '),
-      'Subject: ' + kopfWort(String(d.betreff || '').replace(/[\r\n]+/g, ' ')),
+      'Subject: ' + kopfWort(String(o.betreff || '').replace(/[\r\n]+/g, ' ')),
       'Content-Type: multipart/alternative; boundary="' + grenze + '"',
       '',
       '--' + grenze,
       'Content-Type: text/plain; charset="utf-8"',
       'Content-Transfer-Encoding: base64',
       '',
-      zeilen76(b64Utf8(baueText(d))),
+      zeilen76(b64Utf8(o.text)),
       '',
       '--' + grenze,
       'Content-Type: text/html; charset="utf-8"',
@@ -355,6 +379,9 @@
       ''
     ].join('\r\n');
   }
+  function baueEml(d) {
+    return emlAus({ html: baueHtml(d), text: baueText(d), betreff: d.betreff, empfaenger: d.empfaenger });
+  }
   function emlDateiname(d) {
     var n = String(d.nach || '').trim().replace(/[^0-9A-Za-zÄÖÜäöüß_-]+/g, '_') || 'Kunde';
     var nr = String(d.nr || '').trim().replace(/[^0-9A-Za-z_-]+/g, '');
@@ -365,12 +392,83 @@
     LOGO_URL: LOGO_URL, BANK: BANK, TELEFON: TELEFON, ROLLEN: ZE_ROLLEN, SCHRITTE_STANDARD: SCHRITTE_STANDARD,
     esc: esc, parseBetrag: parseBetrag, fmtCent: fmtCent, fmtEuro: fmtEuro, fmtFeld: fmtFeld, rechne: rechne, zerlegeName: zerlegeName,
     briefAnrede: briefAnrede, fristText: fristText, verwendungszweck: verwendungszweck, schritteAktiv: schritteAktiv, betreff: betreff,
-    baueHtml: baueHtml, baueText: baueText, baueEml: baueEml, emlDateiname: emlDateiname, vorbelegung: vorbelegung, datumDe: datumDe
+    baueHtml: baueHtml, baueText: baueText, baueEml: baueEml, emlAus: emlAus, emlDateiname: emlDateiname, vorbelegung: vorbelegung, datumDe: datumDe,
+    C: C, FONT: FONT, FONT_H: FONT_H, ANSCHRIFT: ANSCHRIFT, WEB: WEB, FUSSZEILE: FUSSZEILE,
+    bau: { td: td, tabelle: tabelle, absatz: absatz, zwischen: zwischen, zeile: zeile, kopfLogo: kopfLogo, linie: linie, summenKasten: summenKasten, betragsTabelle: betragsTabelle, bankKasten: bankKasten, schrittListe: schrittListe, signatur: signatur, fuss: fuss, seite: seite }
   };
 
   /* ====================================================================
      Oberfläche (nur im Browser mit window.EG)
      ==================================================================== */
+  /* ---------- Gemeinsame Formular-Teile (auch für VK_ZB; nur im Browser aufgerufen) ---------- */
+  /** Editor für Beträge-Zeilen: Haken, Vorzeichen, Bezeichnung, Betrag, löschen.
+      h = EG.h, liste = Array der Positionen (wird direkt verändert), box = Container, onChange = Funktion nach jeder Änderung.
+      Geänderte Bezeichnung setzt p.textManuell = true. → { zeichne(), neueZeile() } */
+  function uiPositionen(h, liste, box, onChange) {
+    function zeichne() {
+      box.innerHTML = '';
+      liste.forEach(function (p, i) {
+        var cb = h('input', { type: 'checkbox', checked: !!p.aktiv, 'aria-label': 'Zeile verwenden: ' + p.text });
+        var vz = h('select', { 'aria-label': 'Vorzeichen' }, h('option', { value: '+', text: '+' }), h('option', { value: '-', text: '−' }));
+        vz.value = p.vz === '-' ? '-' : '+';
+        var t = h('input', { type: 'text', value: p.text, 'aria-label': 'Bezeichnung', autocomplete: 'off' });
+        var b = h('input', { type: 'text', inputmode: 'decimal', value: p.betrag == null ? '' : p.betrag, placeholder: '0,00', 'aria-label': 'Betrag in Euro', autocomplete: 'off' });
+        var zeile = h('div', { class: 'vk-ze-zeile' + (p.aktiv ? '' : ' aus') });
+        cb.addEventListener('change', function () { p.aktiv = cb.checked; zeile.className = 'vk-ze-zeile' + (p.aktiv ? '' : ' aus'); onChange(); });
+        vz.addEventListener('change', function () { p.vz = vz.value; onChange(); });
+        t.addEventListener('input', function () { p.text = t.value; p.textManuell = true; onChange(); });
+        b.addEventListener('input', function () {
+          p.betrag = b.value;
+          var n = parseBetrag(b.value);
+          b.className = (n !== null && isNaN(n)) ? 'vk-ze-ungueltig' : '';
+          if (n !== null && !isNaN(n) && n > 0 && !p.aktiv) { p.aktiv = true; cb.checked = true; zeile.className = 'vk-ze-zeile'; }
+          onChange();
+        });
+        b.addEventListener('blur', function () { var n = parseBetrag(b.value); if (n !== null && !isNaN(n)) { b.value = fmtFeld(n); p.betrag = b.value; onChange(); } });
+        var weg = h('button', { type: 'button', class: 'btn btn-ghost btn-klein vk-ze-weg', 'aria-label': 'Zeile löschen', text: '×', onclick: function () { liste.splice(i, 1); zeichne(); onChange(); } });
+        zeile.appendChild(cb); zeile.appendChild(vz); zeile.appendChild(t); zeile.appendChild(b); zeile.appendChild(weg);
+        box.appendChild(zeile);
+      });
+    }
+    function neueZeile() {
+      liste.push({ aktiv: true, vz: '+', text: '', betrag: '' }); zeichne(); onChange();
+      var ts = box.querySelectorAll('.vk-ze-zeile input[type=text]'); if (ts.length >= 2) ts[ts.length - 2].focus();
+    }
+    return { zeichne: zeichne, neueZeile: neueZeile };
+  }
+  /** Zeilen für die „nächsten Schritte“ (Haken + Text) */
+  function uiSchritte(h, liste, box, onChange) {
+    liste.forEach(function (s, i) {
+      var cb = h('input', { type: 'checkbox', checked: !!s.aktiv, 'aria-label': 'Schritt verwenden' });
+      var t = h('input', { type: 'text', value: s.text, 'aria-label': 'Schritt ' + (i + 1), autocomplete: 'off' });
+      var z = h('div', { class: 'vk-ze-zeile schritt' + (s.aktiv ? '' : ' aus') });
+      cb.addEventListener('change', function () { s.aktiv = cb.checked; z.className = 'vk-ze-zeile schritt' + (s.aktiv ? '' : ' aus'); onChange(); });
+      t.addEventListener('input', function () { s.text = t.value; onChange(); });
+      z.appendChild(cb); z.appendChild(t); box.appendChild(z);
+    });
+  }
+  /** Vollbild-Overlay (Formular links, Vorschau rechts, Knopfleiste unten). o: { titel, form, vorschau (Node), knoepfe: [Node] }
+      → { schliessen() }. Esc schließt. Gleiche Klassen wie die Zahlungseinladung (vk-ze-*). */
+  function uiOverlay(EG, o) {
+    var h = EG.h, doc = root.document;
+    var vorKarte = h('div', { class: 'vk-ze-vorkarte' }, h('h3', { text: 'Vorschau' }), o.vorschau);
+    var kopf = h('div', { class: 'vk-ze-kopf' }, h('h2', { text: o.titel }),
+      h('button', { type: 'button', class: 'dlg-x', 'aria-label': 'Schließen', text: '×', onclick: schliessen }));
+    var ueber = h('div', { class: 'vk-ze-ueber', role: 'dialog', 'aria-modal': 'true', 'aria-label': o.titel },
+      h('div', { class: 'vk-ze-panel' }, kopf, h('div', { class: 'vk-ze-body' }, o.form, vorKarte), h('div', { class: 'vk-ze-leiste' }, o.knoepfe)));
+    function taste(e) { if (e.key === 'Escape') { e.stopPropagation(); schliessen(); } }
+    function schliessen() {
+      doc.removeEventListener('keydown', taste, true);
+      if (ueber.parentNode) ueber.parentNode.removeChild(ueber);
+      doc.body.classList.remove('vk-ze-offen');
+    }
+    doc.body.appendChild(ueber);
+    doc.body.classList.add('vk-ze-offen');
+    doc.addEventListener('keydown', taste, true);
+    return { schliessen: schliessen };
+  }
+  API.ui = { positionen: uiPositionen, schritte: uiSchritte, overlay: uiOverlay };
+
   API.darfSehen = function (rolle) { return ZE_ROLLEN.indexOf(rolle) >= 0; };
 
   /** Öffnet das Formular. akte = verkauf.akte-Zeile, pm = Punkt-Map der Akte (S.pm). Gibt nichts zurück. */
@@ -428,37 +526,11 @@
     el.fahrzeug = txt('vk-ze-fz', d.fahrzeug, 'Hersteller Modell'); el.nr = txt('vk-ze-nr', d.nr, 'z. B. 2808');
     el.fahrzeug.addEventListener('input', nachNameOderNr); el.nr.addEventListener('input', nachNameOderNr);
 
-    /* Positionen */
+    /* Positionen (Editor gemeinsam mit VK_ZB: API.ui) */
     var posBox = h('div', { class: 'vk-ze-pos' });
-    function zeichnePositionen() {
-      posBox.innerHTML = '';
-      d.positionen.forEach(function (p, i) {
-        var cb = h('input', { type: 'checkbox', checked: !!p.aktiv, 'aria-label': 'Zeile verwenden: ' + p.text });
-        var vz = h('select', { 'aria-label': 'Vorzeichen' }, h('option', { value: '+', text: '+' }), h('option', { value: '-', text: '−' }));
-        vz.value = p.vz === '-' ? '-' : '+';
-        var t = h('input', { type: 'text', value: p.text, 'aria-label': 'Bezeichnung', autocomplete: 'off' });
-        var b = h('input', { type: 'text', inputmode: 'decimal', value: p.betrag == null ? '' : p.betrag, placeholder: '0,00', 'aria-label': 'Betrag in Euro', autocomplete: 'off' });
-        var zeile = h('div', { class: 'vk-ze-zeile' + (p.aktiv ? '' : ' aus') });
-        cb.addEventListener('change', function () { p.aktiv = cb.checked; zeile.className = 'vk-ze-zeile' + (p.aktiv ? '' : ' aus'); aktualisieren(); });
-        vz.addEventListener('change', function () { p.vz = vz.value; aktualisieren(); });
-        t.addEventListener('input', function () { p.text = t.value; aktualisieren(); });
-        b.addEventListener('input', function () {
-          p.betrag = b.value;
-          var n = parseBetrag(b.value);
-          b.className = (n !== null && isNaN(n)) ? 'vk-ze-ungueltig' : '';
-          if (n !== null && !isNaN(n) && n > 0 && !p.aktiv) { p.aktiv = true; cb.checked = true; zeile.className = 'vk-ze-zeile'; }
-          aktualisieren();
-        });
-        b.addEventListener('blur', function () { var n = parseBetrag(b.value); if (n !== null && !isNaN(n)) { b.value = fmtFeld(n); p.betrag = b.value; aktualisieren(); } });
-        var weg = h('button', { type: 'button', class: 'btn btn-ghost btn-klein vk-ze-weg', 'aria-label': 'Zeile löschen', text: '×', onclick: function () { d.positionen.splice(i, 1); zeichnePositionen(); aktualisieren(); } });
-        zeile.appendChild(cb); zeile.appendChild(vz); zeile.appendChild(t); zeile.appendChild(b); zeile.appendChild(weg);
-        posBox.appendChild(zeile);
-      });
-    }
-    var posNeu = h('button', { type: 'button', class: 'btn btn-ghost btn-klein', text: '+ Zeile', onclick: function () {
-      d.positionen.push({ aktiv: true, vz: '+', text: '', betrag: '' }); zeichnePositionen(); aktualisieren();
-      var ts = posBox.querySelectorAll('.vk-ze-zeile input[type=text]'); if (ts.length >= 2) ts[ts.length - 2].focus();
-    } });
+    var posEd = uiPositionen(h, d.positionen, posBox, function () { aktualisieren(); });
+    var zeichnePositionen = posEd.zeichne;
+    var posNeu = h('button', { type: 'button', class: 'btn btn-ghost btn-klein', text: '+ Zeile', onclick: posEd.neueZeile });
 
     /* Frist */
     el.fristArt = h('select', { id: 'vk-ze-fa' }, h('option', { value: 'tage', text: 'innerhalb der nächsten … Tage' }), h('option', { value: 'datum', text: 'bis zum Datum' }));
@@ -473,14 +545,7 @@
 
     /* Schritte */
     var schrBox = h('div', { class: 'vk-ze-schritte' });
-    d.schritte.forEach(function (s, i) {
-      var cb = h('input', { type: 'checkbox', checked: !!s.aktiv, 'aria-label': 'Schritt verwenden' });
-      var t = h('input', { type: 'text', value: s.text, 'aria-label': 'Schritt ' + (i + 1), autocomplete: 'off' });
-      var z = h('div', { class: 'vk-ze-zeile schritt' + (s.aktiv ? '' : ' aus') });
-      cb.addEventListener('change', function () { s.aktiv = cb.checked; z.className = 'vk-ze-zeile schritt' + (s.aktiv ? '' : ' aus'); aktualisieren(); });
-      t.addEventListener('input', function () { s.text = t.value; aktualisieren(); });
-      z.appendChild(cb); z.appendChild(t); schrBox.appendChild(z);
-    });
+    uiSchritte(h, d.schritte, schrBox, function () { aktualisieren(); });
 
     el.abName = txt('vk-ze-abn', d.absender.name, 'Vorname Nachname'); el.abMail = txt('vk-ze-abm', d.absender.email, 'name@autohaus-stieber.de', 'email'); el.abTel = txt('vk-ze-abt', d.absender.tel);
     [el.abName, el.abMail, el.abTel].forEach(function (x) { x.addEventListener('input', aktualisieren); });

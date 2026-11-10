@@ -865,6 +865,10 @@
     if (info.key === 'v7' && p.k === 'zahlungseinladung' && window.VK_ZE && window.VK_ZE.darfSehen(meineRolle())) {   // Zahlungseinladung: Formular + Mail zum Kopieren (verkauf-zahlungseinladung.js)
       karte.appendChild(h('button', { type: 'button', class: 'btn btn-primary vk-ze-knopf', text: 'Zahlungseinladung erstellen', onclick: function () { window.VK_ZE.oeffnen(S.akte, S.pm); } }));
     }
+    if (info.key === 'v7' && (p.k === 'anzahlung_da' || p.k === 'restzahlung') && window.VK_ZB && window.VK_ZB.darfSehen(meineRolle())) {   // Zahlungsbestätigung: Formular + Mail (verkauf-zahlungsbestaetigung.js)
+      var zbArt = p.k === 'anzahlung_da' ? 'anzahlung' : 'komplett';
+      karte.appendChild(h('button', { type: 'button', class: 'btn btn-primary vk-ze-knopf', text: 'Zahlungsbestätigung erstellen', onclick: function () { window.VK_ZB.oeffnen(S.akte, S.pm, zbArt); } }));
+    }
     if (p.spezial === 'nachlass') karte.appendChild(nachlassBlock(info, pe, ed));
     if (p.foto) karte.appendChild(fotoBereich(info, pe, ed));
     karte.appendChild(segment(info, pe, ed));
