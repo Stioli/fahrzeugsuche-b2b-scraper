@@ -318,11 +318,54 @@
     };
   }
 
+  /* ---------- .eml-Entwurf (Oli 10.11.2026: Mail auf einen Klick mit Empfänger, Betreff und HTML) ----------
+     X-Unsent: 1 → Outlook öffnet die Datei als sendebereiten Entwurf (Outlook classic sicher; neues Outlook testen). */
+  function b64Utf8(s) {
+    var bytes = unescape(encodeURIComponent(String(s == null ? '' : s)));
+    return (typeof btoa === 'function') ? btoa(bytes) : Buffer.from(bytes, 'binary').toString('base64');
+  }
+  function zeilen76(s) { return String(s).replace(/(.{76})/g, '$1\r\n'); }
+  function kopfWort(s) { return /^[\x20-\x7E]*$/.test(String(s)) ? String(s) : '=?UTF-8?B?' + b64Utf8(s) + '?='; }
+  function baueEml(d) {
+    var grenze = '----=_Stieber_ZE_' + Date.now().toString(36);
+    var empf = String(d.empfaenger || '').replace(/[\r\n<>,;"]/g, '').trim();
+    var html = '<!DOCTYPE html><html lang="de"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc(d.betreff || '') + '</title></head>' +
+      '<body style="margin:0;padding:0;background-color:#FFFFFF;">' + baueHtml(d) + '</body></html>';
+    return [
+      'MIME-Version: 1.0',
+      'X-Unsent: 1',
+      (empf ? 'To: ' + empf : 'To: '),
+      'Subject: ' + kopfWort(String(d.betreff || '').replace(/[\r\n]+/g, ' ')),
+      'Content-Type: multipart/alternative; boundary="' + grenze + '"',
+      '',
+      '--' + grenze,
+      'Content-Type: text/plain; charset="utf-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      zeilen76(b64Utf8(baueText(d))),
+      '',
+      '--' + grenze,
+      'Content-Type: text/html; charset="utf-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      zeilen76(b64Utf8(html)),
+      '',
+      '--' + grenze + '--',
+      ''
+    ].join('\r\n');
+  }
+  function emlDateiname(d) {
+    var n = String(d.nach || '').trim().replace(/[^0-9A-Za-zÄÖÜäöüß_-]+/g, '_') || 'Kunde';
+    var nr = String(d.nr || '').trim().replace(/[^0-9A-Za-z_-]+/g, '');
+    return 'Zahlungseinladung ' + n + (nr ? ' ' + nr : '') + '.eml';
+  }
+
   var API = {
     LOGO_URL: LOGO_URL, BANK: BANK, TELEFON: TELEFON, ROLLEN: ZE_ROLLEN, SCHRITTE_STANDARD: SCHRITTE_STANDARD,
     esc: esc, parseBetrag: parseBetrag, fmtCent: fmtCent, fmtEuro: fmtEuro, fmtFeld: fmtFeld, rechne: rechne, zerlegeName: zerlegeName,
     briefAnrede: briefAnrede, fristText: fristText, verwendungszweck: verwendungszweck, schritteAktiv: schritteAktiv, betreff: betreff,
-    baueHtml: baueHtml, baueText: baueText, vorbelegung: vorbelegung, datumDe: datumDe
+    baueHtml: baueHtml, baueText: baueText, baueEml: baueEml, emlDateiname: emlDateiname, vorbelegung: vorbelegung, datumDe: datumDe
   };
 
   /* ====================================================================
@@ -463,7 +506,18 @@
       sammeln();
       EG.kopieren(d.betreff).then(function (ok) { EG.toast(ok ? 'Betreff kopiert' : 'Kopieren hat nicht geklappt.', ok ? 'ok' : 'fehler'); });
     }
-    var knMail = h('button', { type: 'button', class: 'btn btn-primary', text: 'Mail kopieren', onclick: kopiereMail });
+    function oeffneInOutlook() {
+      if (!pruefen()) return;
+      if (!d.empfaenger) { EG.toast('Keine E-Mail-Adresse des Kunden eingetragen.', 'fehler'); return; }
+      var blob = new Blob([baueEml(d)], { type: 'message/rfc822' });
+      var url = URL.createObjectURL(blob);
+      var a = doc.createElement('a'); a.href = url; a.download = emlDateiname(d);
+      doc.body.appendChild(a); a.click(); doc.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      EG.toast('Datei heruntergeladen – per Doppelklick öffnen, Rechnung anhängen, senden.', 'ok');
+    }
+    var knOutlook = h('button', { type: 'button', class: 'btn btn-primary', text: 'In Outlook öffnen', onclick: oeffneInOutlook });
+    var knMail = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Mail kopieren', onclick: kopiereMail });
     var knBetreff = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Betreff kopieren', onclick: kopiereBetreff });
     var knOeffnen = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Mail öffnen', onclick: function () {
       sammeln();
@@ -488,7 +542,7 @@
       abschnitt('Absender', h('div', {}, EG.feld('Name', el.abName), EG.feld('E-Mail', el.abMail), EG.feld('Telefon', el.abTel))),
       abschnitt('Versand', h('div', {}, EG.feld('Empfänger (E-Mail)', el.empf), EG.feld('Betreff', el.betreff))));
     var vorKarte = h('div', { class: 'vk-ze-vorkarte' }, h('h3', { text: 'Vorschau' }), vorschau);
-    var leiste = h('div', { class: 'vk-ze-leiste' }, knMail, knBetreff, knOeffnen, knZu);
+    var leiste = h('div', { class: 'vk-ze-leiste' }, knOutlook, knMail, knBetreff, knZu);
     var kopf = h('div', { class: 'vk-ze-kopf' }, h('h2', { text: 'Zahlungseinladung erstellen' }),
       h('button', { type: 'button', class: 'dlg-x', 'aria-label': 'Schließen', text: '×', onclick: schliessen }));
     var ueber = h('div', { class: 'vk-ze-ueber', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Zahlungseinladung erstellen' },
