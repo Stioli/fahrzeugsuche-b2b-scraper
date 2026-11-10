@@ -25,6 +25,19 @@
 .vk-fehlt-phase{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--blau-dark);flex:0 0 auto}
 .vk-fehlt-text{flex:1 1 180px;overflow-wrap:anywhere}
 .vk-fehlt-sperre{background:var(--gold-bg);border:1px solid var(--gold);border-radius:12px;padding:10px 12px;font-size:15px;font-weight:600}
+/* je Phase eine aufklappbare Gruppe (Pfeil wie bei den Phasen unten) */
+.vk-fehlt-gruppe{border:1px solid var(--border);border-left:6px solid #AEBACB;border-radius:12px;background:#fff}
+.vk-fehlt-gruppe.gelb{border-left-color:var(--gold)}
+.vk-fehlt-gruppe.rot{border-left-color:var(--rot-text)}
+.vk-fehlt-gruppe.aktuell{border-color:var(--blau);border-left-color:var(--blau)}
+.vk-fehlt-gruppe > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:48px;padding:8px 44px 8px 12px;position:relative}
+.vk-fehlt-gruppe > summary::-webkit-details-marker{display:none}
+.vk-fehlt-gruppe > summary::after{content:"";position:absolute;right:18px;top:50%;width:9px;height:9px;border-right:3px solid var(--sub);border-bottom:3px solid var(--sub);transform:translateY(-70%) rotate(45deg);transition:transform .15s}
+.vk-fehlt-gruppe[open] > summary::after{transform:translateY(-30%) rotate(-135deg)}
+.vk-fehlt-gr-name{font-family:var(--font-heading);font-weight:700;font-size:16px}
+.vk-fehlt-gr-zahl{font-size:14px;color:var(--sub);flex:1 1 auto}
+.vk-fehlt-gr-body{display:flex;flex-direction:column;gap:8px;padding:0 10px 10px}
+.vk-fehlt-gr-body .vk-fehlt-phase{display:none}   /* Phase steht schon in der Gruppenzeile */
 
 /* ---------- Phase (aufklappbar) ---------- */
 .vk-phase{background:#fff;border:1px solid var(--border);border-left:8px solid #AEBACB;border-radius:var(--radius);box-shadow:var(--schatten);margin-bottom:12px;scroll-margin-top:64px}

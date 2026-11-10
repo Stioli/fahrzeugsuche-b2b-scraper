@@ -567,7 +567,7 @@
     mitAc(S.pm, nr ? (await AC_UI.ladeZeilen([nr]))[nr] : null);
     neuBerechnen();
     if (S.geoeffnetFuer !== S.id) {   // beim ersten Öffnen: aktuelle Phase aufklappen
-      S.geoeffnetFuer = S.id; S.offen = {};
+      S.geoeffnetFuer = S.id; S.offen = {}; S.fehltOffen = {};
       if (S.calc.aktuellIdx >= 0) S.offen[S.calc.aktuell] = true;
     }
     zeichneDetail();
@@ -655,26 +655,46 @@
     var karte = h('div', { class: 'karte vk-fehlt' }, h('h2', { text: 'Was fehlt noch' }));
     if (a.phase_aktuell === 'abgebrochen') { karte.appendChild(h('p', { class: 'muted', text: 'Verkauf abgebrochen – nichts mehr offen.' })); return karte; }
     if (c.aktuellIdx < 0) { karte.appendChild(EG.banner('Alles erledigt. Alle zehn Phasen sind grün.', 'ok')); return karte; }
+    // Je Phase eine aufklappbare Gruppe; offen ist zuerst nur die aktuelle Phase, danach merkt sich die Akte jedes Auf-/Zuklappen (S.fehltOffen)
     var liste = h('div', { class: 'vk-fehlt-liste' }), n = 0;
+    if (!S.fehltOffen) S.fehltOffen = {};
     for (var i = 0; i <= c.fehltBis; i++) {
       var info = c.phasen[i];
       if (info.gruen) continue;
+      var body = h('div', { class: 'vk-fehlt-gr-body' }), m = 0, nok = false;
       if (info.sperren.length && i === c.aktuellIdx) {
-        info.sperren.forEach(function (s) { liste.appendChild(h('div', { class: 'vk-fehlt-sperre', text: 'Gesperrt: ' + s.text })); });
+        info.sperren.forEach(function (s) { body.appendChild(h('div', { class: 'vk-fehlt-sperre', text: 'Gesperrt: ' + s.text })); });
       }
       var acOffen = 0, acErste = null;
       info.punkte.forEach(function (pe) {
         if (!(pe.offen || pe.st === 'nok')) return;
-        n++;
+        m++;
+        if (pe.st === 'nok') nok = true;
         if (pe.def.gruppe === 'ac') { acOffen++; if (!acErste) acErste = pe; return; }
-        liste.appendChild(fehltEintrag(info, pe, pe.def.text));
+        body.appendChild(fehltEintrag(info, pe, pe.def.text));
       });
-      if (acOffen) liste.appendChild(fehltEintrag(info, acErste, 'Auslieferungs-Checkliste: ' + (a.interne_nr ? acOffen + ' Punkt' + (acOffen === 1 ? '' : 'e') + ' offen' : 'Akte hat keine interne Nr.')));
+      if (acOffen) body.appendChild(fehltEintrag(info, acErste, 'Auslieferungs-Checkliste: ' + (a.interne_nr ? acOffen + ' Punkt' + (acOffen === 1 ? '' : 'e') + ' offen' : 'Akte hat keine interne Nr.')));
+      if (!body.childNodes.length) continue;
+      n += m;
+      liste.appendChild(fehltGruppe(info, i === c.aktuellIdx, m, nok, body));
     }
     var cur = c.phasen[c.aktuellIdx];
-    karte.appendChild(h('p', { class: 'muted klein', text: n + ' offene' + (n === 1 ? 'r Punkt' : ' Punkte') + ' bis die Phase „' + cur.def.name + '“ grün ist. Tippe auf einen Eintrag, dann springst du hin.' }));
+    karte.appendChild(h('p', { class: 'muted klein', text: n + ' offene' + (n === 1 ? 'r Punkt' : ' Punkte') + ' bis die Phase „' + cur.def.name + '“ grün ist. Tippe auf eine Phase zum Auf- oder Zuklappen, auf einen Eintrag, dann springst du hin.' }));
     karte.appendChild(liste);
     return karte;
+  }
+  function fehltGruppe(info, aktuell, m, nok, body) {
+    var key = info.key, det = h('details', { class: 'vk-fehlt-gruppe ' + info.ampel + (aktuell ? ' aktuell' : '') });
+    det.open = key in S.fehltOffen ? S.fehltOffen[key] : aktuell;
+    det.addEventListener('toggle', function () { S.fehltOffen[key] = det.open; });
+    det.appendChild(h('summary', {},
+      h('span', { class: 'vk-dot ' + info.ampel, 'aria-hidden': 'true' }),
+      h('span', { class: 'vk-fehlt-gr-name', text: info.def.name }),
+      h('span', { class: 'vk-fehlt-gr-zahl', text: m + ' offen' }),
+      nok ? EG.pill('NOK', 'rot') : null,
+      aktuell ? EG.pill('jetzt') : null));
+    det.appendChild(body);
+    return det;
   }
   function fehltEintrag(info, pe, text) {
     return h('button', { type: 'button', class: 'vk-fehlt-item', onclick: function () { springeZu(info.key, pe.def.k); } },
