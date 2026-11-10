@@ -29,11 +29,11 @@
   var FONT_H = "'Plus Jakarta Sans',Arial,sans-serif";
 
   var SCHRITTE_STANDARD = [
-    'Überweisung des Betrages',
-    'Eintreffen des Fahrzeuges bei uns',
-    'Aufbereitung und technische Durchsicht, sowie ggf. Montage des Zubehörs',
-    'Vereinbarung eines Abholtermins',
-    'Abholung und Übergabe'
+    'Überweisung des Betrags',
+    'Eintreffen des Fahrzeugs bei uns',
+    'Aufbereitung und technische Durchsicht, ggf. Montage des Zubehörs',
+    'Vereinbarung eines Übergabetermins',
+    'Übergabe Ihres Fahrzeugs'
   ];
 
   /* ====================================================================
@@ -143,11 +143,27 @@
   function absatz(text, extra) {
     return '<p style="margin:0 0 16px 0;font-family:' + FONT + ';font-size:16px;line-height:24px;color:' + C.text + ';' + (extra || '') + '">' + text + '</p>';
   }
+  function zwischen(text) {
+    return '<p style="margin:0 0 12px 0;font-family:' + FONT_H + ';font-size:18px;line-height:24px;font-weight:700;color:' + C.text + ';">' + text + '</p>';
+  }
+  /** Einleitung (Text 10.11.2026, Oli): Dank, Glückwunsch, Bitte um Überweisung */
+  function einleitung(d) {
+    var f = String(d.fahrzeug || '').trim();
+    return {
+      dank: 'vielen Dank für Ihr Vertrauen! ' + (f ? 'Mit Ihrem ' + f + ' haben Sie sich für ein tolles Fahrzeug entschieden.' : 'Sie haben sich für ein tolles Fahrzeug entschieden.') + ' Herzlichen Glückwunsch dazu!',
+      bitte: 'Damit wir Ihr Fahrzeug in Ruhe für Sie vorbereiten können, bitten wir Sie, den unten genannten Betrag ',
+      bitteEnde: ' zu überweisen.',
+      danach: 'Sobald Ihre Zahlung bei uns eingegangen ist, bereiten wir Ihr Fahrzeug vor und melden uns bei Ihnen, um einen Übergabetermin zu vereinbaren.',
+      fragen: 'Haben Sie Fragen? Ich bin jederzeit gerne für Sie da.',
+      gruss: 'Herzliche Grüße und bis bald'
+    };
+  }
 
   /** d: { anrede, vor, nach, positionen, frist, zweck, schritte, absender:{name,email,tel}, logoUrl? } → HTML-Fragment (äußere Tabelle) */
   function baueHtml(d) {
     var r = rechne(d.positionen), st = schritteAktiv(d.schritte), ab = d.absender || {};
     var logo = d.logoUrl != null ? d.logoUrl : LOGO_URL;
+    var ein = einleitung(d);
     var out = '';
 
     // Betragstabelle
@@ -205,19 +221,20 @@
       // Text
       '<tr>' + td('padding:28px 24px 8px 24px;background-color:' + C.weiss + ';',
         absatz(esc(briefAnrede(d.anrede, d.vor, d.nach))) +
-        absatz('damit wir alles für die Auslieferung vorbereiten können, bitten wir Sie herzlich, den folgenden Betrag <strong>' + esc(fristText(d.frist)) + '</strong> auf unser Konto zu überweisen:')) + '</tr>' +
+        absatz(esc(ein.dank)) +
+        absatz(esc(ein.bitte) + '<strong>' + esc(fristText(d.frist)) + '</strong>' + esc(ein.bitteEnde))) + '</tr>' +
+      // Schritte (erst der Ablauf, dann die Zahlung – Oli 10.11.2026)
+      (st.length ? '<tr>' + td('padding:0 24px 12px 24px;background-color:' + C.weiss + ';',
+        zwischen('So geht es weiter') + tabelle('100%', schrittHtml)) + '</tr>' : '') +
       // Beträge
-      '<tr>' + td('padding:0 24px 20px 24px;background-color:' + C.weiss + ';', tabelle('100%', zeilen) + '<div style="height:12px;line-height:12px;font-size:0;">&nbsp;</div>' + summeBox) + '</tr>' +
+      '<tr>' + td('padding:0 24px 20px 24px;background-color:' + C.weiss + ';', zwischen('Ihre Zahlung') + tabelle('100%', zeilen) + '<div style="height:12px;line-height:12px;font-size:0;">&nbsp;</div>' + summeBox) + '</tr>' +
       // Bank
       '<tr>' + td('padding:0 24px 24px 24px;background-color:' + C.weiss + ';', bankKasten) + '</tr>' +
-      // Schritte
-      (st.length ? '<tr>' + td('padding:0 24px 4px 24px;background-color:' + C.weiss + ';',
-        absatz('Gerne möchten wir Ihnen einen Überblick über die nächsten Schritte bis zur Übergabe Ihres neuen Fahrzeugs geben:') + tabelle('100%', schrittHtml)) + '</tr>' : '') +
       // Schluss
-      '<tr>' + td('padding:12px 24px 8px 24px;background-color:' + C.weiss + ';',
-        absatz('Wir kümmern uns mit größter Sorgfalt um Ihre Bestellung und sorgen dafür, dass die Übergabe Ihres Fahrzeugs reibungslos und zu Ihrer vollen Zufriedenheit verläuft.') +
-        absatz('Falls Sie noch Fragen haben, stehe ich Ihnen gerne jederzeit unter den unten angegebenen Kontaktdaten zur Verfügung.') +
-        absatz('Herzliche Grüße und bis bald')) + '</tr>' +
+      '<tr>' + td('padding:4px 24px 8px 24px;background-color:' + C.weiss + ';',
+        absatz(esc(ein.danach)) +
+        absatz(esc(ein.fragen)) +
+        absatz(esc(ein.gruss))) + '</tr>' +
       // Signatur
       '<tr>' + td('padding:0 24px 24px 24px;background-color:' + C.weiss + ';', sig) + '</tr>' +
       // Fuß
@@ -236,22 +253,24 @@
     betraege.push(fmtCent(r.cent));
     betraege.forEach(function (b) { if (b.length > breite) breite = b.length; });
     function links(t, b) { var l = t.length, n = Math.max(2, 44 - l); return t + new Array(n + 1).join(' ') + new Array(Math.max(0, breite - b.length) + 1).join(' ') + b; }
-    var z = [];
+    var z = [], ein = einleitung(d);
     z.push(briefAnrede(d.anrede, d.vor, d.nach), '');
-    z.push('damit wir alles für die Auslieferung vorbereiten können, bitten wir Sie herzlich, den folgenden Betrag ' + fristText(d.frist) + ' auf unser Konto zu überweisen:', '');
+    z.push(ein.dank, '');
+    z.push(ein.bitte + fristText(d.frist) + ein.bitteEnde, '');
+    if (st.length) {
+      z.push('So geht es weiter', '');
+      st.forEach(function (t, i) { z.push((i + 1) + '. ' + t); });
+      z.push('');
+    }
+    z.push('Ihre Zahlung', '');
     r.zeilen.forEach(function (x, i) { z.push(links(x.text, betraege[i])); });
     z.push(new Array(44 + breite + 3).join('-'));
     z.push(links('Überweisungsbetrag', betraege[betraege.length - 1]), '');
     function kv(k, v) { return k + new Array(Math.max(1, 19 - k.length) + 1).join(' ') + v; }
     z.push(kv('Kontoinhaber:', BANK.inhaber), kv('Bank:', BANK.bank), kv('IBAN:', BANK.iban), kv('BIC:', BANK.bic), kv('Verwendungszweck:', d.zweck || ''), '');
-    if (st.length) {
-      z.push('Gerne möchten wir Ihnen einen Überblick über die nächsten Schritte bis zur Übergabe Ihres neuen Fahrzeugs geben:', '');
-      st.forEach(function (t, i) { z.push((i + 1) + '. ' + t); });
-      z.push('');
-    }
-    z.push('Wir kümmern uns mit größter Sorgfalt um Ihre Bestellung und sorgen dafür, dass die Übergabe Ihres Fahrzeugs reibungslos und zu Ihrer vollen Zufriedenheit verläuft.', '');
-    z.push('Falls Sie noch Fragen haben, stehe ich Ihnen gerne jederzeit unter den unten angegebenen Kontaktdaten zur Verfügung.', '');
-    z.push('Herzliche Grüße und bis bald', '');
+    z.push(ein.danach, '');
+    z.push(ein.fragen, '');
+    z.push(ein.gruss, '');
     z.push(ab.name || '', 'Autohaus Stieber GmbH', ANSCHRIFT, 'Telefon: ' + (ab.tel || TELEFON));
     if (ab.email) z.push('E-Mail: ' + ab.email);
     z.push(WEB);
