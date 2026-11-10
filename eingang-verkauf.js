@@ -37,7 +37,7 @@
      ==================================================================== */
   var PH_BY = {}; PH.forEach(function (p, i) { PH_BY[p.key] = p; p.idx = i; });
   var VERKAEUFER = ['OS', 'NP', 'AI'];
-  var ANLEGEN_ROLLEN = ['admin', 'verkauf', 'dispo'];
+  var ANLEGEN_ROLLEN = ['admin', 'verkauf', 'dispo', 'buchhaltung'];   // Buchhaltung seit 10.11.2026 (Oli)
   var AMPEL_TEXT = { gruen: 'Fertig', gelb: 'In Arbeit', rot: 'Achtung', grau: 'Noch nicht dran' };
   var AMPEL_PILL = { gruen: 'gruen', gelb: 'gold', rot: 'rot', grau: 'grau' };
   var STATUS_LABEL = { ok: 'OK', nok: 'NOK', entfaellt: 'entfällt' };

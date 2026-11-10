@@ -1,5 +1,5 @@
 /* Stieber-App – Reiter „Verkauf“: Haken je Phase (window.VK_PHASEN)
-   Stand 10.11.2026 (v7: neuer freiwilliger Punkt zahlungsbestaetigung). Quelle: Plan „Verkauf in Phasen zum Abhaken“, Teil B (mit Oli abgestimmt).
+   Stand 10.11.2026 (v7: neuer freiwilliger Punkt zahlungsbestaetigung; Dispo und Buchhaltung dürfen alle Phasen). Quelle: Plan „Verkauf in Phasen zum Abhaken“, Teil B (mit Oli abgestimmt).
    Gehört zu eingang-verkauf.js. Hier stehen NUR Daten, keine Logik.
 
    Phase:  { key:'v1'…'v10', name, wer (Anzeige), rollen:[…], hinweis?,
@@ -23,10 +23,12 @@
 (function () {
   'use strict';
 
-  var VERKAUF = ['verkauf', 'admin'];
-  var DISPO = ['dispo', 'admin'];
-  var ZAHLUNG = ['dispo', 'admin', 'buchhaltung'];   // Phase v7 „Zahlung“: auch die Buchhaltung hakt ab (v8 bleibt DISPO)
-  var AC_ROLLEN = ['dispo', 'admin', 'werkstatt'];   // Aufbereiter/Meister haken über werkstatt@ mit Namenseintrag ab
+  // Oli 10.11.2026: Dispo und Buchhaltung dürfen alle Phasen (auch v6), die Auslieferungs-Checkliste und Akten anlegen.
+  var VERKAUF = ['verkauf', 'admin', 'dispo', 'buchhaltung'];   // v1–v5, v9, v10
+  var PRUEFUNG = ['admin', 'dispo', 'buchhaltung'];             // v6
+  var ZAHLUNG = ['dispo', 'admin', 'buchhaltung'];              // v7
+  var VORBEREITUNG = ['dispo', 'admin', 'buchhaltung'];         // v8
+  var AC_ROLLEN = ['dispo', 'admin', 'werkstatt', 'buchhaltung'];   // Aufbereiter/Meister haken über werkstatt@ mit Namenseintrag ab
   var VERK = ['OS', 'NP', 'AI'];                     // Verkäufer-Kürzel (Lead Liste)
 
   /* ---------- Auslieferungs-Checkliste, steht in V8 an Stelle 5 ----------
@@ -60,7 +62,7 @@
   // Endkontrolle: Aufbereiter, Meister und Verkäufer bestätigen mit Name und Datum
   acPunkte.push({ k: 'ac_end_aufbereiter', text: 'Aufbereiter bestätigt (Name, Datum)', pflicht: true, gruppe: 'ac', block: 'Endkontrolle', eingabe: 'bestaetigung', rollen: AC_ROLLEN, keinEntfaellt: true, seg: ['ok', 'nok'] });
   acPunkte.push({ k: 'ac_end_meister', text: 'Meister bestätigt (Name, Datum)', pflicht: true, gruppe: 'ac', block: 'Endkontrolle', eingabe: 'bestaetigung', rollen: AC_ROLLEN, keinEntfaellt: true, seg: ['ok', 'nok'] });
-  acPunkte.push({ k: 'ac_end_verkaeufer', text: 'Verkäufer bestätigt (Name, Datum)', pflicht: true, gruppe: 'ac', block: 'Endkontrolle', eingabe: 'bestaetigung', rollen: ['verkauf', 'dispo', 'admin'], keinEntfaellt: true, seg: ['ok', 'nok'] });
+  acPunkte.push({ k: 'ac_end_verkaeufer', text: 'Verkäufer bestätigt (Name, Datum)', pflicht: true, gruppe: 'ac', block: 'Endkontrolle', eingabe: 'bestaetigung', rollen: ['verkauf', 'dispo', 'admin', 'buchhaltung'], keinEntfaellt: true, seg: ['ok', 'nok'] });
 
   /* Dieselbe Liste für beide Reiter: Reiter „Auslieferung“ (eingang-auslieferung.js) zeigt und speichert sie,
      der Reiter Verkauf nutzt sie in Phase v8 für Ampel und „Was fehlt noch“. Gespeichert wird NICHT in verkauf.punkt,
@@ -166,7 +168,7 @@
     },
     /* ============ V6 ============ */
     {
-      key: 'v6', name: 'Prüfung durch Oli', wer: 'nur Oli', rollen: ['admin'],
+      key: 'v6', name: 'Prüfung durch Oli', wer: 'Oli, Dispo, Buchhaltung', rollen: PRUEFUNG,
       punkte: [
         { k: 'p_bestellung', text: 'Bestellung vollständig', pflicht: true },
         { k: 'p_preis', text: 'Preis, Zugaben und Nachlass wie freigegeben', pflicht: true },
@@ -202,7 +204,7 @@
     },
     /* ============ V8 ============ */
     {
-      key: 'v8', name: 'Vorbereitung', wer: 'Dispo, Werkstatt, Aufbereiter', rollen: DISPO,
+      key: 'v8', name: 'Vorbereitung', wer: 'Dispo, Buchhaltung, Werkstatt, Aufbereiter', rollen: VORBEREITUNG,
       punkte: [
         { k: 'repdoc_kunde', text: 'Kunde in Repdoc vorhanden oder angelegt', pflicht: true, eingabe: 'text', label: 'Kundennummer Repdoc' },
         { k: 'repdoc_fahrzeug', text: 'Fahrzeug in Repdoc vorhanden oder angelegt', pflicht: true, eingabe: 'text', label: 'Fahrzeug in Repdoc (Nr.)' },
