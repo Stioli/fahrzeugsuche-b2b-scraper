@@ -210,7 +210,7 @@
   EG.onTab('verkauf', function (root) {
     S.root = root;
     demoSaen();
-    if (!S.filterGesetzt) { S.filterGesetzt = true; if (meineRolle() === 'dispo') S.filter = 'dispo'; }   // Startansicht der Dispo
+    if (!S.filterGesetzt) { S.filterGesetzt = true; if (meineRolle() === 'dispo' || meineRolle() === 'buchhaltung') S.filter = 'dispo'; }   // Startansicht der Dispo (und der Buchhaltung)
     return S.id ? ladeDetail() : ladeListe();
   });
   document.addEventListener('eg-bereit', function () { if (meineRolle() === 'dispo' || meineRolle() === 'admin') swStart(); });
@@ -862,6 +862,9 @@
     karte.appendChild(titel);
     if (p.hinweis) karte.appendChild(h('div', { class: 'punkt-hinweis', text: p.hinweis }));
     if (p.eingabe) karte.appendChild(eingabeBlock(info, pe, ed));
+    if (info.key === 'v7' && p.k === 'zahlungseinladung' && window.VK_ZE && window.VK_ZE.darfSehen(meineRolle())) {   // Zahlungseinladung: Formular + Mail zum Kopieren (verkauf-zahlungseinladung.js)
+      karte.appendChild(h('button', { type: 'button', class: 'btn btn-primary vk-ze-knopf', text: 'Zahlungseinladung erstellen', onclick: function () { window.VK_ZE.oeffnen(S.akte, S.pm); } }));
+    }
     if (p.spezial === 'nachlass') karte.appendChild(nachlassBlock(info, pe, ed));
     if (p.foto) karte.appendChild(fotoBereich(info, pe, ed));
     karte.appendChild(segment(info, pe, ed));

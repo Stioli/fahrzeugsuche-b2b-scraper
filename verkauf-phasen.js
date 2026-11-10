@@ -25,6 +25,7 @@
 
   var VERKAUF = ['verkauf', 'admin'];
   var DISPO = ['dispo', 'admin'];
+  var ZAHLUNG = ['dispo', 'admin', 'buchhaltung'];   // Phase v7 „Zahlung“: auch die Buchhaltung hakt ab (v8 bleibt DISPO)
   var AC_ROLLEN = ['dispo', 'admin', 'werkstatt'];   // Aufbereiter/Meister haken über werkstatt@ mit Namenseintrag ab
   var VERK = ['OS', 'NP', 'AI'];                     // Verkäufer-Kürzel (Lead Liste)
 
@@ -181,7 +182,7 @@
     },
     /* ============ V7 ============ */
     {
-      key: 'v7', name: 'Zahlung', wer: 'Dispo', rollen: DISPO,
+      key: 'v7', name: 'Zahlung', wer: 'Dispo, Buchhaltung', rollen: ZAHLUNG,
       punkte: [
         { k: 'lief_rechnung', text: 'Lieferantenrechnung da?', pflicht: true, eingabe: 'auswahl', label: 'Rechnung', optionen: ['Liegt vor (mit Einladung)', 'Kommt nach Zahlung'] },
         { k: 'repdoc_rechnung', text: 'Rechnung in Repdoc erstellt (Handelsakte → „den Verkauf durchführen“)', pflicht: true, eingabe: 'text', label: 'Rechnungsnummer Repdoc',

@@ -296,6 +296,33 @@
       .then(function (w) { return w === 'x' ? inp.value.trim() : null; });
   };
 
+  /** Mail-Inhalt als HTML (text/html) UND Klartext (text/plain) in die Zwischenablage → Promise<boolean>.
+      Einfügen in Outlook übernimmt das HTML. Fallback: unsichtbares contenteditable-Element + execCommand('copy'). */
+  EG.kopierenHtml = function (html, text) {
+    function alt() {
+      var d = h('div', { contenteditable: 'true', style: 'position:fixed;left:-9999px;top:0;width:620px;background:#fff' });
+      d.innerHTML = html;
+      document.body.appendChild(d);
+      var ok = false;
+      try {
+        var r = document.createRange(); r.selectNodeContents(d);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        ok = document.execCommand('copy');
+        s.removeAllRanges();
+      } catch (e) { /* egal */ }
+      d.remove(); return ok;
+    }
+    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+      try {
+        return navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text || ''], { type: 'text/plain' })
+        })]).then(function () { return true; }, function () { return alt(); });
+      } catch (e) { /* weiter mit Fallback */ }
+    }
+    return Promise.resolve(alt());
+  };
+
   /** Text in die Zwischenablage → Promise<boolean> */
   EG.kopieren = function (text) {
     function alt() {
@@ -587,6 +614,9 @@
   EG.istWerkstatt = function () { return /^werkstatt@/i.test(EG.nutzer()); };
   EG.istAdmin = function () { return EG.rolle === 'admin'; };
   EG.istDispo = function () { return EG.rolle === 'dispo'; };
+  EG.istBuchhaltung = function () { return EG.rolle === 'buchhaltung'; };
+  /** Anzeigenamen der Rollen (Version 2.6: Buchhaltung ersetzt die alte, unbenutzte Rolle „buero“) */
+  EG.ROLLEN_NAME = { admin: 'Oli', verkauf: 'Verkauf', dispo: 'Dispo', buchhaltung: 'Buchhaltung', werkstatt: 'Werkstatt' };
   /** Name für „erfasst von“/„gesendet von“: bei werkstatt@ der auf dem Gerät gemerkte Name, sonst anzeigename. */
   EG.nutzerName = function () {
     if (EG.istWerkstatt()) return lsGet(LS_NAME) || '';
@@ -939,6 +969,7 @@
     admin: { email: 'oli@demo.example', rolle: 'admin', name: 'Oli (Demo)' },
     verkauf: { email: 'verkauf@demo.example', rolle: 'verkauf', name: 'Verkäufer (Demo)' },
     dispo: { email: 'dispo@demo.example', rolle: 'dispo', name: 'Dispo (Demo)' },
+    buchhaltung: { email: 'buchhaltung@demo.example', rolle: 'buchhaltung', name: 'Buchhaltung (Demo)' },
     werkstatt: { email: 'werkstatt@demo.example', rolle: 'werkstatt', name: '' }
   };
   async function demoKontoSetzen(art) {

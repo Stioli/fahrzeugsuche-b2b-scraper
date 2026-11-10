@@ -26,7 +26,7 @@
   var BY = {}; AC.punkte.forEach(function (p) { BY[p.k] = p; });
   var STATUS_LABEL = { ok: 'OK', nok: 'NOK', entfaellt: 'entfällt' };
   var SEG_KLASSE = { ok: 'seg-ok', nok: 'seg-mangel', entfaellt: 'seg-entfaellt' };
-  var ROLLE_NAME = { admin: 'Oli', dispo: 'Dispo', werkstatt: 'Werkstatt', verkauf: 'Verkauf' };
+  var ROLLE_NAME = { admin: 'Oli', dispo: 'Dispo', werkstatt: 'Werkstatt', verkauf: 'Verkauf', buchhaltung: 'Buchhaltung' };
 
   var T = function () { return EG.tab('verkauf', 'auslieferung_punkt'); };
   function chk(r) { if (r && r.error) throw r.error; return r; }
