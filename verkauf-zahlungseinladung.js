@@ -514,7 +514,7 @@
       var a = doc.createElement('a'); a.href = url; a.download = emlDateiname(d);
       doc.body.appendChild(a); a.click(); doc.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-      EG.toast('Datei heruntergeladen – per Doppelklick öffnen, Rechnung anhängen, senden.', 'ok');
+      EG.toast('Datei heruntergeladen – per Doppelklick öffnen, Rechnung anhängen, die von Outlook angehängte Signatur unten löschen, senden.', 'ok');
     }
     var knOutlook = h('button', { type: 'button', class: 'btn btn-primary', text: 'In Outlook öffnen', onclick: oeffneInOutlook });
     var knMail = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Mail kopieren', onclick: kopiereMail });
@@ -530,6 +530,7 @@
     var abschnitt = function (titel, inhalt) { return h('section', { class: 'vk-ze-abschn' }, h('h3', { text: titel }), inhalt); };
     var form = h('div', { class: 'vk-ze-form' },
       h('div', { class: 'banner info', text: 'Rechnung als PDF in Outlook anhängen. Die App sendet nichts.' }),
+      h('div', { class: 'banner warn', text: 'Vor dem Senden: Outlook hängt unten automatisch die eigene Signatur an (z. B. „Bitte bearbeiten / beachten“). Diese Zeilen löschen – die Zahlungseinladung hat ihre Signatur schon.' }),
       abschnitt('Kunde', h('div', {},
         EG.feld('Anrede', el.anrede),
         h('div', { class: 'feld' }, nachLabel, el.nach), vorFeld,
