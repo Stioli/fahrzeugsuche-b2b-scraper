@@ -1,16 +1,20 @@
-/* Stieber-App – Reiter „Verkauf“: Zahlungsbestätigung erstellen (window.VK_ZB, Version 1.0, 10.11.2026)
+/* Stieber-App – Reiter „Verkauf“: Zahlungsbestätigung erstellen (window.VK_ZB, Version 1.2, 11.11.2026)
+      v1.2 (11.11.2026): CC – der Verkäufer (Ansprechpartner) steht automatisch in CC der Kundenmail (d.cc, Kopfzeile „Cc:“ in der .eml); entfällt, wenn gleich Empfänger/Absender;
+   pruefe sperrt ungültige CC-Adresse; ladeKontakt/DEMO_KONTAKT jetzt aus VK_ZE (gemeinsam), VK_ZB.ladeKontakt bleibt als Verweis erhalten.
+      v1.1 (11.11.2026): Schutzregeln – (1) Anzahlung deckt Gesamtbetrag → Art automatisch 'komplett' + Hinweis, pruefe sperrt;
+   (2) istKuerzel: Kürzel als Ansprechpartner-Name wird nicht übernommen und sperrt; (3) Signatur-Hinweis nach „In Outlook öffnen“/Kopieren.
    Gehört zu Phase v7 „Zahlung“: Knopf an den Punkten v7.anzahlung_da (art 'anzahlung') und v7.restzahlung (art 'komplett'), Haken
    v7.zahlungsbestaetigung („Zahlungsbestätigung an den Kunden gesendet“, freiwillig).
    Die App SENDET NICHTS: Sie baut die Mail (HTML + Klartext + .eml) mit Live-Vorschau, der Nutzer öffnet sie in Outlook.
 
-   Baut auf VK_ZE (verkauf-zahlungseinladung.js, Version 3.0) auf: Rechnen, Formate, Anrede, Name, Mail-Bausteine (VK_ZE.bau), emlAus, Formular-Teile (VK_ZE.ui).
+   Baut auf VK_ZE (verkauf-zahlungseinladung.js, Version 3.1) auf: Rechnen, Formate, Anrede, Name, Mail-Bausteine (VK_ZE.bau), emlAus, Formular-Teile (VK_ZE.ui).
    Aufbau wie VK_ZE:
    - Reine Funktionen (ohne Browser, in Node testbar): erledigtAnzahl, betreff, intro, baueHtml, baueText, baueEml, vorbelegung, pruefe, emlDateiname.
    - Oberfläche: VK_ZB.oeffnen(akte, pm, art[, kontakt]) – Vollbild-Overlay (braucht window.EG und VK_ZE im Browser).
 
    Datenmodell d: { art:'anzahlung'|'komplett', anrede, vor, nach, fahrzeug, nr, eingang:{ betrag, datum (ISO) },
      positionen:[{aktiv,vz,text,betrag}], zeigeBank, zweck, schritte:[{aktiv,text,erledigt?}],
-     ansprechpartner:{name,tel,email}, absender:{name,email,tel}, empfaenger, betreff }
+     ansprechpartner:{name,tel,email}, absender:{name,email,tel}, empfaenger, cc (String, Adressen durch Komma/Semikolon), betreff }
 
    Mail-HTML: nur Tabellen, alle Styles inline, Farben als HEX (Outlook Desktop/Web), max. 600 px. */
 (function (root) {
@@ -35,7 +39,11 @@
   var TEXT_REST = 'Den Restbetrag überweisen Sie bitte vor der Übergabe.';
   var TEXT_FRAGEN = 'Haben Sie Fragen? Dann wenden Sie sich gerne an Ihren Verkäufer:';
   var TEXT_GRUSS = 'Herzliche Grüße und bis bald';
-  var DEMO_KONTAKT = { anzeigename: 'Max Beispiel', email: 'max.beispiel@example.test', telefon: '0711 000000-00' };
+  var HINWEIS_ART_AUTO = 'Die Anzahlung deckt den Gesamtbetrag – die Art wurde automatisch auf „Komplettzahlung“ gestellt.';
+  var FEHLER_ART = 'Die Anzahlung deckt den Gesamtbetrag – bitte Art „Komplettzahlung“ wählen.';
+  var FEHLER_KUERZEL = 'Ansprechpartner: bitte vollen Namen eintragen (nicht nur das Kürzel).';
+  var HINWEIS_SIGNATUR = 'Wichtig: Outlook hängt beim Öffnen deine Antwort-Signatur an („Bitte bearbeiten / beachten …“). Bitte unten löschen, bevor du sendest.';
+  var DEMO_KONTAKT = ZE.DEMO_KONTAKT;   // Platzhalter-Verkäufer im Demo-Modus (gemeinsam mit VK_ZE)
 
   /* ====================================================================
      Reine Funktionen
@@ -164,12 +172,18 @@
   }
 
   function baueEml(d) {
-    return ZE.emlAus({ html: baueHtml(d), text: baueText(d), betreff: d.betreff, empfaenger: d.empfaenger, grenzePrefix: '----=_Stieber_ZB_' });
+    return ZE.emlAus({ html: baueHtml(d), text: baueText(d), betreff: d.betreff, empfaenger: d.empfaenger, cc: d.cc, grenzePrefix: '----=_Stieber_ZB_' });
   }
   function emlDateiname(d) {
     var n = String(d.nach || '').trim().replace(/[^0-9A-Za-zÄÖÜäöüß_-]+/g, '_') || 'Kunde';
     var nr = String(d.nr || '').trim().replace(/[^0-9A-Za-z_-]+/g, '');
     return 'Zahlungsbestaetigung ' + n + (nr ? ' ' + nr : '') + '.eml';
+  }
+
+  /** true bei leer/nur Leerzeichen oder 1–4 Zeichen ohne Leerzeichen, nur Großbuchstaben (inkl. ÄÖÜ) – z. B. „AI“ statt vollem Namen */
+  function istKuerzel(name) {
+    var n = String(name == null ? '' : name).trim();
+    return n === '' || /^[A-ZÄÖÜ]{1,4}$/.test(n);
   }
 
   /** Prüfung vor Ausgabe → Fehlertext oder null */
@@ -179,7 +193,9 @@
     var r = rechne(d.positionen);
     if (r.cent < 0) return 'Der offene Rest ist negativ – Positionen prüfen.';
     if (d.art === 'komplett' && r.cent !== 0) return 'Bei Komplettzahlung muss der offene Rest 0,00 € sein – Positionen prüfen.';
-    return null;
+    if (d.art === 'anzahlung' && r.cent === 0) return FEHLER_ART;
+    if (istKuerzel((d.ansprechpartner || {}).name)) return FEHLER_KUERZEL;
+    return ZE.pruefeCc(d.cc);
   }
 
   /* ---------- Vorbelegung aus Akte und Punkt-Werten ---------- */
@@ -210,6 +226,9 @@
     var gesamt = rechne([p[0], p[1], p[2], p[4]]).cent / 100;
     var anz = eingangAus(pm, 'anzahlung_da'), rest = eingangAus(pm, 'restzahlung');
     var heute = lokalIso();
+    var hinweis = '', artAuto = false;
+    // Schutz: Anzahlung deckt schon den Gesamtbetrag (Rest ≤ 0) → Komplettzahlung
+    if (art === 'anzahlung' && anz && gesamt > 0 && Math.round(anz.betrag * 100) >= Math.round(gesamt * 100)) { art = 'komplett'; artAuto = true; hinweis = HINWEIS_ART_AUTO; }
     var eingang, anzAktiv = false, zahlAktiv = false, zahlQuelle = rest;
     if (art === 'anzahlung') {
       eingang = anz; anzAktiv = !!anz;
@@ -219,6 +238,7 @@
     }
     var anzD = (anz || {}).datum || heute, zahlD = (zahlQuelle || {}).datum || (eingang && eingang.datum) || heute;
     return {
+      art: art, artAutomatisch: artAuto, hinweis: hinweis,
       eingang: eingang ? { betrag: eingang.betrag, datum: eingang.datum } : { betrag: null, datum: heute },
       positionen: [
         { aktiv: gesamt > 0, vz: '+', text: 'Gesamtbetrag', betrag: gesamt > 0 ? fmtFeld(gesamt) : '' },
@@ -231,7 +251,9 @@
   /** kontakt: { name | anzeigename, email, telefon | tel } oder leer */
   function kontaktAus(k) {
     k = k || {};
-    return { name: k.name || k.anzeigename || '', tel: k.tel || k.telefon || '', email: k.email || '' };
+    var name = String(k.name || k.anzeigename || '').trim();
+    if (istKuerzel(name)) name = '';   // Kürzel statt Namen nicht übernehmen → Banner „Verkäuferdaten fehlen“
+    return { name: name, tel: k.tel || k.telefon || '', email: k.email || '' };
   }
 
   /** → Anfangszustand des Formulars (siehe Datenmodell oben) */
@@ -240,8 +262,10 @@
     art = art === 'komplett' ? 'komplett' : 'anzahlung';
     var base = ZE.vorbelegung(akte, pm, nutzer);
     var pf = positionenFuer(base, pm, art);
+    art = pf.art;
+    var ap = kontaktAus(kontakt), empf = (akte && akte.kunde_email) || '';
     return {
-      art: art,
+      art: art, artAutomatisch: pf.artAutomatisch, hinweis: pf.hinweis,
       anrede: base.anrede, vor: base.vor, nach: base.nach,
       fahrzeug: base.fahrzeug, nr: base.nr,
       eingang: pf.eingang,
@@ -249,9 +273,10 @@
       zeigeBank: art === 'anzahlung',
       zweck: base.zweck,
       schritte: SCHRITTE_STANDARD.map(function (t, i) { var s = { aktiv: true, text: t }; if (i === 0) s.erledigt = true; return s; }),
-      ansprechpartner: kontaktAus(kontakt),
+      ansprechpartner: ap,
       absender: { name: nutzer.name || '', email: nutzer.email || '', tel: ZE.TELEFON },
-      empfaenger: (akte && akte.kunde_email) || '',
+      empfaenger: empf,
+      cc: ZE.ccVorschlag(ap.email, [empf, nutzer.email]),   // Verkäufer in CC, außer er ist selbst Empfänger oder Absender
       betreff: betreff(base.fahrzeug, base.nr)
     };
   }
@@ -259,7 +284,7 @@
   var API = {
     SCHRITTE_STANDARD: SCHRITTE_STANDARD, ROLLEN: ZB_ROLLEN, DEMO_KONTAKT: DEMO_KONTAKT,
     betreff: betreff, erledigtAnzahl: erledigtAnzahl, intro: intro, baueHtml: baueHtml, baueText: baueText, baueEml: baueEml,
-    emlDateiname: emlDateiname, pruefe: pruefe, vorbelegung: vorbelegung, positionenFuer: positionenFuer, eingangAus: eingangAus,
+    emlDateiname: emlDateiname, pruefe: pruefe, istKuerzel: istKuerzel, vorbelegung: vorbelegung, positionenFuer: positionenFuer, eingangAus: eingangAus,
     kontaktAus: kontaktAus, kontaktKasten: kontaktKasten, anzahlungText: anzahlungText, zahlungText: zahlungText
   };
 
@@ -268,20 +293,7 @@
      ==================================================================== */
   API.darfSehen = function (rolle) { return ZB_ROLLEN.indexOf(rolle) >= 0; };
 
-  /** Verkäuferdaten laden → Promise<{anzeigename,email,telefon}|null>. Fehler/kein Treffer/kein Kürzel → null.
-      Demo-Modus (EG.demo): feste Platzhalter. Die Datenbankfunktion shared.verkaeufer_kontakt kann noch fehlen – das ist der Normalfall bis zum Einspielen. */
-  function ladeKontakt(EG, akte) {
-    if (EG.demo) return Promise.resolve(DEMO_KONTAKT);
-    var kz = akte && akte.verkaeufer;
-    if (!kz || !EG.sb) return Promise.resolve(null);
-    try {
-      return Promise.resolve(EG.sb.schema('shared').rpc('verkaeufer_kontakt', { p_kuerzel: kz })).then(function (r) {
-        if (!r || r.error) return null;
-        var z = Array.isArray(r.data) ? r.data[0] : r.data;
-        return z && (z.anzeigename || z.email || z.telefon) ? z : null;
-      }, function () { return null; });
-    } catch (e) { return Promise.resolve(null); }
-  }
+  var ladeKontakt = ZE.ladeKontakt;   // Verkäuferdaten laden: gemeinsame Funktion aus VK_ZE (Demo-Modus: DEMO_KONTAKT)
   API.ladeKontakt = ladeKontakt;
 
   /** Öffnet das Formular. akte = verkauf.akte-Zeile, pm = Punkt-Map der Akte (S.pm), art = 'anzahlung' | 'komplett', kontakt (optional) = Verkäuferdaten. */
@@ -291,7 +303,7 @@
     var doc = root.document;
     var nutzer = { name: EG.nutzerName ? EG.nutzerName() : '', email: EG.nutzer ? EG.nutzer() : '' };
     var d = vorbelegung(akte, pm, nutzer, art, kontakt);
-    var zweckManuell = false, betreffManuell = false, apManuell = false;
+    var zweckManuell = false, betreffManuell = false, apManuell = false, apGeladen = !!d.ansprechpartner.name, ccManuell = false, artHinweis = d.hinweis || '';
     var el = {};
 
     function txt(id, wert, ph, typ) { return h('input', { type: typ || 'text', id: id, value: wert == null ? '' : wert, placeholder: ph || '', autocomplete: 'off' }); }
@@ -299,11 +311,15 @@
     /* ---------- Vorschau und Summe ---------- */
     var vorschau = h('div', { class: 'vk-ze-vorschau', 'aria-label': 'Vorschau der Mail' });
     var summeAnz = h('div', { class: 'vk-ze-summe' });
+    var artBanner = h('div', { class: 'banner warn', style: 'display:none' });
+    var sigBanner = h('div', { class: 'banner warn', text: HINWEIS_SIGNATUR, style: 'display:none;font-weight:700;border-width:2px' });
+    var ccBanner = h('div', { class: 'banner warn', text: ZE.HINWEIS_CC_FEHLT, style: 'display:none' });
+    var apBanner = h('div', { class: 'banner warn', text: 'Verkäuferdaten fehlen – bitte von Hand eintragen.', style: 'display:none' });
     function sammeln() {
       d.art = el.art.value; d.anrede = el.anrede.value; d.vor = el.vor.value; d.nach = el.nach.value;
       d.fahrzeug = el.fahrzeug.value; d.nr = el.nr.value;
       d.eingang = { betrag: el.eBetrag.value, datum: el.eDatum.value };
-      d.zeigeBank = el.bank.checked; d.zweck = el.zweck.value; d.betreff = el.betreff.value; d.empfaenger = el.empf.value.trim();
+      d.zeigeBank = el.bank.checked; d.zweck = el.zweck.value; d.betreff = el.betreff.value; d.empfaenger = el.empf.value.trim(); d.cc = el.cc.value.trim();
       d.ansprechpartner = { name: el.apName.value.trim(), tel: el.apTel.value.trim(), email: el.apMail.value.trim() };
       d.absender = { name: el.abName.value.trim(), email: el.abMail.value.trim(), tel: el.abTel.value.trim() };
     }
@@ -314,6 +330,12 @@
       summeAnz.className = 'vk-ze-summe' + (r.cent < 0 || (d.art === 'komplett' && r.cent !== 0) ? ' warn' : '');
       el.briefAnr.textContent = ZE.briefAnrede(d.anrede, d.vor, d.nach);
       el.bankBox.style.display = d.zeigeBank ? '' : 'none';
+      var anzVoll = d.art === 'anzahlung' && r.cent === 0;
+      artBanner.textContent = anzVoll ? FEHLER_ART : artHinweis;
+      artBanner.style.display = artBanner.textContent ? '' : 'none';
+      apBanner.style.display = apGeladen && istKuerzel(d.ansprechpartner.name) ? '' : 'none';
+      ccBanner.style.display = apGeladen && !d.cc ? '' : 'none';
+      el.cc.className = ZE.pruefeCc(d.cc) ? 'vk-ze-ungueltig' : '';
       vorschau.innerHTML = baueHtml(d);   // alle Nutzereingaben sind in baueHtml escaped
     }
     function nachNameOderNr() {
@@ -373,7 +395,9 @@
       var base = ZE.vorbelegung(akte, pm, nutzer), pf = positionenFuer(base, pm, el.art.value);
       d.positionen.splice(0, d.positionen.length); pf.positionen.forEach(function (p) { d.positionen.push(p); });
       el.eBetrag.value = pf.eingang.betrag > 0 ? fmtFeld(pf.eingang.betrag) : ''; el.eDatum.value = pf.eingang.datum;
-      el.bank.checked = el.art.value === 'anzahlung';
+      artHinweis = pf.hinweis || '';
+      if (pf.art !== el.art.value) el.art.value = pf.art;
+      el.bank.checked = pf.art === 'anzahlung';
       posEd.zeichne(); aktualisieren();
     });
 
@@ -391,11 +415,10 @@
     /* Ansprechpartner */
     el.apName = txt('vk-zb-apn', d.ansprechpartner.name, 'Vorname Nachname'); el.apTel = txt('vk-zb-apt', d.ansprechpartner.tel, 'Telefon'); el.apMail = txt('vk-zb-apm', d.ansprechpartner.email, 'name@autohaus-stieber.de', 'email');
     [el.apName, el.apTel, el.apMail].forEach(function (x) { x.addEventListener('input', function () { apManuell = true; aktualisieren(); }); });
-    var apBanner = h('div', { class: 'banner warn', text: 'Verkäuferdaten fehlen – bitte von Hand eintragen.', style: 'display:none' });
-
     el.abName = txt('vk-zb-abn', d.absender.name, 'Vorname Nachname'); el.abMail = txt('vk-zb-abm', d.absender.email, 'name@autohaus-stieber.de', 'email'); el.abTel = txt('vk-zb-abt', d.absender.tel);
     [el.abName, el.abMail, el.abTel].forEach(function (x) { x.addEventListener('input', aktualisieren); });
     el.empf = txt('vk-zb-empf', d.empfaenger, 'E-Mail des Kunden', 'email'); el.empf.addEventListener('input', aktualisieren);
+    el.cc = txt('vk-zb-cc', d.cc, 'Verkäufer-E-Mail'); el.cc.addEventListener('input', function () { ccManuell = true; aktualisieren(); });
     el.betreff = txt('vk-zb-betreff', d.betreff, 'Betreff');
     el.betreff.addEventListener('input', function () { betreffManuell = true; aktualisieren(); });
 
@@ -406,15 +429,25 @@
       if (f) { EG.toast(f, 'fehler'); return false; }
       return true;
     }
+    function zeigeSignaturHinweis() {
+      sigBanner.style.display = '';
+      try { sigBanner.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ältere Browser */ }
+    }
     function kopiereMail() {
       if (!pruefen()) return;
+      zeigeSignaturHinweis();
       EG.kopierenHtml(baueHtml(d), baueText(d)).then(function (ok) {
-        EG.toast(ok ? 'Kopiert – jetzt in Outlook einfügen (Strg+V)' : 'Kopieren hat nicht geklappt. Bitte die Vorschau markieren und von Hand kopieren.', ok ? 'ok' : 'fehler');
+        EG.toast(ok ? 'Kopiert – jetzt in Outlook einfügen (Strg+V)' + (d.cc ? ' · CC: ' + d.cc + ' von Hand eintragen' : '') : 'Kopieren hat nicht geklappt. Bitte die Vorschau markieren und von Hand kopieren.', ok ? 'ok' : 'fehler');
       });
     }
     function kopiereBetreff() {
       sammeln();
       EG.kopieren(d.betreff).then(function (ok) { EG.toast(ok ? 'Betreff kopiert' : 'Kopieren hat nicht geklappt.', ok ? 'ok' : 'fehler'); });
+    }
+    function kopiereCc() {
+      sammeln();
+      if (!d.cc) { EG.toast(ZE.HINWEIS_CC_FEHLT, 'fehler'); return; }
+      EG.kopieren(d.cc).then(function (ok) { EG.toast(ok ? 'CC kopiert' : 'Kopieren hat nicht geklappt.', ok ? 'ok' : 'fehler'); });
     }
     function oeffneInOutlook() {
       if (!pruefen()) return;
@@ -424,20 +457,25 @@
       var a = doc.createElement('a'); a.href = url; a.download = emlDateiname(d);
       doc.body.appendChild(a); a.click(); doc.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-      EG.toast('Datei heruntergeladen – per Doppelklick öffnen, die von Outlook angehängte Signatur unten löschen, senden.', 'ok');
+      zeigeSignaturHinweis();
+      EG.toast('Datei heruntergeladen – per Doppelklick öffnen. ' + HINWEIS_SIGNATUR, 'ok');
     }
     var ov = null;
     var knOutlook = h('button', { type: 'button', class: 'btn btn-primary', text: 'In Outlook öffnen', onclick: oeffneInOutlook });
     var knMail = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Mail kopieren', onclick: kopiereMail });
     var knBetreff = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Betreff kopieren', onclick: kopiereBetreff });
+    var knCc = h('button', { type: 'button', class: 'btn btn-ghost', text: 'CC kopieren', onclick: kopiereCc });
     var knZu = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Schließen', onclick: function () { if (ov) ov.schliessen(); } });
 
     /* ---------- Aufbau ---------- */
     var abschnitt = function (titel, inhalt) { return h('section', { class: 'vk-ze-abschn' }, h('h3', { text: titel }), inhalt); };
     var form = h('div', { class: 'vk-ze-form' },
       h('div', { class: 'banner info', text: 'Die App sendet nichts. Nach dem Senden den Haken ‚Zahlungsbestätigung an den Kunden gesendet‘ setzen.' }),
-      h('div', { class: 'banner warn', text: 'Vor dem Senden: Outlook hängt unten automatisch die eigene Signatur an (z. B. „Bitte bearbeiten / beachten“). Diese Zeilen löschen – die Zahlungsbestätigung hat ihre Signatur schon.' }),
+      sigBanner,
+      h('div', { class: 'banner warn', text: HINWEIS_SIGNATUR + ' Die Zahlungsbestätigung hat ihre Signatur schon.' }),
+      artBanner,
       apBanner,
+      ccBanner,
       abschnitt('Art', EG.feld('Was ist eingegangen?', el.art)),
       abschnitt('Kunde', h('div', {},
         EG.feld('Anrede', el.anrede),
@@ -451,19 +489,20 @@
       abschnitt('Nächste Schritte', h('div', {}, h('p', { class: 'muted klein', text: 'Nummeriert wird nur, was angehakt ist. Der erste Schritt „Zahlung eingegangen“ bekommt einen Haken.' }), schrBox)),
       abschnitt('Ansprechpartner (Verkäufer)', h('div', {}, EG.feld('Name', el.apName), EG.feld('Telefon', el.apTel), EG.feld('E-Mail', el.apMail))),
       abschnitt('Absender', h('div', {}, EG.feld('Name', el.abName), EG.feld('E-Mail', el.abMail), EG.feld('Telefon', el.abTel))),
-      abschnitt('Versand', h('div', {}, EG.feld('Empfänger (E-Mail)', el.empf), EG.feld('Betreff', el.betreff))));
+      abschnitt('Versand', h('div', {}, EG.feld('Empfänger (E-Mail)', el.empf), EG.feld('CC (Verkäufer)', el.cc), EG.feld('Betreff', el.betreff))));
 
     anredeUmschalten(); posEd.zeichne();
-    ov = ZE.ui.overlay(EG, { titel: 'Zahlungsbestätigung erstellen', form: form, vorschau: vorschau, knoepfe: [knOutlook, knMail, knBetreff, knZu] });
+    ov = ZE.ui.overlay(EG, { titel: 'Zahlungsbestätigung erstellen', form: form, vorschau: vorschau, knoepfe: [knOutlook, knMail, knBetreff, knCc, knZu] });
     aktualisieren();
 
     /* ---------- Verkäuferdaten asynchron laden (nur wenn nicht schon übergeben) ---------- */
     if (!d.ansprechpartner.name) {
       ladeKontakt(EG, akte).then(function (k) {
-        if (!k) { apBanner.style.display = ''; return; }
-        if (apManuell) return;   // der Nutzer hat schon selbst etwas eingetragen
-        var ap = kontaktAus(k);
+        apGeladen = true;
+        if (!k || apManuell) { aktualisieren(); return; }   // kein Treffer → Banner; Nutzer hat schon selbst etwas eingetragen
+        var ap = kontaktAus(k);   // Kürzel statt Name → Name leer → Banner
         el.apName.value = ap.name; el.apTel.value = ap.tel; el.apMail.value = ap.email;
+        if (!ccManuell) { sammeln(); el.cc.value = ZE.ccVorschlag(ap.email, [d.empfaenger, d.absender.email]); }
         aktualisieren();
       });
     }

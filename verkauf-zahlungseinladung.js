@@ -1,4 +1,6 @@
 /* Stieber-App – Reiter „Verkauf“: Zahlungseinladung erstellen (window.VK_ZE)
+   Version 3.1 (11.11.2026): CC (Verkäufer der Akte) – Feld d.cc, Kopfzeile „Cc:“ in der .eml (nur bei nicht leerem cc, sonst Ausgabe unverändert),
+   gemeinsame Funktionen ladeKontakt / ccVorschlag / pruefeCc / pruefe (auch für VK_ZB), Formularfeld „CC (Verkäufer)“. Mailtext/HTML unverändert.
    Version 3.0 (10.11.2026): Mail-Bausteine als VK_ZE.bau freigegeben, emlAus() ausgekoppelt (für VK_ZB), Ausgabe unverändert.
    Stand 10.11.2026. Gehört zu Phase v7 „Zahlung“, Punkt v7.zahlungseinladung (Knopf in eingang-verkauf.js).
    Die App SENDET NICHTS: Sie baut die Mail (HTML + Klartext) mit Live-Vorschau, der Nutzer kopiert sie und fügt sie in Outlook ein.
@@ -24,6 +26,8 @@
   var WEB = 'www.autohaus-stieber.de';
   var FUSSZEILE = 'Geschäftsführer Oliver Stieber · HRB Stuttgart 8987';
   var ZE_ROLLEN = ['admin', 'dispo', 'buchhaltung'];   // wer den Knopf sieht
+  var DEMO_KONTAKT = { anzeigename: 'Max Beispiel', email: 'max.beispiel@example.test', telefon: '0711 000000-00' };   // Demo-Modus: Platzhalter-Verkäufer
+  var HINWEIS_CC_FEHLT = 'Verkäufer-E-Mail fehlt – CC bitte von Hand eintragen.';
 
   var C = { blau: '#007BFF', blauDunkel: '#0A5CD0', text: '#1A2333', sub: '#4A5F78', rahmen: '#E3E9F2', hell: '#F4F8FD', weiss: '#FFFFFF' };
   var FONT = "'DM Sans',Arial,Helvetica,sans-serif";
@@ -337,9 +341,34 @@
       schritte: SCHRITTE_STANDARD.map(function (t) { return { aktiv: true, text: t }; }),
       absender: { name: nutzer.name || '', email: nutzer.email || '', tel: TELEFON },
       empfaenger: akte.kunde_email || '',
+      cc: '',   // Verkäufer der Akte – wird in der Oberfläche über ladeKontakt/ccVorschlag gesetzt
       betreff: betreff([akte.hersteller, akte.modell].filter(Boolean).join(' '), nr)
     };
   }
+
+  /* ---------- CC (Verkäufer der Akte in Kopie, Oli 11.11.2026) ---------- */
+  /** 'a@x.de, b@y.de; c@z.de' → ['a@x.de','b@y.de','c@z.de'] (getrimmt, ohne Leere) */
+  function ccListe(cc) {
+    return String(cc == null ? '' : cc).split(/[,;]/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  /** Fehlertext, wenn eine CC-Adresse ungültig ist (kein @ o. Ä.), sonst null. Leer ist gültig. */
+  function pruefeCc(cc) {
+    var l = ccListe(cc);
+    for (var i = 0; i < l.length; i++) {
+      if (!/^[^\s@<>"]+@[^\s@<>"]+$/.test(l[i])) return 'CC: „' + l[i] + '“ ist keine gültige E-Mail-Adresse.';
+    }
+    return null;
+  }
+  /** Vorbelegung für cc: E-Mail des Verkäufers; leer/ungültig oder gleich einer der ausschliessen-Adressen (Empfänger, Absender; Groß/Klein egal) → '' */
+  function ccVorschlag(email, ausschliessen) {
+    var e = String(email == null ? '' : email).trim();
+    if (!e || pruefeCc(e)) return '';
+    var el = e.toLowerCase(), aus = [].concat(ausschliessen || []);
+    for (var i = 0; i < aus.length; i++) { if (String(aus[i] == null ? '' : aus[i]).trim().toLowerCase() === el) return ''; }
+    return e;
+  }
+  /** Prüfung vor Ausgabe (nur CC) → Fehlertext oder null */
+  function pruefe(d) { return pruefeCc(d && d.cc); }
 
   /* ---------- .eml-Entwurf (Oli 10.11.2026: Mail auf einen Klick mit Empfänger, Betreff und HTML) ----------
      X-Unsent: 1 → Outlook öffnet die Datei als sendebereiten Entwurf (Outlook classic sicher; neues Outlook testen). */
@@ -353,6 +382,7 @@
   function emlAus(o) {
     var grenze = (o.grenzePrefix || '----=_Stieber_ZE_') + Date.now().toString(36);
     var empf = String(o.empfaenger || '').replace(/[\r\n<>,;"]/g, '').trim();
+    var cc = ccListe(o.cc).map(function (x) { return x.replace(/[\r\n<>"\s]/g, ''); }).filter(Boolean).join(', ');   // leer → keine Cc-Zeile
     var html = '<!DOCTYPE html><html lang="de"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">' +
       '<meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc(o.betreff || '') + '</title></head>' +
       '<body style="margin:0;padding:0;background-color:#FFFFFF;">' + o.html + '</body></html>';
@@ -360,6 +390,7 @@
       'MIME-Version: 1.0',
       'X-Unsent: 1',
       (empf ? 'To: ' + empf : 'To: '),
+      (cc ? 'Cc: ' + cc : null),
       'Subject: ' + kopfWort(String(o.betreff || '').replace(/[\r\n]+/g, ' ')),
       'Content-Type: multipart/alternative; boundary="' + grenze + '"',
       '',
@@ -377,10 +408,10 @@
       '',
       '--' + grenze + '--',
       ''
-    ].join('\r\n');
+    ].filter(function (z) { return z !== null; }).join('\r\n');
   }
   function baueEml(d) {
-    return emlAus({ html: baueHtml(d), text: baueText(d), betreff: d.betreff, empfaenger: d.empfaenger });
+    return emlAus({ html: baueHtml(d), text: baueText(d), betreff: d.betreff, empfaenger: d.empfaenger, cc: d.cc });
   }
   function emlDateiname(d) {
     var n = String(d.nach || '').trim().replace(/[^0-9A-Za-zÄÖÜäöüß_-]+/g, '_') || 'Kunde';
@@ -393,6 +424,7 @@
     esc: esc, parseBetrag: parseBetrag, fmtCent: fmtCent, fmtEuro: fmtEuro, fmtFeld: fmtFeld, rechne: rechne, zerlegeName: zerlegeName,
     briefAnrede: briefAnrede, fristText: fristText, verwendungszweck: verwendungszweck, schritteAktiv: schritteAktiv, betreff: betreff,
     baueHtml: baueHtml, baueText: baueText, baueEml: baueEml, emlAus: emlAus, emlDateiname: emlDateiname, vorbelegung: vorbelegung, datumDe: datumDe,
+    ccListe: ccListe, pruefeCc: pruefeCc, ccVorschlag: ccVorschlag, pruefe: pruefe, DEMO_KONTAKT: DEMO_KONTAKT, HINWEIS_CC_FEHLT: HINWEIS_CC_FEHLT,
     C: C, FONT: FONT, FONT_H: FONT_H, ANSCHRIFT: ANSCHRIFT, WEB: WEB, FUSSZEILE: FUSSZEILE,
     bau: { td: td, tabelle: tabelle, absatz: absatz, zwischen: zwischen, zeile: zeile, kopfLogo: kopfLogo, linie: linie, summenKasten: summenKasten, betragsTabelle: betragsTabelle, bankKasten: bankKasten, schrittListe: schrittListe, signatur: signatur, fuss: fuss, seite: seite }
   };
@@ -471,6 +503,22 @@
 
   API.darfSehen = function (rolle) { return ZE_ROLLEN.indexOf(rolle) >= 0; };
 
+  /** Verkäuferdaten laden (gemeinsam mit VK_ZB) → Promise<{anzeigename,email,telefon}|null>. Fehler/kein Treffer → null.
+      Demo-Modus (EG.demo): feste Platzhalter. Die Datenbankfunktion shared.verkaeufer_kontakt kann noch fehlen – das ist der Normalfall bis zum Einspielen. */
+  function ladeKontakt(EG, akte) {
+    if (EG.demo) return Promise.resolve(DEMO_KONTAKT);
+    var kz = akte && akte.verkaeufer;
+    if (!kz || !EG.sb) return Promise.resolve(null);
+    try {
+      return Promise.resolve(EG.sb.schema('shared').rpc('verkaeufer_kontakt', { p_kuerzel: kz })).then(function (r) {
+        if (!r || r.error) return null;
+        var z = Array.isArray(r.data) ? r.data[0] : r.data;
+        return z && (z.anzeigename || z.email || z.telefon) ? z : null;
+      }, function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+  }
+  API.ladeKontakt = ladeKontakt;
+
   /** Öffnet das Formular. akte = verkauf.akte-Zeile, pm = Punkt-Map der Akte (S.pm). Gibt nichts zurück. */
   API.oeffnen = function (akte, pm) {
     var EG = root.EG, h = EG && EG.h;
@@ -486,11 +534,13 @@
     var vorschau = h('div', { class: 'vk-ze-vorschau', 'aria-label': 'Vorschau der Mail' });
     var summeAnz = h('div', { class: 'vk-ze-summe' });
     var betreffAnz = null;
+    var ccManuell = false, ccGeladen = false;
+    var ccBanner = h('div', { class: 'banner warn', text: HINWEIS_CC_FEHLT, style: 'display:none' });
     function sammeln() {
       d.anrede = el.anrede.value; d.vor = el.vor.value; d.nach = el.nach.value;
       d.fahrzeug = el.fahrzeug.value; d.nr = el.nr.value;
       d.frist = { art: el.fristArt.value, tage: el.fristTage.value, datum: el.fristDatum.value };
-      d.zweck = el.zweck.value; d.betreff = el.betreff.value; d.empfaenger = el.empf.value.trim();
+      d.zweck = el.zweck.value; d.betreff = el.betreff.value; d.empfaenger = el.empf.value.trim(); d.cc = el.cc.value.trim();
       d.absender = { name: el.abName.value.trim(), email: el.abMail.value.trim(), tel: el.abTel.value.trim() };
     }
     function aktualisieren() {
@@ -499,6 +549,8 @@
       summeAnz.textContent = 'Überweisungsbetrag: ' + fmtCent(r.cent);
       summeAnz.className = 'vk-ze-summe' + (r.cent <= 0 ? ' warn' : '');
       el.briefAnr.textContent = briefAnrede(d.anrede, d.vor, d.nach);
+      ccBanner.style.display = ccGeladen && !d.cc ? '' : 'none';
+      el.cc.className = pruefeCc(d.cc) ? 'vk-ze-ungueltig' : '';
       vorschau.innerHTML = baueHtml(d);   // alle Nutzereingaben sind in baueHtml escaped
     }
     function nachNameOderNr() {
@@ -550,6 +602,7 @@
     el.abName = txt('vk-ze-abn', d.absender.name, 'Vorname Nachname'); el.abMail = txt('vk-ze-abm', d.absender.email, 'name@autohaus-stieber.de', 'email'); el.abTel = txt('vk-ze-abt', d.absender.tel);
     [el.abName, el.abMail, el.abTel].forEach(function (x) { x.addEventListener('input', aktualisieren); });
     el.empf = txt('vk-ze-empf', d.empfaenger, 'E-Mail des Kunden', 'email'); el.empf.addEventListener('input', aktualisieren);
+    el.cc = txt('vk-ze-cc', d.cc, 'Verkäufer-E-Mail'); el.cc.addEventListener('input', function () { ccManuell = true; aktualisieren(); });
     el.betreff = txt('vk-ze-betreff', d.betreff, 'Betreff');
     el.betreff.addEventListener('input', function () { betreffManuell = true; aktualisieren(); });
 
@@ -559,17 +612,23 @@
       var r = rechne(d.positionen);
       if (!r.zeilen.length) { EG.toast('Bitte mindestens eine Position mit Betrag auswählen.', 'fehler'); return null; }
       if (r.cent <= 0) { EG.toast('Der Überweisungsbetrag ist 0 oder negativ – bitte die Positionen prüfen.', 'fehler'); return null; }
+      var fcc = pruefe(d); if (fcc) { EG.toast(fcc, 'fehler'); return null; }
       return r;
     }
     function kopiereMail() {
       if (!pruefen()) return;
       EG.kopierenHtml(baueHtml(d), baueText(d)).then(function (ok) {
-        EG.toast(ok ? 'Kopiert – jetzt in Outlook einfügen (Strg+V)' : 'Kopieren hat nicht geklappt. Bitte die Vorschau markieren und von Hand kopieren.', ok ? 'ok' : 'fehler');
+        EG.toast(ok ? 'Kopiert – jetzt in Outlook einfügen (Strg+V)' + (d.cc ? ' · CC: ' + d.cc + ' von Hand eintragen' : '') : 'Kopieren hat nicht geklappt. Bitte die Vorschau markieren und von Hand kopieren.', ok ? 'ok' : 'fehler');
       });
     }
     function kopiereBetreff() {
       sammeln();
       EG.kopieren(d.betreff).then(function (ok) { EG.toast(ok ? 'Betreff kopiert' : 'Kopieren hat nicht geklappt.', ok ? 'ok' : 'fehler'); });
+    }
+    function kopiereCc() {
+      sammeln();
+      if (!d.cc) { EG.toast(HINWEIS_CC_FEHLT, 'fehler'); return; }
+      EG.kopieren(d.cc).then(function (ok) { EG.toast(ok ? 'CC kopiert' : 'Kopieren hat nicht geklappt.', ok ? 'ok' : 'fehler'); });
     }
     function oeffneInOutlook() {
       if (!pruefen()) return;
@@ -584,10 +643,11 @@
     var knOutlook = h('button', { type: 'button', class: 'btn btn-primary', text: 'In Outlook öffnen', onclick: oeffneInOutlook });
     var knMail = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Mail kopieren', onclick: kopiereMail });
     var knBetreff = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Betreff kopieren', onclick: kopiereBetreff });
+    var knCc = h('button', { type: 'button', class: 'btn btn-ghost', text: 'CC kopieren', onclick: kopiereCc });
     var knOeffnen = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Mail öffnen', onclick: function () {
       sammeln();
       if (!d.empfaenger) { EG.toast('Keine E-Mail-Adresse des Kunden eingetragen.', 'fehler'); return; }
-      root.location.href = 'mailto:' + encodeURIComponent(d.empfaenger).replace(/%40/g, '@') + '?subject=' + encodeURIComponent(d.betreff);
+      root.location.href = 'mailto:' + encodeURIComponent(d.empfaenger).replace(/%40/g, '@') + '?subject=' + encodeURIComponent(d.betreff) + (d.cc ? '&cc=' + encodeURIComponent(d.cc).replace(/%40/g, '@') : '');
     } });
     var knZu = h('button', { type: 'button', class: 'btn btn-ghost', text: 'Schließen', onclick: schliessen });
 
@@ -595,6 +655,7 @@
     var abschnitt = function (titel, inhalt) { return h('section', { class: 'vk-ze-abschn' }, h('h3', { text: titel }), inhalt); };
     var form = h('div', { class: 'vk-ze-form' },
       h('div', { class: 'banner info', text: 'Rechnung als PDF in Outlook anhängen. Die App sendet nichts.' }),
+      ccBanner,
       h('div', { class: 'banner warn', text: 'Vor dem Senden: Outlook hängt unten automatisch die eigene Signatur an (z. B. „Bitte bearbeiten / beachten“). Diese Zeilen löschen – die Zahlungseinladung hat ihre Signatur schon.' }),
       abschnitt('Kunde', h('div', {},
         EG.feld('Anrede', el.anrede),
@@ -606,9 +667,9 @@
       abschnitt('Verwendungszweck', EG.feld('Verwendungszweck (auf der Überweisung)', el.zweck)),
       abschnitt('Nächste Schritte', h('div', {}, h('p', { class: 'muted klein', text: 'Nummeriert wird nur, was angehakt ist.' }), schrBox)),
       abschnitt('Absender', h('div', {}, EG.feld('Name', el.abName), EG.feld('E-Mail', el.abMail), EG.feld('Telefon', el.abTel))),
-      abschnitt('Versand', h('div', {}, EG.feld('Empfänger (E-Mail)', el.empf), EG.feld('Betreff', el.betreff))));
+      abschnitt('Versand', h('div', {}, EG.feld('Empfänger (E-Mail)', el.empf), EG.feld('CC (Verkäufer)', el.cc), EG.feld('Betreff', el.betreff))));
     var vorKarte = h('div', { class: 'vk-ze-vorkarte' }, h('h3', { text: 'Vorschau' }), vorschau);
-    var leiste = h('div', { class: 'vk-ze-leiste' }, knOutlook, knMail, knBetreff, knZu);
+    var leiste = h('div', { class: 'vk-ze-leiste' }, knOutlook, knMail, knBetreff, knCc, knZu);
     var kopf = h('div', { class: 'vk-ze-kopf' }, h('h2', { text: 'Zahlungseinladung erstellen' }),
       h('button', { type: 'button', class: 'dlg-x', 'aria-label': 'Schließen', text: '×', onclick: schliessen }));
     var ueber = h('div', { class: 'vk-ze-ueber', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Zahlungseinladung erstellen' },
@@ -625,6 +686,16 @@
     doc.body.classList.add('vk-ze-offen');
     doc.addEventListener('keydown', taste, true);
     aktualisieren();
+
+    /* ---------- Verkäufer der Akte → CC (asynchron) ---------- */
+    ladeKontakt(EG, akte).then(function (k) {
+      ccGeladen = true;
+      if (k && !ccManuell) {
+        sammeln();
+        el.cc.value = ccVorschlag(k.email, [d.empfaenger, d.absender.email]);
+      }
+      aktualisieren();
+    });
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
