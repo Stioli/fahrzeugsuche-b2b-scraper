@@ -1159,6 +1159,13 @@
   /* ====================================================================
      Verkaufsakte anlegen (Status 5)
      ==================================================================== */
+  /** Text der Anfrage für die Verkaufsakte: Kontaktverlauf (Anfragetext steht zuerst), höchstens ~500 Zeichen, an einer Wortgrenze gekürzt. */
+  function nachrichtKurz(z) {
+    var t = String(z.notiz || '').replace(/^BITTE PRÜFEN[^\n]*\n?/, '').replace(/[ \t]+\n/g, '\n').trim();
+    if (t.length <= 500) return t;
+    var k = t.slice(0, 500), i = k.lastIndexOf(' ');
+    return (i > 400 ? k.slice(0, i) : k) + ' …';
+  }
   function verkaufsakteAnlegen(z) {
     if (typeof window.VK_AKTE_ANLEGEN !== 'function') { EG.toast('Verkaufs-Reiter noch nicht geladen'); return; }
     var p;
@@ -1172,7 +1179,9 @@
         interne_nr: '',                              // liefert leads_api nicht; der Verkauf-Reiter ergänzt sie aus der Masterliste
         hersteller: z.hersteller || '',
         modell: z.modell || '',
-        verkaeufer: z.verkaeufer || (S.me && S.me.kuerzel) || ''
+        verkaeufer: z.verkaeufer || (S.me && S.me.kuerzel) || '',
+        herkunft_anfrage: [z.herkunft, z.ueber].filter(Boolean).join(' · '),   // Kanal/Quelle der Anfrage (VA7)
+        nachricht: nachrichtKurz(z)                  // Text der Anfrage, gekürzt (VA7)
       });
     } catch (e) { EG.fehler(e); return; }
     if (p && typeof p.then === 'function') p.then(null, EG.fehler);

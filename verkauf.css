@@ -203,3 +203,9 @@ body.vk-ze-offen{overflow:hidden}
 @media(max-width:480px){
   .vk-ze-zeile{grid-template-columns:28px 56px 1fr 96px 44px;gap:4px}
 }
+
+/* ---------- Verkaufsablauf 4.0 (VA3): Transportstatus, Zahlungsstand, Freigaben ---------- */
+.vk-transport{margin:8px 0 4px;padding:6px 10px;border-radius:10px;background:#EEF1F5;font-size:14px;overflow-wrap:anywhere}
+.vk-zahlstand{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0}
+.vk-freigabe .banner{margin:8px 0}
+.vk-fehlt-wer{flex:0 0 100%}

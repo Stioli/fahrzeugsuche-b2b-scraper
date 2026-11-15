@@ -1,5 +1,5 @@
 /* Fahrzeugeingang-Tool – gemeinsame Helfer (window.EG)
-   Paket P3, Stand 30.10.2026.
+   Version 4.5, Paket P3, Stand 15.11.2026 (mailMitAnhang: Optionen titel und knopfText).
    Wird von eingang-anlieferung.js und eingang-inzahlung.js genutzt.
 
    Überblick der Schnittstelle (Details siehe jeweils am Funktionskopf):
@@ -8,7 +8,7 @@
      EG.h(tag, attrs, ...kinder)  ·  EG.feld(...)  ·  EG.pill(...)  ·  EG.banner(...)
      EG.toast(text, art)  ·  EG.fehler(e)  ·  EG.dialog(opt)  ·  EG.bestaetigen(text, opt)  ·  EG.eingabe(frage, opt)
      EG.fotoHochladen(file, pfad)  ·  EG.fotoAnzeigen(pfad)  ·  EG.fotoBlob(pfad)  ·  EG.fotoBlock(opt)  ·  EG.fotoThumb(pfad)
-     EG.mailMitAnhang({an, betreff, text, fotoPfade})
+     EG.mailMitAnhang({an, betreff, text, fotoPfade, titel?, knopfText?})
      EG.heute(), EG.fmtDatum(), EG.fmtZeit(), EG.plusWerktage(), EG.werktageSeit(), EG.kopieren()
      EG.demoSeed(schluessel, zeilen)  (nur im Demo-Modus wirksam)
 */
@@ -519,7 +519,8 @@
     setTimeout(function () { a.remove(); URL.revokeObjectURL(url); }, 4000);
   }
 
-  /** EG.mailMitAnhang({an, betreff, text, fotoPfade}) → Promise<boolean>
+  /** EG.mailMitAnhang({an, betreff, text, fotoPfade, titel?, knopfText?}) → Promise<boolean>
+      titel: Dialogtitel (Standard „Rüge versenden“) · knopfText: Beschriftung des Bestätigen-Knopfs (Standard „Gesendet“).
       Zeigt den Versand-Dialog (Empfänger groß mit „Adresse kopieren“, Teilen mit Fotos, am PC .eml-Entwurf,
       Ersatzweg: Fotos einzeln + mailto). true = Person hat „Gesendet“ bestätigt, false = abgebrochen. */
   EG.mailMitAnhang = async function (o) {
@@ -591,11 +592,11 @@
     });
 
     var w = await EG.dialog({
-      titel: 'Rüge versenden', inhalt: inhalt, breit: true, keinFokus: true,
+      titel: o.titel || 'Rüge versenden', inhalt: inhalt, breit: true, keinFokus: true,
       knoepfe: [
         { text: 'Abbrechen', art: 'ghost', wert: false },
         {
-          text: 'Gesendet', art: 'primary', wert: true,
+          text: o.knopfText || 'Gesendet', art: 'primary', wert: true,
           aktion: async function () {
             if (ladeFehler) return 'Die Fotos konnten nicht geladen werden – so ist die Mail unvollständig. Bitte abbrechen und neu versuchen.';
             await geladen;
