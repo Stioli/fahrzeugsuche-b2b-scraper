@@ -351,6 +351,9 @@
     ]);
   }
 
+  // Für den Abschnitt „Inzahlungnahmen“ im Reiter Anlieferung (eingang-anlieferung-iz.js)
+  window.IZ_INFO = { demo: demoVorbereiten, LACK_POINTS: LACK_POINTS, AUSST: AUSST };
+
   async function holeUser() {
     if (S.userId) return;
     var eg = EGx();

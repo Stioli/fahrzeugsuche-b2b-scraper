@@ -104,6 +104,7 @@
      ==================================================================== */
   EG.onTab('anlieferung', function (root) {
     S.root = root;
+    if (S.izId && window.AN_IZ) return window.AN_IZ.detail(root, S.izId, izZurueck);
     return S.id ? ladeDetail() : ladeListe();
   });
 
@@ -111,7 +112,8 @@
      LISTE
      ==================================================================== */
   async function ladeListe() {
-    S.id = null; S.fz = null;
+    S.id = null; S.fz = null; S.izId = null;
+    if (window.AN_IZ) window.AN_IZ.neuLaden();
     S.root.innerHTML = '';
     S.root.appendChild(h('p', { class: 'muted', text: 'Lade Fahrzeuge …' }));
     var r = chk(await T.fz().select('*').order('gepl_anlieferung', { ascending: true, nullsFirst: false }));
@@ -150,6 +152,8 @@
     S.sp = S.sp || { f: {}, sort: null };   // Spaltenfilter und Sortierung bleiben beim Neuzeichnen erhalten
     S.listenBox = h('div', { role: 'list' });
     S.root.appendChild(h('div', { class: 'ac-tabelle' }, EG.zeilenKopf('an-zeile', SPALTEN, S.sp, fuelleListe, S.liste), S.listenBox));
+    S.izBox = h('div', { class: 'ac-tabelle', style: 'margin-top:18px' });   // Inzahlungnahmen (eingang-anlieferung-iz.js)
+    S.root.appendChild(S.izBox);
     fuelleListe();
   }
   /** Termintext und -datum je Status (geplant / angeliefert / geprüft). */
@@ -173,7 +177,16 @@
     { t: 'Hinweis', c: 'an-c-hinw', w: hinweisText, ph: 'Hinweis' },
     { t: 'Status', c: 'an-c-status', w: function (f) { return (STATUS[f.status] || [f.status])[0]; }, wahl: true }
   ];
+  /* Inzahlungnahmen nach „Fahrzeug übernehmen“: eigener Abschnitt mit Aufgabenliste (eingang-anlieferung-iz.js) */
+  function izOeffnen(id) { S.izId = id; window.AN_IZ.detail(S.root, id, izZurueck).catch(EG.fehler); window.scrollTo(0, 0); }
+  function izZurueck() { S.izId = null; ladeListe().catch(EG.fehler); }
+  function fuelleIz() {
+    if (!S.izBox || !window.AN_IZ) return;
+    S.izBox.innerHTML = '';
+    S.izBox.appendChild(window.AN_IZ.abschnitt({ filter: S.filter, suche: S.suche, oeffne: izOeffnen }));
+  }
   function fuelleListe() {
+    fuelleIz();
     var box = S.listenBox; box.innerHTML = '';
     var fl = S.filter === 'offen' ? OFFEN : S.filter === 'erledigt' ? ERLEDIGT : null;
     var l = S.liste.filter(function (f) { return (!fl || fl.indexOf(f.status) >= 0) && passtSuche(f); });
