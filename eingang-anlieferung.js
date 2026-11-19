@@ -23,8 +23,15 @@
   var ERLEDIGT = ['geprueft_ok', 'ruege_gesendet', 'abgeschlossen'];
 
   // Checkliste fürs Handy gekürzt; Quelle: Eingangsprüfung-Entwurf, Abschnitt 1 (A–H).
+  // Seit 19.11.2026 (Oli): Identität mit FIN-Abgleich an erster Stelle. Aufgaben danach (CMR, Räder, Lack, Repdoc …): eingang-anlieferung-iz.js
   // k = Prüfpunkt (wird so in eingang.pruefpunkt.punkt gespeichert, je Fahrzeug eindeutig).
   var CHECKLISTE = [
+    { block: 'Identität', punkte: [
+      { k: 'FIN am Fahrzeug = Papiere', hinweis: 'Als Erstes: Typschild und Einschlag mit Bestellung, Rechnung und COC vergleichen – passt das Fahrzeug zur Bestellung?', foto: true },
+      { k: 'Modell, Motor, Getriebe = Bestellung', kat: 'Falsche Ausstattung' },
+      { k: 'Farbe außen und innen = Bestellung', kat: 'Falsche Farbe' },
+      { k: 'Kilometerstand mit Tacho-Foto', extra: 'km', foto: true, kat: 'Kilometerstand zu hoch' }
+    ] },
     { block: 'Papiere', punkte: [
       { k: 'COC vorhanden', hinweis: 'Papier oder elektronische Daten – ohne gültige COC keine Zulassung', kat: 'Papiere fehlen' },
       { k: 'Zulassungsbescheinigung Teil I', hinweis: 'nur falls zugelassen – FIN und Halter stimmig', kat: 'Papiere fehlen' },
@@ -33,12 +40,6 @@
       { k: 'Anzahl Schlüssel', hinweis: 'laut Bestellung, Funktion jedes Schlüssels prüfen', kat: 'Schlüssel / Zubehör fehlt', notiz: true },
       { k: 'Notschlüssel / Code-Karte', kat: 'Schlüssel / Zubehör fehlt' }
     ] },
-    { block: 'Identität', punkte: [
-      { k: 'FIN am Fahrzeug = Papiere', hinweis: 'Typschild und Einschlag mit Bestellung, Rechnung und COC vergleichen', foto: true },
-      { k: 'Modell, Motor, Getriebe = Bestellung', kat: 'Falsche Ausstattung' },
-      { k: 'Farbe außen und innen = Bestellung', kat: 'Falsche Farbe' },
-      { k: 'Kilometerstand mit Tacho-Foto', extra: 'km', foto: true, kat: 'Kilometerstand zu hoch' }
-    ] },
     { block: 'Neuwagen', hinweis: 'nur Neuwagen, EU-Neuwagen und Tageszulassungen', punkte: [
       { k: 'Produktionsdatum festgestellt', extra: 'produktion', hinweis: 'COC, Typschild oder Herstellerabfrage', kat: 'Produktionsdatum zu alt' },
       { k: 'Keine Standschäden', hinweis: 'Reifen, Bremsen, Batterie, Lack', kat: 'Sonstiges' }
@@ -46,7 +47,7 @@
     { block: 'Schäden', punkte: [
       { k: 'Rundgang außen', hinweis: 'Lack, Dellen, Kratzer, Steinschläge, Felgen, Reifen, Scheiben, Leuchten – jeder Schaden mit Foto' },
       { k: 'Innenraum', hinweis: 'Sitze, Himmel, Verkleidungen, Gerüche', kat: 'Innenraum (Verschmutzung, Gebrauchsspur)' },
-      { k: 'Warnleuchten nach Motorstart', kat: 'Technik / Warnleuchte' }
+      { k: 'Warnleuchten nach Motorstart', hinweis: 'Technisch prüfen: Warnleuchten, kurze Probefahrt', kat: 'Technik / Warnleuchte' }
     ] },
     { block: 'Ausstattung', punkte: [
       { k: 'Ausstattung gegen Bestellung', hinweis: 'Pakete, Assistenzsysteme, Navi, AHK, Dach, Felgen – bestellt ist bestellt', kat: 'Falsche Ausstattung' },
@@ -118,6 +119,7 @@
     S.root.appendChild(h('p', { class: 'muted', text: 'Lade Fahrzeuge …' }));
     var r = chk(await T.fz().select('*').order('gepl_anlieferung', { ascending: true, nullsFirst: false }));
     S.liste = r.data || [];
+    S.aufg = window.AN_IZ ? await window.AN_IZ.standLieferant(S.liste.filter(function (f) { return f.status !== 'erwartet'; }).map(function (f) { return f.id; })) : {};
     zeichneListe();
   }
   function ueberfaellig(f) {
@@ -163,8 +165,10 @@
     if (f.geprueft_am) return { text: 'Geprüft ' + EG.fmtDatum(f.geprueft_am), datum: String(f.geprueft_am).slice(0, 10), faellig: false };
     return { text: 'Angeliefert ' + (EG.fmtDatum(f.angeliefert_am) || '–'), datum: f.angeliefert_am ? String(f.angeliefert_am).slice(0, 10) : '', faellig: false };
   }
+  /** „Aufgaben 3/12“ für angelieferte Fahrzeuge (Aufgaben nach der Anlieferung, eingang-anlieferung-iz.js) */
+  function aufgText(f) { var a = (S.aufg || {})[f.id]; return a && a[0] < a[1] ? 'Aufgaben ' + a[0] + '/' + a[1] : ''; }
   function hinweisText(f) {
-    return [ueberfaellig(f) ? 'Prüfung überfällig' : '', terminVon(f).faellig ? 'Termin überschritten' : '',
+    return [aufgText(f), ueberfaellig(f) ? 'Prüfung überfällig' : '', terminVon(f).faellig ? 'Termin überschritten' : '',
       f.nicht_mehr_in_masterliste ? 'nicht mehr in der Masterliste' : '', f.quelle === 'hand' ? 'von Hand angelegt' : ''].filter(Boolean).join(' ');
   }
   /** Spalten der Zeilenansicht (Kopf mit Sortierung und Filter: EG.zeilenKopf). Auf dem Handy bleiben Fahrzeug (mit Kurzzeilen) und Status. */
@@ -207,10 +211,11 @@
         rot ? h('span', { class: 'rot-text fett', text: 'Prüfung überfällig' }) : null,
         faellig ? h('span', { class: 'rot-text fett', text: 'Termin überschritten' }) : null,
         f.nicht_mehr_in_masterliste ? EG.pill('nicht mehr in der Masterliste', 'gold') : null,
-        f.quelle === 'hand' ? h('span', { class: 'muted', text: 'von Hand angelegt' }) : null
+        f.quelle === 'hand' ? h('span', { class: 'muted', text: 'von Hand angelegt' }) : null,
+        aufgText(f) ? h('span', { class: 'muted', text: aufgText(f) }) : null
       ].filter(Boolean).map(function (x, i) { return i ? [' ', x] : x; });
     }
-    var hatHinweis = rot || faellig || f.nicht_mehr_in_masterliste || f.quelle === 'hand';
+    var hatHinweis = rot || faellig || f.nicht_mehr_in_masterliste || f.quelle === 'hand' || !!aufgText(f);
     var titelLang = [termin, faellig ? 'Termin überschritten' : '', rot ? 'Prüfung überfällig – seit über einem Werktag angeliefert' : ''].filter(Boolean).join(' · ');
     return h('button', {
       type: 'button', role: 'listitem', class: 'ac-zeile an-zeile' + (rot ? ' rot' : '') + (ERLEDIGT.indexOf(f.status) >= 0 ? ' fertig' : ''),
@@ -330,6 +335,7 @@
       CHECKLISTE.forEach(function (b) { root.appendChild(blockKarte(b)); });
       root.appendChild(weitereMaengel());
       root.appendChild(abschlussKarte(beantwortet));
+      if (window.AN_IZ) root.appendChild(window.AN_IZ.block({ art: 'L', besitzer: f }));
       root.appendChild(notizKarte(f));
     }
     window.scrollTo(0, y);
