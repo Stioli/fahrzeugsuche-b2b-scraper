@@ -31,6 +31,11 @@
 .kd-fz-link:hover{text-decoration:underline}
 .kd-fz-link:focus-visible{outline:2px solid var(--blau);outline-offset:2px;border-radius:4px}
 .kd-zum-kunden{margin:4px 0 8px}
+/* v1.3: Spalte Kunde (Fahrzeug-Liste) und Fahrzeug / Int.-Nr. / Fgst.-Nr. (Kunden-Liste) */
+.fz-tabelle td .kd-fz-link{min-height:0;font-weight:600;color:var(--blau)}
+.fz-tabelle td .kd-fz-link:hover{color:var(--blau-dark)}
+.kd-zl .kd-zeile1{line-height:24px;height:24px}
+.kd-zl .kd-zeile1 .kd-fz-link{line-height:24px}
 
 /* v1.2 (P4b): Mehrfeld-Dialog (Reiter Zahlungen) */
 .fz-mehrfeld{max-height:62vh;overflow:auto;padding-right:4px}

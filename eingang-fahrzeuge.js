@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Fahrzeuge“ (Etappe 1b, B3 + B4, Plan 25.11.2026)                     Stand 25.11.2026 v1.2 (P4b: Mehrfeld-Dialog für den Reiter Zahlungen)
+/* Stieber-App – Reiter „Fahrzeuge“ (Etappe 1b, B3 + B4, Plan 25.11.2026)                     Stand 25.11.2026 v1.3 (Spalte „Kunde“ in der Liste)
    Alle Felder der Masterliste je Fahrzeug – lesen, bearbeiten, neu anlegen. Eine Quelle für Rechte und Felder:
    bestand.feld_katalog (Oli 25.11.2026: admin, Dispo, Buchhaltung sehen/ändern alles und legen an; übrige Rollen
    lesen ohne EK/Zahlung/Ertrag und ändern nur ihre Punkte).
@@ -8,6 +8,8 @@
             Schalter bestand.einstellung 'fahrzeug_schreiben' = probe → nichts wird gespeichert (Hinweis in der App).
    v1.2: window.EG_FZ.felderBearbeiten(stieberId, [sp_intern …]) – ein Dialog für mehrere Felder (nur geänderte Werte gehen an
          bestand_schreiben, mit Konfliktschutz). Nutzt der Reiter Zahlungen; eine Schreiblogik für beide Reiter.
+   v1.3: Spalte „Kunde“ (Masterliste-Feld Title) direkt nach „Modell“ in jeder Ansicht, wenn die Rolle das Feld lesen darf (Katalog).
+         Der Name ist ein Knopf und öffnet über window.EG_KD den Kunden (ohne die Fahrzeugzeile zu öffnen); „Stieber“/leer = „–“.
    Baut auf window.EG (eingang-core.js) auf. Demo (?demo=1): erfundene Fahrzeuge, nichts verlässt die Seite. */
 (function () {
   'use strict';
@@ -20,6 +22,7 @@
     ['zahlung', 'Zahlung Kunde'], ['inzahlung', 'Inzahlungnahme & Ablöse'], ['finanzierung', 'Finanzierung & Netting'], ['kennzahlen', 'Kennzahlen']
   ];
   var NR = 'InterneNr_x002e_', HERST = 'FahrzeugModell', MODELL = 'Modell', FIN = 'Fgst_x002e__x002d_Nr_x002e__x003', AUTRADO = 'AutradoNr_x002e_';
+  var KUNDE = 'Title';   // Masterliste-Feld „Kunde“ (Bestandsfahrzeuge: „Stieber“)
   var STATUS = 'Status0', STANDORT = 'Status', STANDTAGE = 'Standtage';
   /* Geldbeträge, die in der Masterliste Zahl/berechnet sind, trotzdem mit € anzeigen */
   var GELD_BERECHNET = ['Kaufpreis', 'Zahlbetrag_x0020_Kunde', 'Kd_x2011_Ges_x2011_Zahlbetrag', 'Kd_x2011_Gesamtzahlung', 'InzRestwert', 'AufwandGesamt', 'UmsatzNetto', 'Ertrag', 'Zusatzrechnung'];
@@ -197,14 +200,34 @@
 
   /* ---------------------------------------------------------------- Liste */
   function vorlage() { return VORLAGEN.filter(function (v) { return v.k === S.vorlage; })[0] || VORLAGEN[0]; }
-  function spalten() { return vorlage().sp.filter(function (sp) { return sp === NR || S.katMap[sp]; }); }
+  function spalten() {
+    var l = vorlage().sp.filter(function (sp) { return sp === NR || S.katMap[sp]; });
+    if (S.katMap[KUNDE] && l.indexOf(KUNDE) < 0) { var i = l.indexOf(MODELL); l.splice(i >= 0 ? i + 1 : l.length, 0, KUNDE); }   // v1.3: Kunde direkt nach Modell
+    return l;
+  }
+  function spName(k) { return k === NR ? 'Interne Nr.' : k === KUNDE ? 'Kunde' : (S.katMap[k] ? S.katMap[k].anzeigename : k); }
+  /** Kundenname für die Liste; Bestandsfahrzeuge („Stieber“) und leer → '' */
+  function kundeName(x) { var n = txt((x.felder || {})[KUNDE]).trim(); return !n || /^stieber( gmbh)?$/i.test(n) ? '' : n; }
+  /** Zelle „Kunde“: Knopf, der den Kunden öffnet (nicht die Fahrzeugzeile). */
+  function kundeZelle(x) {
+    var n = kundeName(x);
+    if (!n) return h('td', { class: 'muted', text: '–' });
+    if (!(window.EG_KD && window.EG_KD.darf())) return h('td', { text: n });
+    return h('td', {}, h('button', { type: 'button', class: 'kd-fz-link', title: 'Kunde öffnen', text: n, onclick: function (e) {
+      e.stopPropagation();
+      window.EG_KD.fuerFahrzeug(x.stieber_id).then(function (k) {
+        if (!k) { EG.toast('Zu diesem Fahrzeug wurde noch kein Kunde in der Kundenliste gefunden.'); return; }
+        return window.EG_KD.oeffnen(k.id);
+      }).catch(EG.fehler);
+    }, onkeydown: function (e) { e.stopPropagation(); } }));
+  }
   function sichtbar() {
     var v = vorlage(), q = S.suche.trim().toLowerCase();
     var l = S.daten.filter(function (x) {
       var f = x.felder || {};
       if (!v.filter(f)) return false;
       if (!q) return true;
-      return [x.interne_nr, x.stieber_id, txt(f[HERST]), txt(f[MODELL]), txt(f[FIN]), txt(f[AUTRADO]), txt(f.Lieferant)].join(' ').toLowerCase().indexOf(q) >= 0;
+      return [x.interne_nr, x.stieber_id, txt(f[HERST]), txt(f[MODELL]), txt(f[FIN]), txt(f[AUTRADO]), txt(f.Lieferant), txt(f[KUNDE])].join(' ').toLowerCase().indexOf(q) >= 0;
     });
     var s = S.sort || (v.sort ? { sp: v.sort.sp, dir: v.sort.dir } : { sp: NR, dir: -1 });
     var wert = function (x) { var w = s.sp === NR ? x.interne_nr : (x.felder || {})[s.sp]; var n = num(txt(w)); return n != null && !/^\d{4}-/.test(txt(w)) ? n : txt(w); };
@@ -243,12 +266,12 @@
       var an = S.sort && S.sort.sp === k;
       return h('th', { scope: 'col' }, h('button', { type: 'button', class: 'fz-th', title: 'Sortieren',
         onclick: function () { S.sort = !an ? { sp: k, dir: 1 } : S.sort.dir > 0 ? { sp: k, dir: -1 } : null; tabelleNeu(); } },
-        k === NR ? 'Nr.' : (S.katMap[k] ? S.katMap[k].anzeigename : k), an ? (S.sort.dir > 0 ? ' ▲' : ' ▼') : ''));
+        k === NR ? 'Nr.' : spName(k), an ? (S.sort.dir > 0 ? ' ▲' : ' ▼') : ''));
     }));
     var rumpf = h('tbody', {}, l.slice(0, 500).map(function (x) {
       return h('tr', { tabindex: '0', class: 'fz-zeile', onclick: function () { detail(x.stieber_id).catch(EG.fehler); },
         onkeydown: function (e) { if (e.key === 'Enter') detail(x.stieber_id).catch(EG.fehler); } },
-        sp.map(function (k) { return h('td', { text: k === NR ? (x.interne_nr || '–') : anzeigen(k, (x.felder || {})[k]) }); }));
+        sp.map(function (k) { return k === KUNDE ? kundeZelle(x) : h('td', { text: k === NR ? (x.interne_nr || '–') : anzeigen(k, (x.felder || {})[k]) }); }));
     }));
     box.appendChild(h('div', { class: 'fz-scroll' }, h('table', { class: 'fz-tabelle' }, h('thead', {}, kopf), rumpf)));
     if (l.length > 500) box.appendChild(h('p', { class: 'klein muted', text: 'Nur die ersten 500 angezeigt – bitte suchen oder Ansicht wählen.' }));
@@ -259,8 +282,8 @@
   function exportieren() {
     var sp = spalten(), l = sichtbar();
     var esc = function (s) { s = String(s == null ? '' : s); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    var zeilen = [sp.map(function (k) { return esc(k === NR ? 'Interne Nr.' : S.katMap[k].anzeigename); }).join(';')];
-    l.forEach(function (x) { zeilen.push(sp.map(function (k) { return esc(k === NR ? x.interne_nr : anzeigen(k, (x.felder || {})[k])); }).join(';')); });
+    var zeilen = [sp.map(function (k) { return esc(spName(k)); }).join(';')];
+    l.forEach(function (x) { zeilen.push(sp.map(function (k) { return esc(k === NR ? x.interne_nr : k === KUNDE ? kundeName(x) : anzeigen(k, (x.felder || {})[k])); }).join(';')); });
     var blob = new Blob(['﻿' + zeilen.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     var a = h('a', { href: URL.createObjectURL(blob), download: 'Fahrzeuge_' + vorlage().t.replace(/\W+/g, '_') + '_' + EG.heute() + '.csv' });
     document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -425,7 +448,7 @@
   function dk(sp, name, typ, abschnitt, lesen, aendern, auswahl, pflicht) { return { sp_intern: sp, anzeigename: name, typ: typ, abschnitt: abschnitt, lesen: lesen, aendern: aendern, auswahl: auswahl || null, pflicht_anlegen: !!pflicht }; }
   var DEMO_KAT = [
     dk(NR, 'Interne Nr.', 'Number', 'fahrzeug', ALLE, BUERO), dk(HERST, 'Hersteller', 'Text', 'fahrzeug', ALLE, BUERO, null, true), dk(MODELL, 'Modell', 'Text', 'fahrzeug', ALLE, BUERO, null, true),
-    dk('Farbe', 'Farbe', 'Choice', 'fahrzeug', ALLE, BUERO, ['schwarz', 'weiß', 'grau', 'blau', 'rot', 'silber']), dk(FIN, 'Fgst.-Nr.', 'Text', 'fahrzeug', ALLE, BUERO),
+    dk('Farbe', 'Farbe', 'Choice', 'fahrzeug', ALLE, BUERO, ['schwarz', 'weiß', 'grau', 'blau', 'rot', 'silber']), dk(FIN, 'Fgst.-Nr.', 'Text', 'fahrzeug', ALLE, BUERO), dk(KUNDE, 'Kunde', 'Text', 'kunde', BUERO.concat(['verkauf']), BUERO),
     dk('NW_x002f_GW', 'NW / GW', 'Choice', 'fahrzeug', ALLE, BUERO, ['NW', 'GW', 'TZ'], true), dk('KMStand', 'KM Stand', 'Number', 'fahrzeug', ALLE, BUERO.concat(['werkstatt'])),
     dk(STATUS, 'Status', 'Choice', 'aufbereitung', ALLE, BUERO.concat(['werkstatt', 'aufbereitung']), ['bestellt', 'Transport', 'im Haus', 'Werkstatt', 'Aufbereitung', 'Endkontrolle', 'fertig', 'ausgeliefert']),
     dk('Innen', 'Innen', 'Choice', 'aufbereitung', ALLE, BUERO.concat(['werkstatt', 'aufbereitung']), ['fertig', 'nein', 'in Arbeit', 'für Showroom']),
@@ -466,10 +489,11 @@
       var d = function (n) { var x = new Date(); x.setDate(x.getDate() + n); return EG.isoDatum(x); };
       var fz = function (id, nr, o) { var f = {}; f[NR] = nr; return { stieber_id: id, ml_ref: 'demo', interne_nr: nr, felder: Object.assign(f, o) }; };
       demoDaten = [
-        fz('ST-26-9001', '90001', { FahrzeugModell: 'Hyundai', Modell: 'Tucson 1.6 Demo', Farbe: 'weiß', NW_x002f_GW: 'NW', Status0: 'im Haus', Status: 'AH Stieber', Transportstatus: '5 im Haus', FahrzeuganlieferungAHS: d(-20), Standtage: 20, Innen: 'fertig', Aussen: 'in Arbeit', Werkstatt0: 'fertig', Lieferant: 'Demo-Autohaus Nord', Kaufpreisnetto: 24500, Bilder: { status: 'erledigt', wert: 'OK', am: d(-15) } }),
-        fz('ST-26-9002', '90002', { FahrzeugModell: 'Kia', Modell: 'Sportage Demo', Farbe: 'grau', NW_x002f_GW: 'GW', Status0: 'bestellt', Status: 'bestellt', Transportstatus: '2 geplant', gepl_x002d_Anlieferung: d(3), Lieferant: 'Beispiel Fahrzeughandel', Kaufpreisnetto: 19800 }),
-        fz('ST-26-9003', '90003', { FahrzeugModell: 'Opel', Modell: 'Mokka Demo', Farbe: 'rot', NW_x002f_GW: 'TZ', Status0: 'ausgeliefert', Status: 'Kunde', Transportstatus: '5 im Haus', KaufvertragDatum: d(-30), Verk_x00e4_ufer1: 'NP', VK_x002d_Preis_x002d_Kunde: 27990, Fertig: 'komplett erhalten', Kd_x002d_Zahlart: ['Überweisung'], Kaufpreisnetto: 21000, Ertrag: 1240.5, Lieferant: 'Demo-Autohaus Nord' }),
-        fz('ST-26-9004', '90004', { FahrzeugModell: 'Nissan', Modell: 'Qashqai Demo', Farbe: 'schwarz', NW_x002f_GW: 'NW', Status0: 'im Haus', Status: 'AH Stieber', Transportstatus: '5 im Haus', FahrzeuganlieferungAHS: d(-75), Standtage: 75, KaufvertragDatum: d(-2), Verk_x00e4_ufer1: 'AI', VK_x002d_Preis_x002d_Kunde: 31990, Fertig: 'Teilzahlung', Kd_x002d_Zahlart: ['Anzahlung', 'Finanzierung SCB'], Lieferant: 'Beispiel Fahrzeughandel', Kaufpreisnetto: 25500 })
+        fz('ST-26-9001', '90001', { Title: 'Stieber', Fgst_x002e__x002d_Nr_x002e__x003: 'DEMO0000000090001', FahrzeugModell: 'Hyundai', Modell: 'Tucson 1.6 Demo', Farbe: 'weiß', NW_x002f_GW: 'NW', Status0: 'im Haus', Status: 'AH Stieber', Transportstatus: '5 im Haus', FahrzeuganlieferungAHS: d(-20), Standtage: 20, Innen: 'fertig', Aussen: 'in Arbeit', Werkstatt0: 'fertig', Lieferant: 'Demo-Autohaus Nord', Kaufpreisnetto: 24500, Bilder: { status: 'erledigt', wert: 'OK', am: d(-15) } }),
+        fz('ST-26-9002', '90002', { Title: 'Beispiel Kunde', Fgst_x002e__x002d_Nr_x002e__x003: 'DEMO0000000090002', FahrzeugModell: 'Kia', Modell: 'Sportage Demo', Farbe: 'grau', NW_x002f_GW: 'GW', Status0: 'bestellt', Status: 'bestellt', Transportstatus: '2 geplant', gepl_x002d_Anlieferung: d(3), Lieferant: 'Beispiel Fahrzeughandel', Kaufpreisnetto: 19800 }),
+        fz('ST-26-9003', '90003', { Title: 'Erika Musterfrau', Fgst_x002e__x002d_Nr_x002e__x003: 'DEMO0000000090003', FahrzeugModell: 'Opel', Modell: 'Mokka Demo', Farbe: 'rot', NW_x002f_GW: 'TZ', Status0: 'ausgeliefert', Status: 'Kunde', Transportstatus: '5 im Haus', KaufvertragDatum: d(-30), Verk_x00e4_ufer1: 'NP', VK_x002d_Preis_x002d_Kunde: 27990, Fertig: 'komplett erhalten', Kd_x002d_Zahlart: ['Überweisung'], Kaufpreisnetto: 21000, Ertrag: 1240.5, Lieferant: 'Demo-Autohaus Nord' }),
+        fz('ST-26-9004', '90004', { Title: 'Max Mustermann', Fgst_x002e__x002d_Nr_x002e__x003: 'DEMO0000000090004', FahrzeugModell: 'Nissan', Modell: 'Qashqai Demo', Farbe: 'schwarz', NW_x002f_GW: 'NW', Status0: 'im Haus', Status: 'AH Stieber', Transportstatus: '5 im Haus', FahrzeuganlieferungAHS: d(-75), Standtage: 75, KaufvertragDatum: d(-2), Verk_x00e4_ufer1: 'AI', VK_x002d_Preis_x002d_Kunde: 31990, Fertig: 'Teilzahlung', Kd_x002d_Zahlart: ['Anzahlung', 'Finanzierung SCB'], Lieferant: 'Beispiel Fahrzeughandel', Kaufpreisnetto: 25500 }),
+        fz('ST-25-8001', '80001', { Title: 'Max Mustermann', Fgst_x002e__x002d_Nr_x002e__x003: 'DEMO0000000080001', FahrzeugModell: 'Kia', Modell: 'Ceed Demo', Farbe: 'blau', NW_x002f_GW: 'GW', Status0: 'ausgeliefert', Status: 'Kunde', Transportstatus: '5 im Haus', KaufvertragDatum: d(-400), Verk_x00e4_ufer1: 'OS', Lieferant: 'Demo-Autohaus Nord' })
       ];
     }
     var lesbar = {}; demoKatalog().forEach(function (f) { lesbar[f.sp_intern] = true; });
