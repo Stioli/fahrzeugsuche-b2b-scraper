@@ -27,3 +27,7 @@
 .kd-fz{list-style:none;padding:0;margin:0 0 12px}
 .kd-fz li{border-bottom:1px solid #EEF1F5;padding:8px 0}
 .fz-paar dd a{color:var(--blau-dark);font-weight:600;word-break:break-all}
+.kd-fz-link{all:unset;cursor:pointer;font-weight:700;color:var(--blau-dark);min-height:32px;display:inline-flex;align-items:center}
+.kd-fz-link:hover{text-decoration:underline}
+.kd-fz-link:focus-visible{outline:2px solid var(--blau);outline-offset:2px;border-radius:4px}
+.kd-zum-kunden{margin:4px 0 8px}

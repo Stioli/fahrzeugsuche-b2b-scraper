@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Fahrzeuge“ (Etappe 1b, B3 + B4, Plan 25.11.2026)                     Stand 25.11.2026 v1
+/* Stieber-App – Reiter „Fahrzeuge“ (Etappe 1b, B3 + B4, Plan 25.11.2026)                     Stand 25.11.2026 v1.1 (K2: Kunde öffnen, Höhe)
    Alle Felder der Masterliste je Fahrzeug – lesen, bearbeiten, neu anlegen. Eine Quelle für Rechte und Felder:
    bestand.feld_katalog (Oli 25.11.2026: admin, Dispo, Buchhaltung sehen/ändern alles und legen an; übrige Rollen
    lesen ohne EK/Zahlung/Ertrag und ändern nur ihre Punkte).
@@ -43,6 +43,33 @@
   var S = { root: null, kat: [], katMap: {}, daten: [], vorlage: 'bestand', suche: '', sort: null, laedt: false, detail: null };
 
   EG.onTab('fahrzeuge', function (root) { S.root = root; return laden(); });
+
+  /* Verknüpfung Kunde ↔ Fahrzeug (K2, 25.11.2026): der Reiter „Kunden“ öffnet hierüber ein Fahrzeug. */
+  window.EG_FZ = {
+    darf: function () { var b = document.getElementById('tabk-fahrzeuge'); return !!b && !b.hidden; },
+    oeffnen: async function (stieberId) {
+      if (!S.kat.length) {
+        var k = EG.demo ? demoKatalog() : (chk(await EG.sb.schema('bestand').rpc('feld_katalog_meine')).data || []);
+        S.kat = k; S.katMap = {}; k.forEach(function (f) { S.katMap[f.sp_intern] = f; });
+      }
+      if (!S.daten.some(function (d) { return d.stieber_id === stieberId; })) {
+        var n = EG.demo ? demoFahrzeuge().filter(function (d) { return d.stieber_id === stieberId; })
+          : (chk(await EG.sb.schema('bestand').rpc('fahrzeuge_lesen', { p_stieber_id: stieberId })).data || []);
+        if (!n[0]) { EG.toast('Fahrzeug ' + stieberId + ' nicht gefunden.'); return; }
+        S.daten = S.daten.concat(n);
+      }
+      return detail(stieberId);
+    }
+  };
+
+  /** Tabelle so hoch, dass ihr unterer Rand (mit der waagrechten Bildlaufleiste) im Fenster bleibt. */
+  function hoeheAnpassen() {
+    var el = S.tabBox && S.tabBox.querySelector('.fz-scroll');
+    if (!el || !el.offsetParent) return;
+    var oben = el.getBoundingClientRect().top + window.scrollY;
+    el.style.maxHeight = Math.max(260, window.innerHeight - oben - 16) + 'px';
+  }
+  window.addEventListener('resize', hoeheAnpassen);
 
   function chk(r) { if (r && r.error) throw r.error; return r; }
   function txt(v) { if (v == null) return ''; if (typeof v === 'object' && !Array.isArray(v)) return String(v.wert != null ? (v.wert.wert != null ? v.wert.wert : v.wert) : (v.status || '')); return Array.isArray(v) ? v.join('; ') : String(v); }
@@ -155,6 +182,7 @@
     }));
     box.appendChild(h('div', { class: 'fz-scroll' }, h('table', { class: 'fz-tabelle' }, h('thead', {}, kopf), rumpf)));
     if (l.length > 500) box.appendChild(h('p', { class: 'klein muted', text: 'Nur die ersten 500 angezeigt – bitte suchen oder Ansicht wählen.' }));
+    requestAnimationFrame(hoeheAnpassen);
   }
 
   /** Export als CSV (Semikolon, UTF-8 mit BOM – öffnet in Excel), nur sichtbare Zeilen und Spalten der Ansicht. */
@@ -176,6 +204,15 @@
     function aufbauen(x) {
       inhalt.innerHTML = '';
       inhalt.appendChild(h('p', { class: 'klein muted', text: 'Stieber-ID ' + x.stieber_id + (x.ml_ref ? ' · Masterliste-Zeile ' + x.ml_ref : ' · ohne Masterliste-Zeile') }));
+      if (window.EG_KD && window.EG_KD.darf()) {        // Kunde zu diesem Fahrzeug (Reiter „Kunden“, K2)
+        var kdPlatz = h('div', { class: 'kd-zum-kunden' });
+        inhalt.appendChild(kdPlatz);
+        window.EG_KD.fuerFahrzeug(x.stieber_id).then(function (k) {
+          if (!k) return;
+          kdPlatz.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-klein', text: 'Kunde öffnen: ' + (k.name || 'Kunde') + ' ›',
+            onclick: function () { window.EG_KD.oeffnen(k.id).catch(EG.fehler); } }));
+        }).catch(function (e) { console.warn('Kunde zum Fahrzeug', e); });
+      }
       ABSCHNITTE.forEach(function (a) {
         var felder = S.kat.filter(function (f) { return f.abschnitt === a[0]; });
         if (!felder.length) return;

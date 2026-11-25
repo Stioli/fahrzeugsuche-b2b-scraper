@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Kunden“ (Etappe 1b, K1, Oli 25.11.2026)                          Stand 25.11.2026 v1
+/* Stieber-App – Reiter „Kunden“ (Etappe 1b, K1+K2, Oli 25.11.2026)               Stand 25.11.2026 v1.1
    Alle Kunden mit Kontaktdaten und ihren Fahrzeugen – suchen, ansehen, anrufen/mailen, ändern.
    Sehen: admin, Dispo, Buchhaltung, Verkauf. Ändern: admin, Dispo, Buchhaltung (Rechte laut bestand.feld_katalog).
    Lesen:   RPC crm.kunden_lesen(p_id)  (prüft die Rolle, liefert darf_aendern je Kunde)
@@ -19,9 +19,35 @@
   var NUR_APP = { firma: 1, telefon2: 1, notiz: 1 };
   var SPALTEN = [['name', 'Name'], ['ort', 'Ort'], ['telefon', 'Telefon'], ['email', 'E-Mail'], ['repdoc_kdnr', 'KD-Nr.'], ['fz', 'Fahrzeuge'], ['kauf', 'Letzter Kauf']];
 
-  var S = { root: null, daten: [], suche: '', sort: null, laedt: false, tabBox: null };
+  var S = { root: null, daten: [], geladen: false, suche: '', sort: null, laedt: false, tabBox: null };
 
   EG.onTab('kunden', function (root) { S.root = root; return laden(); });
+
+  /* Verknüpfung (K2): andere Reiter öffnen den Kunden zu einem Fahrzeug. → true, wenn ein Kunde gefunden wurde */
+  window.EG_KD = {
+    fuerFahrzeug: async function (stieberId) {
+      if (!S.geladen) await datenHolen();
+      var k = S.daten.filter(function (d) { return (d.fahrzeuge || []).some(function (f) { return f.stieber_id === stieberId; }); })[0];
+      return k || null;
+    },
+    oeffnen: function (id) { return detail(id); },
+    darf: function () { return reiterSichtbar('kunden'); }
+  };
+  function reiterSichtbar(name) { var b = document.getElementById('tabk-' + name); return !!b && !b.hidden; }
+
+  /** Tabelle so hoch, dass ihr unterer Rand (mit der waagrechten Bildlaufleiste) im Fenster bleibt. */
+  function hoeheAnpassen() {
+    var el = S.tabBox && S.tabBox.querySelector('.fz-scroll');
+    if (!el || !el.offsetParent) return;
+    var oben = el.getBoundingClientRect().top + window.scrollY;
+    el.style.maxHeight = Math.max(260, window.innerHeight - oben - 16) + 'px';
+  }
+  window.addEventListener('resize', hoeheAnpassen);
+
+  async function datenHolen() {
+    S.daten = EG.demo ? demoKunden() : (chk(await EG.sb.schema('crm').rpc('kunden_lesen', { p_id: null })).data || []);
+    S.geladen = true;
+  }
 
   function chk(r) { if (r && r.error) throw r.error; return r; }
   function t(v) { return v == null ? '' : String(v); }
@@ -29,6 +55,13 @@
   function letzterKauf(k) { var f = (k.fahrzeuge || [])[0]; return f && f.kaufvertrag_datum ? String(f.kaufvertrag_datum).slice(0, 10) : ''; }
   function ortZeile(k) { return [t(k.plz), t(k.ort)].filter(Boolean).join(' '); }
   function telLink(v) { var z = t(v).replace(/[^\d+]/g, ''); return z ? 'tel:' + z : null; }
+  /** Listenspalte: jüngstes Fahrzeug „2912 Hyundai Tucson“, weitere als „+1“. */
+  function fzKurz(k) {
+    var l = k.fahrzeuge || [];
+    if (!l.length) return '';
+    var f = l[0];
+    return [f.interne_nr, t(f.hersteller), t(f.modell)].filter(Boolean).join(' ') + (l.length > 1 ? ' (+' + (l.length - 1) + ')' : '');
+  }
   function fzText(f) { return [f.interne_nr ? 'Nr. ' + f.interne_nr : '', [t(f.hersteller), t(f.modell)].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || t(f.stieber_id) || 'Fahrzeug'; }
 
   /* ---------------------------------------------------------------- Laden */
@@ -38,7 +71,7 @@
     S.root.innerHTML = '';
     S.root.appendChild(h('p', { class: 'muted', text: 'Lade Kunden …' }));
     try {
-      S.daten = EG.demo ? demoKunden() : (chk(await EG.sb.schema('crm').rpc('kunden_lesen', { p_id: null })).data || []);
+      await datenHolen();
       zeichnen();
     } catch (e) {
       console.error(e);
@@ -50,7 +83,7 @@
 
   /* ---------------------------------------------------------------- Liste */
   function wertFuer(k, sp) {
-    if (sp === 'fz') return (k.fahrzeuge || []).length;
+    if (sp === 'fz') return fzKurz(k);
     if (sp === 'kauf') return letzterKauf(k);
     if (sp === 'ort') return ortZeile(k);
     return t(k[sp]);
@@ -87,7 +120,7 @@
   }
 
   function zelle(k, sp) {
-    if (sp === 'fz') return String((k.fahrzeuge || []).length || '–');
+    if (sp === 'fz') return fzKurz(k) || '–';
     if (sp === 'kauf') { var d = letzterKauf(k); return d ? EG.fmtDatum(d) : '–'; }
     if (sp === 'ort') return ortZeile(k) || '–';
     return t(k[sp]) || '–';
@@ -102,7 +135,7 @@
     var kopf = h('tr', {}, SPALTEN.map(function (s) {
       var an = S.sort && S.sort.sp === s[0];
       return h('th', { scope: 'col' }, h('button', { type: 'button', class: 'fz-th', title: 'Sortieren',
-        onclick: function () { S.sort = !an ? { sp: s[0], dir: s[0] === 'kauf' || s[0] === 'fz' ? -1 : 1 } : S.sort.dir > 0 ? { sp: s[0], dir: -1 } : null; tabelleNeu(); } },
+        onclick: function () { S.sort = !an ? { sp: s[0], dir: s[0] === 'kauf' ? -1 : 1 } : S.sort.dir > 0 ? { sp: s[0], dir: -1 } : null; tabelleNeu(); } },
         s[1], an ? (S.sort.dir > 0 ? ' ▲' : ' ▼') : ''));
     }));
     var rumpf = h('tbody', {}, l.slice(0, 500).map(function (k) {
@@ -112,6 +145,7 @@
     }));
     box.appendChild(h('div', { class: 'fz-scroll' }, h('table', { class: 'fz-tabelle' }, h('thead', {}, kopf), rumpf)));
     if (l.length > 500) box.appendChild(h('p', { class: 'klein muted', text: 'Nur die ersten 500 angezeigt – bitte suchen.' }));
+    requestAnimationFrame(hoeheAnpassen);
   }
 
   /** Export als CSV (Semikolon, UTF-8 mit BOM – öffnet in Excel), nur die gefilterten Kunden. */
@@ -157,11 +191,17 @@
       inhalt.appendChild(h('details', { class: 'fz-abschnitt', open: true }, h('summary', { text: 'Kontaktdaten' }), dl));
 
       var fz = k.fahrzeuge || [];
+      var fzOffen = window.EG_FZ && window.EG_FZ.darf();
       var liste = fz.length ? h('ul', { class: 'kd-fz' }, fz.map(function (f) {
         var teile = [f.fin ? 'FIN ' + f.fin : '', f.kaufvertrag_datum ? 'Kaufvertrag ' + EG.fmtDatum(String(f.kaufvertrag_datum).slice(0, 10)) : '',
-          f.verkaeufer ? 'Verkäufer ' + f.verkaeufer : '', f.fahrzeugstatus ? 'Status ' + f.fahrzeugstatus : '', f.phase ? 'Phase ' + f.phase : ''].filter(Boolean);
-        return h('li', {}, h('strong', { text: fzText(f) }), h('div', { class: 'klein muted', text: teile.join(' · ') || '–' }));
-      })) : h('p', { class: 'klein muted', text: 'Keine Fahrzeugakte zu diesem Kunden.' });
+          f.verkaeufer ? 'Verkäufer ' + f.verkaeufer : '', f.fahrzeugstatus ? 'Status ' + f.fahrzeugstatus : '', f.phase ? 'Phase ' + f.phase : '',
+          f.quelle === 'masterliste' ? 'noch ohne Verkaufsakte (kein Kaufvertragsdatum)' : ''].filter(Boolean);
+        var kopf = fzOffen && f.stieber_id
+          ? h('button', { type: 'button', class: 'kd-fz-link', title: 'Fahrzeug öffnen', text: fzText(f) + ' ›',
+              onclick: function () { window.EG_FZ.oeffnen(f.stieber_id).catch(EG.fehler); } })
+          : h('strong', { text: fzText(f) });
+        return h('li', {}, kopf, h('div', { class: 'klein muted', text: teile.join(' · ') || '–' }));
+      })) : h('p', { class: 'klein muted', text: 'Kein Fahrzeug zu diesem Kunden gefunden.' });
       inhalt.appendChild(h('details', { class: 'fz-abschnitt', open: true }, h('summary', { text: 'Fahrzeuge (' + fz.length + ')' }), liste));
 
       if (darf.length && !EG.demo) {
@@ -248,7 +288,7 @@
           fahrzeuge: [{ stieber_id: 'ST-26-9004', interne_nr: '90004', hersteller: 'Nissan', modell: 'Qashqai Demo', kaufvertrag_datum: d(-2), verkaeufer: 'AI', fahrzeugstatus: 'im Haus' },
                       { stieber_id: 'ST-25-8001', interne_nr: '80001', hersteller: 'Kia', modell: 'Ceed Demo', kaufvertrag_datum: d(-400), verkaeufer: 'OS', fahrzeugstatus: 'ausgeliefert' }] },
         { id: '00000000-0000-4000-8000-000000000003', name: 'Beispiel Kunde', firma: null, strasse: null, plz: null, ort: null, telefon: null, telefon2: null, email: 'kunde@example.com', repdoc_kdnr: null, notiz: null,
-          pruefen_hinweis: 'Demo: gleiche Telefonnummer wie ein anderer Eintrag', fahrzeuge: [] }
+          pruefen_hinweis: 'Demo: gleiche Telefonnummer wie ein anderer Eintrag', fahrzeuge: [{ stieber_id: 'ST-26-9002', interne_nr: '90002', hersteller: 'Kia', modell: 'Sportage Demo', fahrzeugstatus: 'bestellt', quelle: 'masterliste' }] }
       ];
     }
     return demoDaten.map(function (k) { return Object.assign(k, { darf_aendern: darf }); });
