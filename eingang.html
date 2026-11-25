@@ -100,12 +100,13 @@
     </header>
     <nav class="tabs" role="tablist" aria-label="Bereiche">
       <div class="tabs-in">
+        <button class="tab-knopf" role="tab" id="tabk-aufgaben" data-tab="aufgaben" data-rollen="admin,verkauf,dispo,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-aufgaben" type="button">Aufgaben</button>
         <button class="tab-knopf" role="tab" id="tabk-anfragen" data-tab="anfragen" data-rollen="admin,verkauf" aria-selected="false" aria-controls="tab-anfragen" type="button">Anfragen</button>
         <button class="tab-knopf" role="tab" id="tabk-verkauf" data-tab="verkauf" data-rollen="admin,verkauf,dispo,buchhaltung" aria-selected="false" aria-controls="tab-verkauf" type="button">Verkauf</button>
-        <button class="tab-knopf" role="tab" id="tabk-uebersicht" data-tab="uebersicht" data-rollen="admin,verkauf,dispo,buchhaltung,werkstatt" aria-selected="false" aria-controls="tab-uebersicht" type="button">Übersicht</button>
+        <button class="tab-knopf" role="tab" id="tabk-uebersicht" data-tab="uebersicht" data-rollen="admin,verkauf,dispo,buchhaltung,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-uebersicht" type="button">Übersicht</button>
         <button class="tab-knopf" role="tab" id="tabk-zahlungen" data-tab="zahlungen" data-rollen="admin,dispo,buchhaltung" aria-selected="false" aria-controls="tab-zahlungen" type="button">Zahlungen</button>
-        <button class="tab-knopf" role="tab" id="tabk-transport" data-tab="transport" data-rollen="admin,verkauf,dispo,buchhaltung,werkstatt" aria-selected="false" aria-controls="tab-transport" type="button">Transport</button>
-        <button class="tab-knopf" role="tab" id="tabk-auslieferung" data-tab="auslieferung" data-rollen="admin,verkauf,dispo,werkstatt" aria-selected="false" aria-controls="tab-auslieferung" type="button">Auslieferung</button>
+        <button class="tab-knopf" role="tab" id="tabk-transport" data-tab="transport" data-rollen="admin,verkauf,dispo,buchhaltung,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-transport" type="button">Transport</button>
+        <button class="tab-knopf" role="tab" id="tabk-auslieferung" data-tab="auslieferung" data-rollen="admin,verkauf,dispo,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-auslieferung" type="button">Auslieferung</button>
         <button class="tab-knopf" role="tab" id="tabk-anlieferung" data-tab="anlieferung" aria-selected="true" aria-controls="tab-anlieferung" type="button">Anlieferungen</button>
         <button class="tab-knopf" role="tab" id="tabk-inzahlung" data-tab="inzahlung" aria-selected="false" aria-controls="tab-inzahlung" type="button">Inzahlungnahmen</button>
       </div>
@@ -125,6 +126,7 @@
     <section id="tab-transport" role="tabpanel" aria-labelledby="tabk-transport" hidden></section>
     <!-- Reiter Auslieferung: Fahrzeugliste + Auslieferungs-Checkliste ohne Verkaufsdaten, auch für Aufbereiter/Meister (eingang-auslieferung.js) -->
     <section id="tab-auslieferung" role="tabpanel" aria-labelledby="tabk-auslieferung" hidden></section>
+    <section id="tab-aufgaben" role="tabpanel" aria-labelledby="tabk-aufgaben" hidden></section>
     <!-- Reiter 1: Lieferantenfahrzeuge (eingang-anlieferung.js) -->
     <section id="tab-anlieferung" role="tabpanel" aria-labelledby="tabk-anlieferung"></section>
     <!-- Reiter 2: Inzahlungnahmen (Inhalt kommt aus eingang-inzahlung.js) -->
@@ -142,7 +144,7 @@
 <script src="verkauf-phasen.js?v=4.7"></script>   <!-- 11 Phasen + A1/A2 (Plan v2), window.VK_PHASEN -->
 <script src="verkauf-ampel.js?v=4.7"></script>   <!-- window.VK_AMPEL (reine Berechnung) -->
 <script src="verkauf-transport.js?v=4.7"></script>   <!-- vor eingang-verkauf.js: window.VK_TRANSPORT (Reiter Transport + Status für die Phasen) -->
-<script src="eingang-auslieferung.js?v=2.9"></script>   <!-- vor eingang-verkauf.js: liefert window.AC_UI -->
+<script src="eingang-auslieferung.js?v=3.0"></script>   <!-- vor eingang-verkauf.js: liefert window.AC_UI -->
 <script src="verkauf-zahlungseinladung.js?v=3.1"></script>   <!-- vor eingang-verkauf.js: window.VK_ZE (Knopf in Phase v7) -->
 <script src="verkauf-zahlungsbestaetigung.js?v=1.2"></script>   <!-- nach VK_ZE, vor eingang-verkauf.js: window.VK_ZB (Knöpfe an Anzahlung/Restzahlung) -->
 <script src="verkauf-kunde.js?v=4.7"></script>   <!-- vor eingang-verkauf.js: window.VK_KUNDE (Kunden-Abgleich ohne Dubletten, Phase 1) -->
@@ -153,6 +155,7 @@
 <script src="verkauf-bewertungen.js?v=4.7"></script>   <!-- Bewertungen zuordnen (VA9), Abschnitt im Reiter Übersicht für admin/dispo/buchhaltung -->   <!-- Reiter Übersicht (A4), nutzt VK_PHASEN/VK_AMPEL -->
 <!-- BAU-KOPIE Welle 2 (Verkaufsablauf, 14.11.2026) – nicht live. Live-Stand: Fahrzeugeingang-Tool/web -->
 
+<script src="eingang-aufgaben.js?v=1.0"></script>   <!-- Reiter Aufgaben (Laufzettel LZ5) -->
 <script>EG.start();</script>
 </body>
 </html>

@@ -26,7 +26,18 @@
   var BY = {}; AC.punkte.forEach(function (p) { BY[p.k] = p; });
   var STATUS_LABEL = { ok: 'OK', nok: 'NOK', entfaellt: 'entfällt' };
   var SEG_KLASSE = { ok: 'seg-ok', nok: 'seg-mangel', entfaellt: 'seg-entfaellt' };
-  var ROLLE_NAME = { admin: 'Oli', dispo: 'Dispo', werkstatt: 'Werkstatt', verkauf: 'Verkauf', buchhaltung: 'Buchhaltung' };
+  var ROLLE_NAME = { admin: 'Oli', dispo: 'Dispo', werkstatt: 'Werkstatt', aufbereitung: 'Aufbereitung', verkauf: 'Verkauf', buchhaltung: 'Buchhaltung' };
+  /* Laufzettel LZ3 (25.11.2026, E1): Aufbereitungsliste in der App bearbeiten, Rückschreiben in die Masterliste
+     über die Edge Function aufbereitung_schreiben (Werte = Wahlwerte der Masterliste, dort geprüft). */
+  var ML_FELDER = [
+    { k: 'status', t: 'Status', werte: ['bestellt', 'Transport', 'im Haus', 'Werkstatt', 'Aufbereitung', 'Endkontrolle', 'fertig', 'ausgeliefert'] },
+    { k: 'innen', t: 'Innen', werte: ['nein', 'in Arbeit', 'fertig', 'für Showroom'] },
+    { k: 'aussen', t: 'Außen', werte: ['nein', 'in Arbeit', 'fertig', 'für Showroom'] },
+    { k: 'werkstatt', t: 'Werkstatt', werte: ['nicht begonnen', 'in arbeit', 'fertig'] },
+    { k: 'endkontrolle', t: 'Endkontrolle', werte: ['nein', 'fertig'] }
+  ];
+  var ML_ROLLEN = ['admin', 'dispo', 'werkstatt', 'aufbereitung', 'buchhaltung'];
+  var ML_ROLLEN_ARBEITEN = ['admin', 'dispo', 'werkstatt'];
 
   var T = function () { return EG.tab('verkauf', 'auslieferung_punkt'); };
   function chk(r) { if (r && r.error) throw r.error; return r; }
@@ -432,13 +443,78 @@
     });
     return h('div', { class: 'karte' + (ti.art === 'rot' && !istFertig(f) ? ' rot' : '') },
       h('div', { class: 'karte-kopf' }, h('h2', { text: fzTitel(f) }), EG.pill(ti.text, ti.art)),
-      dl, werteMarken(f));
+      dl, ML_ROLLEN.indexOf(rolle()) >= 0 ? mlFelder(f) : werteMarken(f));
   }
+
+  /** Ein Feld in die Masterliste schreiben (Edge Function). Liefert true bei Erfolg. */
+  async function mlSchreiben(f, feld, wert) {
+    if (EG.demo) { f[feld] = wert; EG.toast('Demo: gespeichert (nichts gesendet).'); return true; }
+    var r = await EG.sb.functions.invoke('aufbereitung_schreiben', { body: { aktion: 'aendern', sp_id: f.sp_id, feld: feld, wert: wert, stand: f.stand || '' } });
+    if (r.error) {
+      var j = null;
+      try { j = await r.error.context.json(); } catch (e) { /* keine JSON-Antwort */ }
+      if (j && j.fehler === 'konflikt') {
+        EG.toast('Jemand hat das Fahrzeug in der Masterliste gerade geändert. Die Liste wird neu geladen.', 'fehler');
+        S.geladenAm = 0; ladeListe().catch(EG.fehler);
+        return false;
+      }
+      EG.toast('Nicht gespeichert: ' + ((j && j.fehler) || r.error.message), 'fehler');
+      return false;
+    }
+    var d = r.data || {};
+    if (d.fehler) { EG.toast('Nicht gespeichert: ' + d.fehler, 'fehler'); return false; }
+    f[feld] = wert;
+    if (d.stand) f.stand = d.stand;
+    EG.toast(d.gesendet ? 'In der Masterliste gespeichert.' : 'Probemodus: geprüft, aber noch nicht in die Masterliste geschrieben.');
+    return true;
+  }
+
+  /** Status, Innen, Außen, Werkstatt, Endkontrolle als Auswahl (Rückschreiben in die Masterliste). */
+  function mlFelder(f) {
+    var box = h('div', { class: 'ac-ml' });
+    ML_FELDER.forEach(function (d) {
+      var id = 'ac-ml-' + d.k, sel = h('select', { id: id });
+      var werte = d.werte.slice();
+      if (f[d.k] && werte.indexOf(f[d.k]) < 0) werte.unshift(f[d.k]);   // unbekannter Altwert bleibt sichtbar
+      sel.appendChild(h('option', { value: '', text: '–', disabled: 'disabled' }));
+      werte.forEach(function (w) { sel.appendChild(h('option', { value: w, text: w })); });
+      sel.value = f[d.k] || '';
+      sel.addEventListener('change', function () {
+        var alt = f[d.k] || '', neu = sel.value;
+        if (!neu || neu === alt) return;
+        sel.disabled = true;
+        seriell(function () { return mlSchreiben(f, d.k, neu); })
+          .then(function (ok) { if (!ok) sel.value = alt; })
+          .catch(function (e) { sel.value = alt; EG.fehler(e); })
+          .then(function () { sel.disabled = false; });
+      });
+      box.appendChild(h('label', { class: 'ac-ml-feld', for: id }, h('span', { class: 'klein muted', text: d.t }), sel));
+    });
+    return box;
+  }
+
   function arbeitenKarte(f) {
+    var darfArbeiten = ML_ROLLEN_ARBEITEN.indexOf(rolle()) >= 0;
+    if (!darfArbeiten) {
+      return h('div', { class: 'karte' },
+        h('h2', { text: 'Arbeiten' }),
+        f.arbeiten ? h('div', { class: 'ac-arbeiten', text: f.arbeiten }) : h('p', { class: 'muted', text: 'Keine besonderen Arbeiten eingetragen.' }),
+        h('p', { class: 'klein muted', style: 'margin-top:8px', text: 'Aus der Masterliste. Ändern: Dispo oder Werkstatt.' }));
+    }
+    var ta = h('textarea', { id: 'ac-arbeiten', rows: '4', 'aria-label': 'Arbeiten am Fahrzeug' });
+    ta.value = f.arbeiten || '';
+    var knopf = h('button', { type: 'button', class: 'btn', text: 'Arbeiten speichern', disabled: 'disabled' });
+    ta.addEventListener('input', function () { knopf.disabled = ta.value === (f.arbeiten || ''); });
+    knopf.addEventListener('click', function () {
+      knopf.disabled = true;
+      seriell(function () { return mlSchreiben(f, 'arbeiten', ta.value); })
+        .then(function (ok) { knopf.disabled = ok; })
+        .catch(function (e) { knopf.disabled = false; EG.fehler(e); });
+    });
     return h('div', { class: 'karte' },
-      h('h2', { text: 'Arbeiten' }),
-      f.arbeiten ? h('div', { class: 'ac-arbeiten', text: f.arbeiten }) : h('p', { class: 'muted', text: 'Keine besonderen Arbeiten eingetragen.' }),
-      h('p', { class: 'klein muted', style: 'margin-top:8px', text: 'Aus der Masterliste, hier nur zum Lesen.' }));
+      h('h2', { text: 'Arbeiten' }), ta,
+      h('div', { style: 'margin-top:8px' }, knopf),
+      h('p', { class: 'klein muted', style: 'margin-top:8px', text: 'Wird in die Masterliste (Spalte „Arbeiten“) geschrieben.' }));
   }
 
   /* ====================================================================

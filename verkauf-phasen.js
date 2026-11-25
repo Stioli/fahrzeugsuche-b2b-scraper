@@ -50,7 +50,7 @@
 
   var VERKAUF = ['verkauf', 'admin', 'dispo', 'buchhaltung'];   // Phasen 1–4, 10, 11
   var BUERO = ['admin', 'dispo', 'buchhaltung'];                // A1, A2, Phase 5 (mit Vertretung), 7, 8, 9
-  var AC_ROLLEN = ['dispo', 'admin', 'werkstatt', 'buchhaltung'];   // Aufbereiter/Meister haken über werkstatt@ mit Namenseintrag ab
+  var AC_ROLLEN = ['dispo', 'admin', 'werkstatt', 'aufbereitung', 'buchhaltung'];   // Aufbereiter/Meister haken über werkstatt@ mit Namenseintrag ab; aufbereitung seit 25.11.2026 (Laufzettel E6)
   var VERK = ['OS', 'NP', 'AI'];                                // Verkäufer-Kürzel (Lead Liste)
   var ML_PHASEN = ['zulassung', 'auslieferung', 'nach_verkauf'];   // kommen aus der Masterliste (Import)
 
