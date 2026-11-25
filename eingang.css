@@ -43,11 +43,17 @@ img{max-width:100%}
 .demo-band strong{font-family:var(--font-heading)}
 .demo-band select{min-height:44px;border:1px solid var(--border);border-radius:12px;padding:0 10px;font-family:var(--font-body);font-size:15px;background:#fff;color:var(--ink);max-width:100%}
 
-/* ---------- Reiter ---------- */
-.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30;overflow-x:auto;-webkit-overflow-scrolling:touch}   /* bis zu 5 Reiter: auf dem Handy waagrecht wischbar */
-.tabs-in{max-width:1100px;margin:0 auto;width:100%;display:flex}
-.tab-knopf{flex:1 0 auto;min-height:52px;background:none;border:none;border-bottom:4px solid transparent;font-family:var(--font-heading);font-size:17px;font-weight:700;color:var(--sub);cursor:pointer;padding:0 14px;white-space:nowrap}
-.tab-knopf[aria-selected="true"]{color:var(--blau-dark);border-bottom-color:var(--blau)}
+/* ---------- Reiter (seit 25.11.2026 als Knöpfe in Reihen, Oli: Vorschau freigegeben) ----------
+   PC (≥ 1150 px): 6 je Reihe · ≤ 1149 px: 4 · ≤ 700 px: 3 · Handy (≤ 520 px): 2. Aktiver Reiter in Aktiv-Blau #0A5CD0
+   (weiße Schrift unter 19 px nur auf dem dunklen Blau kontrastsicher, CI-Regel). Ausgeblendete Reiter ([hidden]) fallen aus dem Raster. */
+.tabs{display:block;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30}
+.tabs-in{max-width:1100px;margin:0 auto;width:100%;display:grid;grid-template-columns:repeat(6, minmax(0, 1fr));gap:8px;padding:10px 16px}
+.tab-knopf{min-height:44px;background:#fff;border:2px solid var(--border);border-radius:14px;font-family:var(--font-heading);font-size:16px;font-weight:700;color:var(--blau-dark);cursor:pointer;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab-knopf:hover{border-color:var(--blau)}
+.tab-knopf[aria-selected="true"]{background:var(--blau-dark);border-color:var(--blau-dark);color:#fff}
+@media (max-width: 1149px){ .tabs-in{grid-template-columns:repeat(4, minmax(0, 1fr))} }
+@media (max-width: 700px){ .tabs-in{grid-template-columns:repeat(3, minmax(0, 1fr));gap:6px;padding:8px 12px} .tab-knopf{font-size:15px;padding:0 6px} }
+@media (max-width: 520px){ .tabs-in{grid-template-columns:repeat(2, minmax(0, 1fr))} .tab-knopf{min-height:40px} }
 
 /* ---------- Knöpfe ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-heading);font-weight:700;font-size:16px;border:2px solid transparent;border-radius:14px;padding:0 18px;min-height:var(--tap);cursor:pointer;text-decoration:none;text-align:center;line-height:1.2;background:#fff;color:var(--blau-dark)}
@@ -197,4 +203,5 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid r
 .lz-status { margin: 6px 0; }
 .lz-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .lz-knoepfe .btn { min-height: 44px; }
-.tab-knopf.hat-rot { color: var(--rot, #EC1C24); font-weight: 700; }
+.tab-knopf.hat-rot { color: var(--rot-text, #C1121A); border-color: var(--rot-text, #C1121A); font-weight: 700; }   /* Rot als Schrift nur #C1121A (CI) */
+.tab-knopf.hat-rot[aria-selected="true"] { background: var(--rot-text, #C1121A); color: #fff; }
