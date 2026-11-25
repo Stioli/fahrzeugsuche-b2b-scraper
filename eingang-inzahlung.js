@@ -1,6 +1,24 @@
 /* =====================================================================
    Fahrzeugeingang-Tool · Reiter „Inzahlungnahmen“ (Paket P4)
-   Autohaus Stieber GmbH · Stand 30.10.2026
+   Autohaus Stieber GmbH · Stand 25.11.2026 (Paket 2 Inzahlung: Ankauf-Ansicht statt Detailfenster) · vorher Paket 1, 30.10.2026
+   NEU 25.11.2026 (Paket 2, Oli-Freigabe, freigegebene Vorschau akte-vorschau/liste-vorschau):
+   · Detailfenster entfällt: Klick auf eine Listenzeile öffnet direkt die Ankauf-Ansicht (Formular, Modus Bearbeiten)
+   · Sticky Kopfleiste unter der Reiterleiste (Fahrzeug, Int.-Nr., Status, Bearbeiter, Datum; ← Liste, Speichern,
+     Drucken ▾ mit Kaufvertrag/Zustandsbericht/Übergabeprotokoll, Fahrzeug übernehmen); Handy: feste Leiste unten
+   · Block „Übernahme bei der Abgabe“ oben im Formular (nur wenn uebernahme_status gesetzt), Entscheidung nur admin
+   · Sprungleiste mit ✓/! je Abschnitt (gleiche Pflichtregeln wie beim Speichern, live), Abschnitte auf-/zuklappbar
+   · Banner „Ungespeicherte Änderungen“, Rückfrage beim Verlassen (← Liste, Reiterwechsel, beforeunload)
+   · Liste: Statusfilter als Knöpfe; Spalten Kunde · Fahrzeug · Kennzeichen · Fgst.-Nr. · Int.-Nr. · Datum · Status · Kaufpreis
+   · Fahrzeugschein per Foto/Scan einlesen (aus alter App v5.2; Edge Function „fahrzeugschein-lesen“ unverändert,
+     Speichern gesperrt bis „Daten geprüft“; im Demo-Modus simuliert); PLZ mit Ziffern-Tastatur
+   Zuvor 25.11.2026 (Paket 1, Oli-Freigabe, Plan 2026-11-25_Plan-Inzahlungnahme-zusammenfuehren_v1):
+   · Zusicherungen als Ja/Nein-Pflichtfragen wie alte App v5 (ZUS_ROWS, Merker zus_ja_nein; Umkehrlogik
+     für Hagel/Nachlack/Mietwagen/EU-Import; alte Datensätze ohne Merker: nicht Angehakte = offen)
+   · Feld „Schäden laut Verkäufer“ (vk_schaeden) und Prüfzeile „Fahrzeug überprüft“ (fz_geprueft*)
+   · Marge-Hinweis unter dem Ankaufspreis entfernt (Statistik-Kacheln waren schon entfernt)
+   · Kaufvertrag: alles schwarz (Logo bleibt farbig), echtes Logo-Bild statt Text-SVG (auch Übergabeprotokoll
+     und Zustandsbericht), § 4 neu wie alte App v5 (Ja/Nein-Tabelle, KD, Schäden, Unterschrift zu § 4),
+     Seitenumbrüche gestrafft; Druck wartet, bis das Logo geladen ist
 
    Übernimmt 1:1 alle Funktionen der alten Fahrzeugankauf-App
    (stioli.github.io/fahrzeugankauf-app, Stand 22.06.2026):
@@ -99,6 +117,16 @@
     ['zusicherung_kein_mietwagen', '✅ Kein Mietfahrzeug', 'Kein ehemaliges Mietfahrzeug', 'Kein Mietfahrzeug'],
     ['zusicherung_kein_eu_import', '✅ Kein EU-Import', 'Kein EU-Import', 'Kein EU-Import']
   ];
+  /* Zusicherungen als Ja/Nein-Fragen (wie alte App v5, Wortlaut 1:1).
+     umgekehrt: Frage ist positiv formuliert („Hagelschaden?“), die Spalte aber verneint
+     („zusicherung_kein_hagel“) → Antwort Ja wird als false gespeichert. */
+  var ZUS_ROWS = [
+    { key: 'unfallfrei', label: 'Unfallfrei', vertrag: 'Fahrzeug ist unfallfrei', umgekehrt: false },
+    { key: 'kein_hagel', label: 'Hagelschaden', vertrag: 'Hagelschaden', umgekehrt: true },
+    { key: 'kein_nachlack', label: 'Nachlackiert', vertrag: 'Nachlackiert', umgekehrt: true },
+    { key: 'kein_mietwagen', label: 'Mietfahrzeug', vertrag: 'Ehemaliges Mietfahrzeug', umgekehrt: true },
+    { key: 'kein_eu_import', label: 'EU-Import', vertrag: 'EU-Import', umgekehrt: true }
+  ];
   var REIFEN = [
     { typ: 'sommer', icon: '☀️', name: 'Sommerreifen', ph: '6,5' },
     { typ: 'winter', icon: '❄️', name: 'Winterreifen', ph: '5,0' },
@@ -121,7 +149,7 @@
     { c: 'vk_vorname', l: 'Vorname *', t: 'text', ph: 'Max' },
     { c: 'vk_nachname', l: 'Nachname *', t: 'text', ph: 'Mustermann' },
     { c: 'vk_strasse', l: 'Straße + Hausnummer', t: 'text', ph: 'Musterstraße 1', full: 1 },
-    { c: 'vk_plz', l: 'PLZ', t: 'text', ph: '70439' },
+    { c: 'vk_plz', l: 'PLZ', t: 'text', ph: '70439', im: 'numeric' },
     { c: 'vk_ort', l: 'Ort', t: 'text', ph: 'Stuttgart' },
     { c: 'vk_telefon', l: 'Telefon', t: 'tel', ph: '0711 12345678' },
     { c: 'vk_email', l: 'E-Mail', t: 'email', ph: 'max@email.de' },
@@ -160,13 +188,15 @@
     { c: 'vk_bekannte_maengel', l: '', t: 'area' },
     { c: 'mn_bemerkungen', l: '', t: 'area', n: 1 },
     { c: 'lack_bemerkung', l: '', t: 'area', n: 1 },
+    { c: 'vk_schaeden', l: '', t: 'area', n: 1 },
+    { c: 'fz_geprueft_datum', l: '', t: 'date', n: 1 },
+    { c: 'fz_pruefer_name', l: '', t: 'text', n: 1 },
     { c: 'ankaufspreis', l: '', t: 'dec', n: 1 },
     { c: 'status', l: '', t: 'select' }
   ]);
   var CHECKS = [].concat(
     AUSST.map(function (x) { return x[0]; }),
-    ZUSICH.map(function (x) { return x[0]; }),
-    ['kd_alle_durchgefuehrt']
+    ['kd_alle_durchgefuehrt', 'fz_geprueft']
   );
 
   /* ===================================================================
@@ -184,6 +214,8 @@
     sortField: 'erstellt_am', sortDir: 'desc',
     filter: { q: '', owner: 'all', status: '', cols: {} },
     userId: null, userEmail: null,
+    dirty: false,        // ungespeicherte Änderungen im Formular (Paket 2)
+    rec: null,           // geöffneter Ankauf (null = neuer Ankauf)
     huRoh: null          // unlesbares altes HU-Format wird beim Speichern erhalten
   };
   
@@ -210,9 +242,9 @@
     var art = typ === 'success' ? 'ok' : typ === 'error' ? 'fehler' : ''; // EG.toast kennt '', 'ok', 'fehler'
     if (typeof eg.toast === 'function') eg.toast(t, art); else console.log('[Toast]', t);
   }
-  async function bestaetigen(t) {
+  async function bestaetigen(t, o) {
     var eg = EGx();
-    if (typeof eg.bestaetigen === 'function') return !!(await eg.bestaetigen(t));
+    if (typeof eg.bestaetigen === 'function') return !!(await eg.bestaetigen(t, o));
     return window.confirm(t);
   }
   function nutzerName() {
@@ -241,6 +273,10 @@
   function fmtEuro(n) {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n);
   }
+  function fmtEuroRund(n) { // ohne Cent (Liste)
+    return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Math.round(Number(n)));
+  }
+  function kundenName(a) { return ((a.vk_vorname || '') + ' ' + (a.vk_nachname || '')).trim(); }
   function fmtKm(n) { return n != null && n !== '' ? Number(n).toLocaleString('de-DE') + ' km' : '–'; }
   function parseDez(s) {
     if (s == null) return null;
@@ -250,6 +286,27 @@
     return isNaN(n) ? null : n;
   }
   function pnum(x) { var n = parseFloat(x); return isNaN(n) ? 0 : n; }
+  /* Antwort auf die angezeigte Frage: true = Ja, false = Nein, null = offen.
+     Alte Datensätze (ohne Merker zus_ja_nein): false heißt nur „nicht angehakt“ → offen. */
+  function zusAnzeige(a, r) {
+    var val = a['zusicherung_' + r.key], g = null;
+    if (val === true) g = true;
+    else if (val === false && a.zus_ja_nein) g = false;
+    if (g === null) return null;
+    return r.umgekehrt ? !g : g;
+  }
+  // Antwort im Formular (true = Ja, false = Nein, null = offen)
+  function zusWert(r) {
+    if (qi('zus_' + r.key + '_ja') && qi('zus_' + r.key + '_ja').checked) return true;
+    if (qi('zus_' + r.key + '_nein') && qi('zus_' + r.key + '_nein').checked) return false;
+    return null;
+  }
+  // Wert für die Spalte aus der Antwort
+  function zusSpeicherwert(r) {
+    var w = zusWert(r);
+    if (w === null) return null;
+    return r.umgekehrt ? !w : w;
+  }
   function summeKosten(a) {
     return MN_ROWS.reduce(function (s, r) { return s + pnum(a['mn_' + r.key + '_kosten']); }, 0);
   }
@@ -556,13 +613,20 @@
       '.iz-tabelle th:first-child,.iz-tabelle td:first-child{padding-left:18px}',
       /* feste Spaltenbreiten, Zellen einzeilig wie in den anderen Reitern (nur das Fahrzeug darf umbrechen) */
       '.iz-tabelle table{table-layout:fixed}',
-      '.iz-tabelle thead tr:first-child th:nth-child(1){width:122px}.iz-tabelle thead tr:first-child th:nth-child(2){width:90px}',
-      '.iz-tabelle thead tr:first-child th:nth-child(4){width:150px}.iz-tabelle thead tr:first-child th:nth-child(5){width:98px}',
-      '.iz-tabelle thead tr:first-child th:nth-child(6){width:106px}.iz-tabelle thead tr:first-child th:nth-child(7){width:90px}',
-      '.iz-tabelle thead tr:first-child th:nth-child(8){width:106px}.iz-tabelle thead tr:first-child th:nth-child(9){width:122px}',
+      /* Spalten (Paket 2): 1 Kunde · 2 Fahrzeug · 3 Kennzeichen · 4 Fgst.-Nr. · 5 Int.-Nr. · 6 Datum · 7 Status · 8 Kaufpreis */
+      '.iz-tabelle thead tr:first-child th:nth-child(3){width:112px}.iz-tabelle thead tr:first-child th:nth-child(4){width:176px}',
+      '.iz-tabelle thead tr:first-child th:nth-child(5){width:120px}.iz-tabelle thead tr:first-child th:nth-child(6){width:100px}',
+      '.iz-tabelle thead tr:first-child th:nth-child(7){width:178px}.iz-tabelle thead tr:first-child th:nth-child(8){width:104px}',
       '.iz-tabelle tbody td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-      '.iz-tabelle tbody td:nth-child(3){white-space:normal;line-height:1.3}',
-      '.iz-tabelle thead th:last-child,.iz-tabelle tbody td:last-child{display:none}',
+      '.iz-tabelle tbody td:nth-child(2){white-space:normal;line-height:1.3}',
+      '.iz-tabelle th:nth-child(8),.iz-tabelle td:nth-child(8){text-align:right}.iz-tabelle th:last-child,.iz-tabelle td:last-child{padding-right:18px}',
+      /* Statusfilter als Knöpfe */
+      '.iz-fk{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}',
+      '.iz-fk button{min-height:44px;border-radius:999px;border:2px solid var(--iz-rahmen);background:#fff;font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:15px;font-weight:700;padding:0 16px;cursor:pointer;color:var(--iz-blau-d)}',
+      '.iz-fk button:hover{border-color:var(--iz-blau)}',
+      '.iz-fk button[aria-pressed="true"]{background:var(--iz-blau-d);border-color:var(--iz-blau-d);color:#fff}',
+      '.iz-fk button.rot{color:var(--iz-rot);border-color:var(--iz-rot)}',
+      '.iz-fk button.rot[aria-pressed="true"]{background:var(--iz-rot);color:#fff}',
       '.iz-nr{font-weight:600;color:var(--ink)}',
       '.iz-fin{font-family:ui-monospace,Consolas,monospace;font-size:13px;color:var(--ink)}',
       '.iz-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:13px;font-weight:700;line-height:1.4;white-space:nowrap}',
@@ -571,6 +635,69 @@
       '.iz-b-uebernommen{background:#166534;color:#fff}.iz-b-abweichung_offen{background:var(--iz-rot);color:#fff}',
       '.iz-leer,.iz-laden{text-align:center;padding:48px 16px;color:var(--iz-sub)}',
       '.iz-mobilbar{display:none}',
+      /* Ankauf-Ansicht (Paket 2) */
+      '.iz-root{--iz-top:var(--tabs-h,52px)}',
+      '.ak-kopf{position:sticky;top:var(--iz-top);z-index:25;background:#fff;border:1px solid var(--iz-rahmen);border-radius:var(--iz-r);box-shadow:0 4px 14px rgba(0,123,255,.10);padding:12px 16px 10px;margin-bottom:16px}',
+      '.ak-zeile1{display:flex;gap:14px;align-items:center}',
+      '.ak-titel{flex:1;min-width:0}',
+      '.ak-titel h2{font-size:24px;line-height:1.15;overflow-wrap:anywhere}',
+      '.ak-meta{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:14.5px;color:var(--iz-sub);margin-top:4px}',
+      '.ak-meta2{font-size:14.5px;color:var(--iz-sub);margin-top:2px}',
+      '.ak-nr{font-weight:700;color:var(--iz-ink)}',
+      '.ak-aktionen{display:flex;gap:10px;align-items:center;flex-shrink:0;position:relative}',
+      '.ak-aktionen .btn,.ak-leiste .btn{white-space:nowrap}',
+      '.ak-aktionen .btn:not(.btn-primary){font-size:15px;padding:0 14px}',
+      '.ak-menuewrap{position:relative;display:inline-block}',
+      '.ak-menue{position:absolute;right:0;top:calc(100% + 6px);min-width:240px;background:#fff;border:1px solid var(--iz-rahmen);border-radius:14px;box-shadow:0 10px 30px rgba(26,35,51,.18);padding:6px;z-index:60;display:none}',
+      '.ak-menue.offen{display:block}',
+      '.ak-menue button{display:flex;width:100%;text-align:left;gap:10px;align-items:center;min-height:46px;padding:0 12px;border:none;background:none;border-radius:10px;font:inherit;font-size:16px;font-weight:600;color:var(--iz-blau-d);cursor:pointer}',
+      '.ak-menue button:hover{background:#EEF5FF}',
+      '.ak-menue .ak-trenner{border-top:1px solid var(--iz-rahmen);margin:4px 0}',
+      '.ak-dirty{display:flex;gap:8px;align-items:center;margin-top:10px;background:#FFF6D6;border:1px solid #F5C842;border-radius:10px;padding:6px 12px;font-size:14.5px}',
+      '.ak-dirty[hidden]{display:none}',
+      '.ak-dirty b{font-family:"Plus Jakarta Sans",system-ui,sans-serif}',
+      '.ak-dirty .pkt{width:9px;height:9px;border-radius:50%;background:#B7791F;flex-shrink:0}',
+      '.ak-sprung{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:10px}',
+      '.ak-sp{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 6px;border:2px solid var(--iz-rahmen);border-radius:14px;background:#fff;color:var(--iz-blau-d);font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:14px;font-weight:700;white-space:nowrap;cursor:pointer;min-width:0}',
+      '.ak-sp:hover{border-color:var(--iz-blau)}',
+      '.ak-sp .n{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:8px;background:var(--iz-blau-d);color:#fff;font-size:14px;flex-shrink:0}',
+      '.ak-sp .nm{overflow:hidden;text-overflow:ellipsis}',
+      '.ak-sp .ok{color:var(--iz-gruen);font-size:17px}',
+      '.ak-sp .warn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--iz-rot);color:#fff;font-size:15px;font-weight:800;flex-shrink:0}',
+      '.ak-sp.hat-fehler{border-color:var(--iz-rot)}',
+      '.ak-alle{display:flex;justify-content:flex-end;gap:6px;margin:-6px 0 8px;flex-wrap:wrap}',
+      '.ak-link{background:none;border:none;color:var(--iz-blau-d);font:inherit;font-size:15px;text-decoration:underline;cursor:pointer;min-height:44px;padding:0 8px}',
+      '.ak-link.rot{color:var(--iz-rot)}',
+      '.iz-root .ak-sek{padding:0;scroll-margin-top:calc(var(--iz-top) + var(--iz-kopf-h,150px) + 14px)}',
+      '.ak-sek-kopf{display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:16px 24px;border:none;background:none;text-align:left;cursor:pointer;font:inherit;color:inherit;border-radius:var(--iz-r)}',
+      '.ak-sek-kopf:focus-visible{outline:3px solid rgba(0,123,255,.35);outline-offset:-3px}',
+      '.ak-sek-kopf .t{font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:20px;font-weight:700;flex:1}',
+      '.ak-st{font-size:14px;font-weight:700;white-space:nowrap}',
+      '.ak-st.ok{color:var(--iz-gruen)}.ak-st.warn{color:var(--iz-rot)}',
+      '.ak-chev{font-size:18px;color:var(--iz-sub);transition:transform .15s}',
+      '.ak-sek.open .ak-chev{transform:rotate(180deg)}',
+      '.ak-sek-body{display:none;padding:18px 24px 24px;border-top:1px solid var(--iz-rahmen)}',
+      '.ak-sek.open .ak-sek-body{display:block}',
+      '.iz-root .ak-uebernahme{border:2px solid var(--iz-rot);padding:20px 24px;margin-bottom:16px}',
+      '.ak-uebernahme h3{font-size:20px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}',
+      '.ak-ueb-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;align-items:start}',
+      '.ak-ueb-ent{display:flex;gap:14px;align-items:flex-end;margin-top:12px}',
+      '.ak-ueb-ent .iz-fg{flex:1}',
+      '.ak-ueb-ent textarea{min-height:60px}',
+      '.ak-leiste{display:none}',
+      '#iz-v-form .ak-leiste[hidden]{display:none}',
+      /* Fahrzeugschein einlesen */
+      '.iz-fzs{border:1.5px dashed var(--iz-blau-d);background:var(--iz-bg);border-radius:12px;padding:14px 16px;margin-bottom:18px}',
+      '.iz-fzs-kopf{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}',
+      '.iz-fzs-titel{font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:18px;font-weight:700}',
+      '.iz-fzs-text{font-size:14px;color:var(--iz-sub);margin-top:4px;max-width:560px}',
+      '.iz-fzs-knoepfe{display:flex;gap:10px;flex-wrap:wrap}',
+      '.iz-fzs-status{margin-top:12px;padding:12px 14px;border-radius:12px;font-size:14.5px;background:#fff;border:1px solid var(--iz-rahmen)}',
+      '.iz-fzs-status.ok{border-color:#e0b100;background:#fffbe6}',
+      '.iz-fzs-status.fehler{border-color:var(--iz-rot);background:#fff5f5;color:#7a0a10}',
+      '.iz-fzs-status ul{margin:6px 0 10px 18px}',
+      '.iz-fzs-status[hidden]{display:none}',
+      '.iz-root .iz-scan-pruefen{background:#fff3b0!important;border-color:#e0b100!important}',
       /* Formular */
       '.iz-sec{background:#fff;border:1px solid var(--iz-rahmen);border-radius:var(--iz-r);padding:24px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,123,255,.06)}',
       '.iz-sec-t{font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:20px;font-weight:700;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--iz-rahmen);display:flex;gap:12px;align-items:center}',
@@ -602,6 +729,15 @@
       '.iz-hinweis.rot{background:#fdecec;border-left-color:var(--iz-rot);color:#7a0a10;font-weight:600}',
       '.iz-hinweis.blau{background:#eef5ff;border-left-color:var(--iz-blau-d)}',
       '.iz-hinweis.gruen{background:#e8f6ee;border-left-color:var(--iz-gruen);color:#14532d}',
+      '.iz-zus-liste{display:grid;gap:10px}',
+      '.iz-zus-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;min-height:60px;border:1.5px solid var(--iz-rahmen);border-radius:12px;background:#fff}',
+      '.iz-zus-row.iz-zus-leer{border-color:var(--iz-rot);background:#fff5f5}',
+      '.iz-zus-l{font-size:16px;font-weight:600}',
+      '.iz-zus-opts{display:flex;gap:8px;flex-shrink:0}',
+      '.iz-zus-opt{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;min-width:96px;padding:0 18px;border:2px solid var(--iz-rahmen);border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;background:#fff;user-select:none}',
+      '.iz-root .iz-zus-opt input{width:22px;height:22px;min-height:0;padding:0;margin:0;flex-shrink:0;accent-color:var(--iz-blau-d)}',
+      '.iz-zus-opt:has(input:checked){border-color:var(--iz-blau-d);background:#E8F0FB;color:var(--iz-blau-d)}',
+      '.iz-pruef{display:grid;grid-template-columns:minmax(220px,1.1fr) 1fr 1.4fr;gap:14px;align-items:end;grid-column:1/-1}',
       '.iz-pflicht{border-color:var(--iz-rot)!important;box-shadow:0 0 0 3px rgba(193,18,26,.1)}',
       '.iz-aktionen{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;margin-top:8px}',
       '.iz-fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:12px}',
@@ -641,25 +777,43 @@
       '.iz-lb-close{position:absolute;top:16px;right:20px;width:48px;height:48px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:22px;cursor:pointer}',
       /* Handy / Tablet */
       '@media (max-width:900px){.iz-tabelle tr.fil{display:none}.iz-mobilbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.iz-mobilbar select{flex:1;min-width:140px}',
-      /* Handy: ein Fahrzeug = eine Zeile (zwei Textzeilen). Oben Fahrzeug | Preis, darunter Nr. · Datum · Kennzeichen | Status. Tippen öffnet die Details. */
+      /* Handy: ein Fahrzeug = eine Karte. Zeile 1 Fahrzeug | Kaufpreis, Zeile 2 Kunde | Status, Zeile 3 Int.-Nr. · Datum · Kennzeichen. Tippen öffnet den Ankauf. */
       ' .iz-tabelle thead{display:none}.iz-tabelle table,.iz-tabelle tbody{display:block;width:100%}',
-      ' .iz-tabelle tbody tr{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:2px 10px;padding:8px 10px 8px 16px;border-top:1px solid var(--border)}',
+      ' .iz-tabelle tbody tr{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:3px 10px;padding:10px 12px 10px 16px;border-top:1px solid var(--border);min-height:64px}',
       ' .iz-tabelle tbody tr:first-child{border-top:0}',
       ' .iz-tabelle td{padding:0;height:auto;border:none;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       ' .iz-tabelle td:first-child{padding-left:0}',
-      ' .iz-tabelle td:nth-child(3){grid-column:1/4;grid-row:1;font-size:15px;white-space:normal;line-height:1.3}',
+      ' .iz-tabelle td:nth-child(2){grid-column:1/4;grid-row:1;font-size:15px;white-space:normal;line-height:1.3}',
       ' .iz-tabelle td:nth-child(8){grid-column:4;grid-row:1;text-align:right}',
-      ' .iz-tabelle td:nth-child(1){grid-column:1;grid-row:2}',
-      ' .iz-tabelle td:nth-child(2){grid-column:2;grid-row:2;color:var(--iz-sub)}',
-      ' .iz-tabelle td:nth-child(5){grid-column:3;grid-row:2;color:var(--iz-sub)}',
-      ' .iz-tabelle td:nth-child(9){grid-column:4;grid-row:2;text-align:right}',
-      ' .iz-tabelle td:nth-child(4),.iz-tabelle td:nth-child(6),.iz-tabelle td:nth-child(7),.iz-tabelle td:nth-child(10){display:none}}',
+      ' .iz-tabelle td:nth-child(1){grid-column:1/4;grid-row:2;color:var(--iz-sub)}',
+      ' .iz-tabelle td:nth-child(7){grid-column:4;grid-row:2;text-align:right}',
+      ' .iz-tabelle td:nth-child(5){grid-column:1;grid-row:3;color:var(--iz-sub)}',
+      ' .iz-tabelle td:nth-child(6){grid-column:2;grid-row:3;color:var(--iz-sub)}',
+      ' .iz-tabelle td:nth-child(3){grid-column:3;grid-row:3;color:var(--iz-sub)}',
+      ' .iz-tabelle td:nth-child(4){display:none}.iz-tabelle td:last-child{padding-right:0}}',
       '@media (max-width:720px){.iz-stats{grid-template-columns:repeat(3,1fr);gap:8px}.iz-stat{padding:10px}.iz-stat-v{font-size:24px}.iz-stat-l{font-size:11px;letter-spacing:.4px}',
       ' .iz-root{padding:10px}.iz-sec{padding:16px 14px}.iz-grid{grid-template-columns:1fr}.iz-cbgrid{grid-template-columns:1fr}',
+      ' .iz-zus-row{flex-direction:column;align-items:stretch}.iz-zus-opts{justify-content:stretch}.iz-zus-opts .iz-zus-opt{flex:1}.iz-pruef{grid-template-columns:1fr}',
       ' .iz-mn-kopf{display:none}.iz-mn-zeile{grid-template-columns:1fr;gap:6px;padding:12px 0}.iz-mn-zeile .nm{color:var(--iz-blau-d);font-weight:700}',
       ' .iz-aktionen{flex-direction:column-reverse}.iz-aktionen .iz-btn{width:100%}.iz-ctrl{width:100%}.iz-ctrl input,.iz-ctrl select{width:100%}',
       ' .iz-modal{padding:18px 14px;border-radius:16px}.iz-zeile{flex-direction:column;gap:0}.iz-zeile span:last-child{text-align:left}',
-      ' .iz-modal-akt .iz-btn{flex:1 1 100%}.iz-profil{grid-template-columns:1fr}}',
+      ' .iz-modal-akt .iz-btn{flex:1 1 100%}.iz-profil{grid-template-columns:1fr}',
+      /* Ankauf-Ansicht am Handy: Reiterleiste scrollt weg (sonst bis zu 6 Reihen fest), Kopf klebt oben, Speichern/Drucken fest unten */
+      ' body.iz-akte .tabs{position:static}body.iz-akte .iz-root{--iz-top:0px}',
+      ' .ak-aktionen.pc{display:none}.ak-zeile1{align-items:flex-start;gap:10px}',
+      ' .ak-titel h2{font-size:19px}.ak-meta{font-size:13.5px;gap:4px 10px}.ak-meta2{font-size:13px}',
+      ' .ak-kopf{padding:10px 12px 8px;border-radius:14px;margin-bottom:12px}',
+      ' .ak-zurueck .lz{display:none}.ak-zurueck{padding:0;width:44px;min-width:44px}',
+      ' .ak-dirty{margin-top:8px;padding:4px 10px;font-size:13.5px}.ak-dirty .bsp{display:none}',
+      ' .ak-sprung{gap:4px;margin-top:8px}.ak-sp{padding:0 2px;gap:3px;min-height:44px;border-radius:12px}.ak-sp .nm{display:none}',
+      ' .ak-sp .n{width:22px;height:22px;font-size:13px}.ak-sp .ok{font-size:15px}.ak-sp .warn{width:20px;height:20px;font-size:13px}',
+      ' .ak-sek-kopf{padding:12px 14px;min-height:60px}.ak-sek-kopf .t{font-size:17px}.ak-sek-body{padding:14px 14px 16px}.ak-st .txt{display:none}',
+      ' .iz-root .ak-uebernahme{padding:14px}.ak-ueb-ent{flex-direction:column;align-items:stretch}',
+      ' .ak-leiste{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:70;gap:10px;background:#fff;border-top:1px solid var(--iz-rahmen);box-shadow:0 -6px 18px rgba(26,35,51,.12);padding:10px 12px calc(10px + env(safe-area-inset-bottom))}',
+      ' .ak-leiste .btn-primary{flex:1}.ak-leiste .ak-menue{top:auto;bottom:calc(100% + 8px);right:0}',
+      ' #iz-v-form{padding-bottom:92px}',
+      ' .iz-fzs-knoepfe,.iz-fzs-knoepfe .iz-fotobtn{width:100%;justify-content:center}}',
+      '@media (max-width:900px){.ak-ueb-grid{grid-template-columns:1fr}}',
       '@media print{.iz-root,.iz-ov{display:none!important}}'
     ].join('\n');
     document.head.appendChild(st);
@@ -682,6 +836,7 @@
   function sortWert(a, f) {
     if (f === 'status') return STATUS_LABEL[anzeigeStatus(a)] || a.status;
     if (f === 'fz_hersteller') return fzBez(a);
+    if (f === 'kunde') return kundenName(a);
     return a[f];
   }
   function gefiltert() {
@@ -701,9 +856,8 @@
       if (c.fz_hersteller && fzBez(a).toLowerCase().indexOf(c.fz_hersteller) < 0) return false;
       if (!has(a.fz_fahrgestellnr, c.fz_fahrgestellnr)) return false;
       if (!has(a.fz_kennzeichen, c.fz_kennzeichen)) return false;
-      if (c.vk_nachname && ((a.vk_vorname || '') + ' ' + (a.vk_nachname || '')).toLowerCase().indexOf(c.vk_nachname) < 0) return false;
-      if (c.fz_km_stand && String(a.fz_km_stand || '').indexOf(c.fz_km_stand.replace(/\./g, '')) < 0) return false;
-      if (c.ankaufspreis && String(a.ankaufspreis || '').indexOf(c.ankaufspreis.replace(/[.,€\s]/g, '')) < 0) return false;
+      if (c.kunde && kundenName(a).toLowerCase().indexOf(c.kunde) < 0) return false;
+      if (c.ankaufspreis && String(Math.round(Number(a.ankaufspreis) || 0)).indexOf(c.ankaufspreis.replace(/[.,€\s]/g, '')) < 0) return false;
       if (Fi.status && anzeigeStatus(a) !== Fi.status) return false;
       return true;
     });
@@ -723,31 +877,44 @@
      7. Liste
      =================================================================== */
   var SPALTEN = [
-    ['interne_nr', 'Interne Nr.', 'filtern…'], ['erstellt_am', 'Datum', 'z.B. 17.05'], ['fz_hersteller', 'Fahrzeug', 'Marke/Modell'],
-    ['fz_fahrgestellnr', 'Fgst.-Nr.', 'FIN'], ['fz_kennzeichen', 'Kennzeichen', 'Kennz.'], ['vk_nachname', 'Verkäufer', 'Name'],
-    ['fz_km_stand', 'KM-Stand', 'km'], ['ankaufspreis', 'Ankaufspreis', '€'], ['status', 'Status', '']
+    ['kunde', 'Kunde', 'Name'], ['fz_hersteller', 'Fahrzeug', 'Marke/Modell'], ['fz_kennzeichen', 'Kennzeichen', 'Kennz.'],
+    ['fz_fahrgestellnr', 'Fgst.-Nr.', 'FIN'], ['interne_nr', 'Int.-Nr.', 'filtern…'], ['erstellt_am', 'Datum', 'z.B. 17.11'],
+    ['status', 'Status', ''], ['ankaufspreis', 'Kaufpreis', '€']
   ];
   var STATUS_FILTER = [['', 'Alle'], ['neu', 'Neu'], ['bewertet', 'Bewertet'], ['vertrag_erstellt', 'Angekauft'],
     ['uebernommen', 'Übernommen'], ['abweichung_offen', 'Abweichung offen'], ['abgeschlossen', 'Abgeschlossen'], ['abgelehnt', 'Abgelehnt']];
+  // Statusfilter als Knöpfe (Oli, 25.11.2026): Alle · Neu · Bewertet · Vertrag · Übernommen · Abweichung (rot)
+  var STATUS_KNOEPFE = [['', 'Alle'], ['neu', 'Neu'], ['bewertet', 'Bewertet'], ['vertrag_erstellt', 'Angekauft'],
+    ['uebernommen', 'Übernommen'], ['abweichung_offen', 'Abweichung', 'rot']];
+
+  function setzeStatusFilter(wert) {
+    S.filter.status = wert || '';
+    var r = S.root; if (!r) return;
+    var sel = r.querySelector('#iz-f-status'); if (sel) sel.value = S.filter.status;
+    r.querySelectorAll('#iz-fk button').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-f') === S.filter.status ? 'true' : 'false'); });
+    zeichneTabelle();
+  }
 
   function baueGeruest() {
     S.root.innerHTML =
       '<div id="iz-v-liste">' +
-      '<div class="iz-stats" id="iz-stats"></div>' +
       '<div class="iz-kopf"><h2>Alle <em>Inzahlungnahmen</em></h2><div class="iz-ctrl">' +
       '<select id="iz-owner"><option value="all">Alle Mitarbeiter</option><option value="me">Nur meine Ankäufe</option></select>' +
       '<input type="search" id="iz-suche" placeholder="🔍 Volltextsuche…">' +
       '<button class="iz-btn iz-btn-o iz-btn-sm" id="iz-reload" type="button">↻ Aktualisieren</button>' +
       '<button class="iz-btn iz-btn-p" id="iz-neu" type="button">➕ Neuer Ankauf</button></div></div>' +
-      '<div class="iz-mobilbar"><select id="iz-m-status">' + STATUS_FILTER.map(function (s) { return '<option value="' + s[0] + '">' + (s[0] ? s[1] : 'Alle Status') + '</option>'; }).join('') + '</select>' +
-      '<select id="iz-m-sort"><option value="erstellt_am|desc">Neueste zuerst</option><option value="erstellt_am|asc">Älteste zuerst</option><option value="fz_hersteller|asc">Fahrzeug A–Z</option><option value="ankaufspreis|desc">Preis hoch</option><option value="status|asc">Status</option></select></div>' +
+      '<div class="iz-fk" id="iz-fk" role="group" aria-label="Status filtern">' + STATUS_KNOEPFE.map(function (s) {
+        return '<button type="button" data-f="' + s[0] + '" aria-pressed="' + (s[0] === '' ? 'true' : 'false') + '"' + (s[2] ? ' class="' + s[2] + '"' : '') + '>' + s[1] + '</button>';
+      }).join('') + '</div>' +
+      '<div class="iz-mobilbar">' +
+      '<select id="iz-m-sort" aria-label="Sortierung"><option value="erstellt_am|desc">Neueste zuerst</option><option value="erstellt_am|asc">Älteste zuerst</option><option value="kunde|asc">Kunde A–Z</option><option value="fz_hersteller|asc">Fahrzeug A–Z</option><option value="ankaufspreis|desc">Preis hoch</option><option value="status|asc">Status</option></select></div>' +
       '<div class="iz-tabelle"><div id="iz-laden" class="iz-laden">Lade Daten…</div><div id="iz-leer" class="iz-leer" style="display:none"><div style="font-size:48px">🚗</div><h3>Keine Ankäufe gefunden</h3><p>Mit „Neuer Ankauf“ geht es los.</p></div>' +
       '<table id="iz-tab" style="display:none"><thead><tr>' +
-      SPALTEN.map(function (s) { return '<th class="sort" data-sort="' + s[0] + '" id="iz-th-' + s[0] + '">' + s[1] + '</th>'; }).join('') + '<th>Aktion</th></tr>' +
+      SPALTEN.map(function (s) { return '<th class="sort" data-sort="' + s[0] + '" id="iz-th-' + s[0] + '">' + s[1] + '</th>'; }).join('') + '</tr>' +
       '<tr class="fil">' + SPALTEN.map(function (s) {
-        if (s[0] === 'status') return '<th><select id="iz-f-status">' + STATUS_FILTER.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('') + '</select></th>';
-        return '<th><input type="text" data-col="' + s[0] + '" placeholder="' + s[2] + '"></th>';
-      }).join('') + '<th></th></tr></thead><tbody id="iz-body"></tbody></table></div></div>' +
+        if (s[0] === 'status') return '<th><select id="iz-f-status" aria-label="Status filtern">' + STATUS_FILTER.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('') + '</select></th>';
+        return '<th><input type="text" data-col="' + s[0] + '" placeholder="' + s[2] + '" aria-label="' + s[1] + ' filtern"></th>';
+      }).join('') + '</tr></thead><tbody id="iz-body"></tbody></table></div></div>' +
       '<div id="iz-v-form" style="display:none"></div>';
 
     var r = S.root;
@@ -758,8 +925,10 @@
     r.querySelectorAll('input[data-col]').forEach(function (inp) {
       inp.addEventListener('input', function () { S.filter.cols[inp.getAttribute('data-col')] = inp.value.toLowerCase().trim(); zeichneTabelle(); });
     });
-    r.querySelector('#iz-f-status').addEventListener('change', function (e) { S.filter.status = e.target.value; r.querySelector('#iz-m-status').value = e.target.value; zeichneTabelle(); });
-    r.querySelector('#iz-m-status').addEventListener('change', function (e) { S.filter.status = e.target.value; r.querySelector('#iz-f-status').value = e.target.value; zeichneTabelle(); });
+    r.querySelector('#iz-f-status').addEventListener('change', function (e) { setzeStatusFilter(e.target.value); });
+    r.querySelector('#iz-fk').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-f]'); if (b) setzeStatusFilter(b.getAttribute('data-f'));
+    });
     r.querySelector('#iz-m-sort').addEventListener('change', function (e) {
       var p = e.target.value.split('|'); S.sortField = p[0]; S.sortDir = p[1]; zeichneTabelle();
     });
@@ -770,12 +939,19 @@
         zeichneTabelle();
       });
     });
+    // Klick (oder Enter) auf eine Zeile öffnet direkt die Ankauf-Ansicht
     r.querySelector('#iz-body').addEventListener('click', function (e) {
-      var b = e.target.closest('[data-detail]'); if (b) zeigeDetail(b.getAttribute('data-detail'));
+      var tr = e.target.closest('tr[data-open]'); if (tr) bearbeiten(tr.getAttribute('data-open'));
+    });
+    r.querySelector('#iz-body').addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var tr = e.target.closest('tr[data-open]'); if (tr) { e.preventDefault(); bearbeiten(tr.getAttribute('data-open')); }
     });
   }
 
   function aktualisiereStats() {
+    var ziel = S.root && S.root.querySelector('#iz-stats');
+    if (!ziel) return;   // 25.11.2026: Statistik-Kacheln auf Olis Wunsch entfernt
     var data = S.alle, jetzt = new Date();
     var monat = data.filter(function (a) { var d = new Date(a.erstellt_am); return d.getMonth() === jetzt.getMonth() && d.getFullYear() === jetzt.getFullYear(); }).length;
     var offen = data.filter(function (a) { return ['neu', 'bewertet', 'vertrag_erstellt'].indexOf(a.status) >= 0; }).length;
@@ -802,17 +978,15 @@
     if (!daten.length) { tab.style.display = 'none'; leer.style.display = 'block'; return; }
     leer.style.display = 'none'; tab.style.display = 'table';
     r.querySelector('#iz-body').innerHTML = daten.map(function (a) {
-      return '<tr class="iz-zeile-klick" data-detail="' + esc(a.id) + '">' +
-        '<td data-l="Interne Nr."><span class="iz-nr">' + esc(a.interne_nr || '–') + '</span></td>' +
-        '<td data-l="Datum">' + fmtDatum(a.erstellt_am) + '</td>' +
-        '<td data-l="Fahrzeug"><strong>' + esc(fzBez(a)) + '</strong></td>' +
-        '<td data-l="Fgst.-Nr."><span class="iz-fin">' + esc(a.fz_fahrgestellnr || '–') + '</span></td>' +
+      return '<tr class="iz-zeile-klick" tabindex="0" data-open="' + esc(a.id) + '">' +
+        '<td data-l="Kunde">' + esc(kundenName(a) || '–') + '</td>' +
+        '<td data-l="Fahrzeug"><strong>' + esc(fzBez(a) || '–') + '</strong></td>' +
         '<td data-l="Kennzeichen">' + esc(a.fz_kennzeichen || '–') + '</td>' +
-        '<td data-l="Verkäufer">' + esc(((a.vk_vorname || '') + ' ' + (a.vk_nachname || '')).trim() || '–') + '</td>' +
-        '<td data-l="KM-Stand">' + (a.fz_km_stand ? fmtKm(a.fz_km_stand) : '–') + '</td>' +
-        '<td data-l="Ankaufspreis"><strong>' + (a.ankaufspreis ? fmtEuro(a.ankaufspreis) : '–') + '</strong></td>' +
+        '<td data-l="Fgst.-Nr."><span class="iz-fin">' + esc(a.fz_fahrgestellnr || '–') + '</span></td>' +
+        '<td data-l="Int.-Nr."><span class="iz-nr">' + esc(a.interne_nr || '–') + '</span></td>' +
+        '<td data-l="Datum">' + fmtDatum(a.erstellt_am) + '</td>' +
         '<td data-l="Status">' + badge(a) + '</td>' +
-        '<td><button type="button" class="iz-btn iz-btn-o iz-btn-sm" data-detail="' + esc(a.id) + '">Details</button></td></tr>';
+        '<td data-l="Kaufpreis"><strong>' + (a.ankaufspreis ? fmtEuroRund(a.ankaufspreis) : '–') + '</strong></td></tr>';
     }).join('');
   }
 
@@ -839,6 +1013,7 @@
     S.view = 'liste';
     S.root.querySelector('#iz-v-liste').style.display = '';
     S.root.querySelector('#iz-v-form').style.display = 'none';
+    setzeAkteKlasse();
     window.scrollTo(0, 0);
   }
 
@@ -856,21 +1031,57 @@
       case 'int':
         inp = '<input type="number" id="' + id + '" inputmode="numeric" placeholder="' + esc(f.ph || '') + '"' + (f.min != null ? ' min="' + f.min + '"' : '') + (f.step ? ' step="' + f.step + '"' : '') + '>'; break;
       default:
-        inp = '<input type="' + (f.t === 'text' ? 'text' : f.t) + '" id="' + id + '" placeholder="' + esc(f.ph || '') + '"' + (f.up ? ' style="text-transform:uppercase"' : '') + '>';
+        inp = '<input type="' + (f.t === 'text' ? 'text' : f.t) + '" id="' + id + '" placeholder="' + esc(f.ph || '') + '"' + (f.im ? ' inputmode="' + f.im + '"' : '') + (f.up ? ' style="text-transform:uppercase"' : '') + '>';
     }
     return '<div class="' + cls + '"><label for="' + id + '">' + esc(f.l) + '</label>' + inp + '</div>';
   }
   function cbHtml(id, label) {
     return '<label class="iz-cb"><input type="checkbox" id="iz_' + id + '"><span>' + label + '</span></label>';
   }
+  var SEK_NAMEN = ['Verkäufer', 'Fahrzeug', 'Ausstattung', 'Zusicherungen', 'Mängel', 'Status'];
   function sekt(nr, titel, inhalt) {
-    return '<div class="iz-sec"><div class="iz-sec-t"><div class="iz-nummer">' + nr + '</div>' + titel + '</div>' + inhalt + '</div>';
+    return '<section class="iz-sec ak-sek" id="iz-sek' + nr + '" data-sek="' + nr + '">' +
+      '<button type="button" class="ak-sek-kopf" aria-expanded="false" aria-controls="iz-sekb' + nr + '"><span class="iz-nummer">' + nr + '</span><span class="t">' + titel + '</span>' +
+      '<span class="ak-st ok" data-st="' + nr + '"></span><span class="ak-chev" aria-hidden="true">▾</span></button>' +
+      '<div class="ak-sek-body" id="iz-sekb' + nr + '">' + inhalt + '</div></section>';
+  }
+
+  // Drucken-Menü (Kopf: ohne, feste Leiste am Handy: mit „Fahrzeug übernehmen“)
+  function menueHtml(mitUebernehmen) {
+    return '<span class="ak-menuewrap" data-nur-edit>' +
+      '<button type="button" class="btn btn-ghost" data-menue aria-haspopup="true" aria-expanded="false">Drucken ▾</button>' +
+      '<div class="ak-menue" role="menu">' +
+      '<button type="button" role="menuitem" data-druck="kauf">🖨️ Kaufvertrag</button>' +
+      '<button type="button" role="menuitem" data-druck="zustand">📋 Zustandsbericht</button>' +
+      '<button type="button" role="menuitem" data-druck="uebergabe">🖨️ Übergabeprotokoll</button>' +
+      (mitUebernehmen ? '<div data-uebern hidden><div class="ak-trenner"></div><button type="button" role="menuitem" data-ak="uebernehmen"><span data-uebern-text>🚗 Fahrzeug übernehmen</span></button></div>' : '') +
+      '</div></span>';
+  }
+  function kopfHtml() {
+    return '<div class="ak-kopf" id="iz-kopf"><div class="ak-zeile1">' +
+      '<button type="button" class="btn btn-ghost btn-klein ak-zurueck" id="iz-zurueck" aria-label="Zur Liste"><span>←</span><span class="lz"> Liste</span></button>' +
+      '<div class="ak-titel"><h2 id="iz-form-titel">Neuer Ankauf</h2><div class="ak-meta" id="iz-form-meta"></div><div class="ak-meta2" id="iz-form-meta2"></div></div>' +
+      '<div class="ak-aktionen pc"><button type="button" class="btn btn-primary" id="iz_speichern" data-ak="speichern">💾 Speichern</button>' + menueHtml(false) +
+      '<button type="button" class="btn btn-ghost" data-ak="uebernehmen" data-uebern hidden><span data-uebern-text>🚗 Fahrzeug übernehmen</span></button></div></div>' +
+      '<div class="ak-dirty" id="iz-dirty" hidden role="status"><span class="pkt"></span><b>Ungespeicherte Änderungen</b><span class="bsp">– bitte „Speichern“ nicht vergessen</span></div>' +
+      '<nav class="ak-sprung" aria-label="Zu Abschnitt springen">' + SEK_NAMEN.map(function (nm, i) {
+        return '<button type="button" class="ak-sp" data-sp="' + (i + 1) + '"><span class="n">' + (i + 1) + '</span><span class="nm">' + nm + '</span><span class="st"></span></button>';
+      }).join('') + '</nav></div>';
+  }
+  function fzsHtml() {
+    return '<div class="iz-fzs" id="iz_fzs"><div class="iz-fzs-kopf"><div><div class="iz-fzs-titel">📷 Fahrzeugschein einlesen</div>' +
+      '<div class="iz-fzs-text">Foto oder Scan der Zulassungsbescheinigung Teil I – die Daten werden in die leeren Felder übernommen. Das Bild wird nicht gespeichert.</div></div>' +
+      '<div class="iz-fzs-knoepfe"><label class="iz-fotobtn">📷 Foto aufnehmen<input type="file" accept="image/*" capture="environment" id="iz_fzs_kamera"></label>' +
+      '<label class="iz-fotobtn">📄 Datei wählen<input type="file" accept="image/*,application/pdf" id="iz_fzs_datei"></label></div></div>' +
+      '<div class="iz-fzs-status" id="iz_fzs_status" hidden></div></div>';
   }
 
   function baueFormular() {
     var h = '';
-    h += '<div class="iz-kopf"><h2 id="iz-form-titel">Neuer <em>Ankauf</em></h2><button type="button" class="iz-btn iz-btn-o iz-btn-sm" id="iz-zurueck">← Zur Liste</button></div>';
-    h += sekt(1, 'Verkäufer (Privatkunde)', '<div class="iz-grid">' + F_KUNDE.map(feldHtml).join('') + '</div>');
+    h += kopfHtml();
+    h += '<div id="iz_ueb_platz"></div>';
+    h += '<div class="ak-alle"><button type="button" class="ak-link rot" id="iz_leeren">Formular leeren</button><button type="button" class="ak-link" id="iz-alle">Alle aufklappen</button></div>';
+    h += sekt(1, 'Verkäufer (Privatkunde)', fzsHtml() + '<div class="iz-grid">' + F_KUNDE.map(feldHtml).join('') + '</div>');
     // 2 Fahrzeug
     h += sekt(2, 'Fahrzeugdaten',
       '<div class="iz-grid">' + F_FAHRZEUG.map(feldHtml).join('') + '</div>' +
@@ -884,11 +1095,19 @@
     h += sekt(3, 'Ausstattung', '<div class="iz-cbgrid">' + AUSST.map(function (x) { return cbHtml(x[0], x[1]); }).join('') + '</div>');
     // 4 Zusicherungen + bekannte Mängel + KD
     h += sekt(4, 'Zusicherungen des Verkäufers',
-      '<div class="iz-cbgrid">' + ZUSICH.map(function (x) { return cbHtml(x[0], x[1]); }).join('') + '</div>' +
+      '<div class="iz-zus-liste" id="iz_zus_liste">' + ZUS_ROWS.map(function (r) {
+        return '<div class="iz-zus-row" id="iz_zus_row_' + r.key + '"><span class="iz-zus-l">' + esc(r.label) + ' *</span><span class="iz-zus-opts">' +
+          '<label class="iz-zus-opt"><input type="radio" name="iz_zus_' + r.key + '" id="iz_zus_' + r.key + '_ja" value="ja">Ja</label>' +
+          '<label class="iz-zus-opt"><input type="radio" name="iz_zus_' + r.key + '" id="iz_zus_' + r.key + '_nein" value="nein">Nein</label></span></div>';
+      }).join('') + '</div>' +
       '<div class="iz-sub"><div class="iz-sub-l">Bekannte Mängel (vom Verkäufer angegeben)</div>' +
       '<div class="iz-fg full"><label for="iz_vk_bekannte_maengel">Dem Verkäufer sind folgende Mängel bekannt *</label>' +
       '<textarea id="iz_vk_bekannte_maengel" rows="4" placeholder="z.B. Klimaanlage kühlt nicht richtig, Steinschlag in Frontscheibe, … Falls dem Verkäufer KEINE Mängel bekannt sind, bitte explizit eintragen: \'Keine Mängel bekannt\'."></textarea>' +
       '<small style="color:var(--iz-sub)">Pflichtfeld – wird in den Kaufvertrag übernommen (rechtlich relevant: Verkäufer haftet bei arglistig verschwiegenen Mängeln).</small></div></div>' +
+      '<div class="iz-sub"><div class="iz-sub-l">Schäden laut Verkäufer (welche und wo)</div>' +
+      '<div class="iz-fg full"><label for="iz_vk_schaeden">Der Verkäufer gibt folgende Schäden an (Art und Stelle am Fahrzeug)</label>' +
+      '<textarea id="iz_vk_schaeden" rows="4" placeholder="z.B. Parkrempler hinten links (Stoßfänger, 2024 repariert), Hagel auf Motorhaube und Dach, Kratzer Tür vorne rechts, … Falls keine Schäden: \'Keine Schäden bekannt\'."></textarea>' +
+      '<small style="color:var(--iz-sub)">Wird in den Kaufvertrag (§ 4) übernommen und vom Verkäufer dort gesondert unterschrieben.</small></div></div>' +
       '<div class="iz-sub"><div class="iz-sub-l">Kundendiensthistorie</div><div class="iz-grid">' + F_KD.map(feldHtml).join('') +
       '<div class="iz-fg" style="justify-content:flex-end">' + cbHtml('kd_alle_durchgefuehrt', '✅ Alle KD lückenlos nachgewiesen') + '</div></div></div>');
     // 5 Mängel & Bewertung
@@ -911,25 +1130,62 @@
       '<div class="iz-fotobtns"><label class="iz-fotobtn">📷 Foto aufnehmen<input type="file" accept="image/*" capture="environment" id="iz_foto_kamera"></label>' +
       '<label class="iz-fotobtn">🖼️ Aus Galerie / Datei<input type="file" accept="image/*" multiple id="iz_foto_datei"></label></div>' +
       '<div class="iz-fotos" id="iz_fotos"></div></div>' +
-      '<div class="iz-grid" style="margin-top:20px"><div class="iz-fg"><label for="iz_ankaufspreis">Ankaufspreis (€) *</label><input type="number" id="iz_ankaufspreis" placeholder="8500" step="100" inputmode="decimal"></div>' +
-      '<div class="iz-fg" style="justify-content:flex-end"><div class="iz-soll" id="iz_marge">→ Marge = Ankaufspreis − Gesamtkosten</div></div></div>' +
+      '<div class="iz-grid" style="margin-top:20px"><div class="iz-fg"><label for="iz_ankaufspreis">Ankaufspreis (€) *</label><input type="number" id="iz_ankaufspreis" placeholder="8500" step="100" inputmode="decimal"></div></div>' +
       '<div class="iz-hinweis rot">Auszahlung nur per Überweisung – nie bar.</div>');
     // 6 Status & Notizen
     h += sekt(6, 'Status &amp; Notizen',
       '<div class="iz-grid"><div class="iz-fg"><label for="iz_status">Status</label><select id="iz_status">' +
       STATUS_OPT.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('') + '</select></div>' +
-      F_STATUS.map(feldHtml).join('') + '</div>');
-    h += '<div class="iz-aktionen"><button type="button" class="iz-btn iz-btn-o" id="iz_leeren">Formular leeren</button>' +
-      '<button type="button" class="iz-btn iz-btn-p" id="iz_speichern">💾 Ankauf speichern</button></div>';
+      feldHtml(F_STATUS[0]) +
+      '<div class="iz-pruef">' + cbHtml('fz_geprueft', '✅ Fahrzeug überprüft') +
+      '<div class="iz-fg"><label for="iz_fz_geprueft_datum">Datum</label><input type="date" id="iz_fz_geprueft_datum"></div>' +
+      '<div class="iz-fg"><label for="iz_fz_pruefer_name">Name Prüfer</label><input type="text" id="iz_fz_pruefer_name" placeholder="Name des Prüfers"></div></div>' +
+      feldHtml(F_STATUS[1]) + '</div>');
+    // feste Leiste unten (nur Handy sichtbar)
+    h += '<div class="ak-leiste" id="iz-leiste"><button type="button" class="btn btn-primary" data-ak="speichern">💾 Speichern</button>' + menueHtml(true) + '</div>';
 
     var v = S.root.querySelector('#iz-v-form');
     v.innerHTML = h;
     // Ereignisse
     v.querySelector('#iz-zurueck').addEventListener('click', formVerlassen);
     v.querySelector('#iz_leeren').addEventListener('click', async function () {
-      if (await bestaetigen('Formular wirklich leeren? Nicht gespeicherte Eingaben gehen verloren.')) { await aufraeumenUploads(); setzeFormZurueck(); }
+      if (await bestaetigen('Formular wirklich leeren? Nicht gespeicherte Eingaben gehen verloren.')) { await aufraeumenUploads(); setzeFormZurueck(); initAbschnitte(); }
     });
-    v.querySelector('#iz_speichern').addEventListener('click', speichern);
+    v.querySelector('#iz-alle').addEventListener('click', function () {
+      var zu = !!v.querySelector('.ak-sek:not(.open)');
+      for (var n = 1; n <= 6; n++) oeffneSektion(n, zu);
+    });
+    v.addEventListener('click', function (e) {
+      var t = e.target; if (!t.closest) return;
+      var b;
+      if ((b = t.closest('.ak-sek-kopf'))) { var s = b.parentNode; oeffneSektion(+s.getAttribute('data-sek'), !s.classList.contains('open')); return; }
+      if ((b = t.closest('[data-sp]'))) { springeZu(+b.getAttribute('data-sp')); return; }
+      if ((b = t.closest('[data-menue]'))) {
+        var wrap = b.closest('.ak-menuewrap'), m = wrap.querySelector('.ak-menue'), war = m.classList.contains('offen');
+        v.querySelectorAll('.ak-menue.offen').forEach(function (x) { x.classList.remove('offen'); });
+        v.querySelectorAll('[data-menue]').forEach(function (x) { x.setAttribute('aria-expanded', 'false'); });
+        if (!war) { m.classList.add('offen'); b.setAttribute('aria-expanded', 'true'); }
+        return;
+      }
+      if ((b = t.closest('[data-druck]'))) { druckAnsicht(b.getAttribute('data-druck')); return; }
+      if ((b = t.closest('[data-ak]'))) {
+        var akt = b.getAttribute('data-ak');
+        if (akt === 'speichern') speichern(); else if (akt === 'uebernehmen') uebernehmenStart();
+        return;
+      }
+      if ((b = t.closest('[data-entscheiden]'))) { entscheidungSpeichern(b); return; }
+      if ((b = t.closest('[data-fzs-geprueft]'))) { fzsGeprueft(); return; }
+    });
+    // ungespeicherte Änderungen + Live-Prüfung der Pflichtfelder
+    var statusTimer = null;
+    function eingabe(e) {
+      var t = e.target;
+      if (!t || t.type === 'file' || (t.closest && t.closest('#iz_ueb_platz'))) return;   // Scan-Dateien und Entscheidung (Admin) zählen nicht
+      markDirty();
+      clearTimeout(statusTimer); statusTimer = setTimeout(aktualisiereStatus, 120);
+    }
+    v.addEventListener('input', eingabe);
+    v.addEventListener('change', eingabe);
     v.querySelectorAll('[id^="iz_mn_"][id$="_kosten"], #iz_ankaufspreis').forEach(function (el) { el.addEventListener('input', rechneSumme); });
     v.querySelectorAll('[data-lack]').forEach(function (el) { el.addEventListener('input', function () { lackPruefen(el); }); });
     REIFEN.forEach(function (t) {
@@ -942,6 +1198,8 @@
     });
     v.querySelector('#iz_foto_kamera').addEventListener('change', fotoAuswahl);
     v.querySelector('#iz_foto_datei').addEventListener('change', fotoAuswahl);
+    v.querySelector('#iz_fzs_kamera').addEventListener('change', function () { fahrzeugscheinLesen(this); });
+    v.querySelector('#iz_fzs_datei').addEventListener('change', function () { fahrzeugscheinLesen(this); });
     v.querySelector('#iz_fotos').addEventListener('click', async function (e) {
       var b = e.target.closest('[data-fotodel]'); if (!b) return;
       var idx = +b.getAttribute('data-fotodel'), p = S.fotos[idx];
@@ -949,8 +1207,90 @@
       S.fotos.splice(idx, 1);
       var ui = S.uploads.indexOf(p);
       if (ui >= 0) { S.uploads.splice(ui, 1); fotosEntfernen([p]); } else S.entfernt.push(p);
-      zeichneFormFotos();
+      zeichneFormFotos(); markDirty();
     });
+    // Kopfhöhe messen (Abschnitte scrollen mit richtigem Abstand unter den festen Kopf)
+    if (window.ResizeObserver) new ResizeObserver(kopfHoehe).observe(v.querySelector('#iz-kopf'));
+    window.addEventListener('resize', kopfHoehe);
+  }
+
+  /* ---- Ankauf-Ansicht: Kopf, Abschnitte, Pflichtprüfung, Änderungsmerker ---- */
+  function kopfHoehe() {
+    var k = q('#iz-kopf'); if (!k || !S.root) return;
+    S.root.style.setProperty('--iz-kopf-h', (k.offsetHeight || 150) + 'px');
+  }
+  function uebernehmbar(a) {
+    return !!a && a.status === 'vertrag_erstellt' && ['ok', 'abweichung_geklaert'].indexOf(a.uebernahme_status) < 0;
+  }
+  function zeichneKopf(a) {
+    var neu = !a, f = S.root.querySelector('#iz-v-form');
+    q('#iz-form-titel').textContent = neu ? 'Neuer Ankauf' : (fzBez(a) || 'Ankauf');
+    q('#iz-form-meta').innerHTML = neu ? '<span class="iz-badge iz-b-neu">Neu</span>'
+      : '<span class="ak-nr">' + esc(a.interne_nr || 'ohne Int.-Nr.') + '</span>' + badge(a);
+    q('#iz-form-meta2').textContent = 'Bearbeiter: ' + ((neu ? nutzerName() : a.bearbeiter_name) || '–') + ' · ' + (neu ? heute() : fmtDatum(a.erstellt_am));
+    f.querySelectorAll('[data-nur-edit]').forEach(function (e) { e.hidden = neu; });
+    var ub = uebernehmbar(a), txt = a && a.uebernahme_status === 'abweichung_offen' ? '🚗 Übernahme neu erfassen' : '🚗 Fahrzeug übernehmen';
+    f.querySelectorAll('[data-uebern]').forEach(function (e) { e.hidden = !ub; });
+    f.querySelectorAll('[data-uebern-text]').forEach(function (e) { e.textContent = txt; });
+    var le = q('#iz_leeren'); if (le) le.hidden = !neu;   // „Formular leeren“ nur beim neuen Ankauf
+    kopfHoehe();
+  }
+  function markDirty() {
+    S.dirty = true;
+    var d = q('#iz-dirty'); if (d) d.hidden = false;
+  }
+  function markClean() {
+    S.dirty = false;
+    var d = q('#iz-dirty'); if (d) d.hidden = true;
+  }
+  function wertVon(id) { var e = qi(id); return e && e.value != null ? String(e.value).trim() : ''; }
+  function scanOffen() { return !!(S.root && S.root.querySelector('#iz-v-form .iz-scan-pruefen')); }
+  // Pflichtfelder je Abschnitt – dieselben Regeln wie beim Speichern
+  function pflichtLuecken() {
+    var l = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    if (!wertVon('fz_hersteller')) l[2].push('Hersteller');
+    if (!wertVon('fz_modell')) l[2].push('Modell');
+    if (!wertVon('vk_bekannte_maengel')) l[4].push('Bekannte Mängel');
+    ZUS_ROWS.forEach(function (r) { if (zusWert(r) === null) l[4].push(r.label); });
+    if (scanOffen()) l[1].push('Fahrzeugschein-Daten prüfen');
+    return l;
+  }
+  function aktualisiereStatus() {
+    if (!S.root || !qi('vk_vorname')) return;
+    var l = pflichtLuecken();
+    for (var n = 1; n <= 6; n++) {
+      var fehl = l[n].length > 0;
+      var st = q('[data-st="' + n + '"]');
+      if (st) {
+        st.className = 'ak-st ' + (fehl ? 'warn' : 'ok');
+        st.innerHTML = fehl ? '!<span class="txt"> ' + (n === 1 ? 'Daten prüfen' : 'Pflichtfeld fehlt') + '</span>' : '✓<span class="txt"> vollständig</span>';
+      }
+      var sp = q('[data-sp="' + n + '"]');
+      if (sp) {
+        sp.classList.toggle('hat-fehler', fehl);
+        sp.querySelector('.st').innerHTML = fehl ? '<span class="warn" aria-hidden="true">!</span>' : '<span class="ok" aria-hidden="true">✓</span>';
+        sp.setAttribute('aria-label', 'Abschnitt ' + n + ' ' + SEK_NAMEN[n - 1] + (fehl ? ': offen – ' + l[n].join(', ') : ': vollständig'));
+      }
+    }
+    // erledigte Markierungen wieder wegnehmen
+    ['fz_hersteller', 'fz_modell', 'vk_bekannte_maengel'].forEach(function (id) { if (wertVon(id)) qi(id).classList.remove('iz-pflicht'); });
+    ZUS_ROWS.forEach(function (r) { if (zusWert(r) !== null) { var row = q('#iz_zus_row_' + r.key); if (row) row.classList.remove('iz-zus-leer'); } });
+  }
+  function oeffneSektion(n, offen) {
+    var s = q('#iz-sek' + n); if (!s) return;
+    s.classList.toggle('open', !!offen);
+    var b = s.querySelector('.ak-sek-kopf'); if (b) b.setAttribute('aria-expanded', offen ? 'true' : 'false');
+    var al = q('#iz-alle'); if (al) al.textContent = q('#iz-v-form .ak-sek:not(.open)') ? 'Alle aufklappen' : 'Alle zuklappen';
+  }
+  function springeZu(n) {
+    oeffneSektion(n, true);
+    var s = q('#iz-sek' + n); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  // Beim Öffnen: Abschnitte mit „!“ aufgeklappt, Abschnitt 1 immer, der Rest zu
+  function initAbschnitte() {
+    var l = pflichtLuecken();
+    for (var n = 1; n <= 6; n++) oeffneSektion(n, n === 1 || l[n].length > 0);
+    aktualisiereStatus();
   }
 
   function lackPruefen(el) {
@@ -960,8 +1300,6 @@
   function rechneSumme() {
     var total = MN_ROWS.reduce(function (s, r) { var e = qi('mn_' + r.key + '_kosten'); return s + (e ? pnum(e.value) : 0); }, 0);
     qi('mn_gesamt').textContent = fmtEuro(total);
-    var preis = pnum(qi('ankaufspreis').value);
-    qi('marge').textContent = '→ Marge = Ankaufspreis − Gesamtkosten' + (preis ? ': ' + fmtEuro(preis - total) : '');
     return total;
   }
   function zeichneFormFotos() {
@@ -976,7 +1314,7 @@
     for (var i = 0; i < files.length; i++) {
       var f = files[i];
       if (!/^image\//.test(f.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(f.name)) { toast('Nur Bilddateien erlaubt: ' + f.name, 'error'); continue; }
-      try { S.fotos.push(await fotoSpeichern(f, id)); zeichneFormFotos(); }
+      try { S.fotos.push(await fotoSpeichern(f, id)); zeichneFormFotos(); markDirty(); }
       catch (e) { toast('Foto-Upload fehlgeschlagen: ' + fehlerText(e), 'error'); }
     }
   }
@@ -986,43 +1324,253 @@
   }
 
   function setzeFormZurueck() {
-    S.editId = null; S.newId = uuid(); S.fotos = []; S.uploads = []; S.entfernt = []; S.huRoh = null;
+    S.editId = null; S.newId = uuid(); S.fotos = []; S.uploads = []; S.entfernt = []; S.huRoh = null; S.rec = null;
     var v = S.root.querySelector('#iz-v-form');
     v.querySelectorAll('input,select,textarea').forEach(function (el) {
-      if (el.type === 'checkbox') el.checked = false; else if (el.type === 'file') el.value = ''; else el.value = '';
+      if (el.type === 'checkbox' || el.type === 'radio') el.checked = false; else if (el.type === 'file') el.value = ''; else el.value = '';
     });
+    v.querySelectorAll('.iz-zus-row').forEach(function (r) { r.classList.remove('iz-zus-leer'); });
     qi('status').value = 'neu';
     qi('bearbeiter_name').value = nutzerName();
-    qi('speichern').textContent = '💾 Ankauf speichern';
-    q('#iz-form-titel').innerHTML = 'Neuer <em>Ankauf</em>';
+    qi('fz_pruefer_name').value = nutzerName();   // Prüfer mit angemeldetem Namen vorbelegen
     v.querySelectorAll('.iz-reifen-b').forEach(function (b) { b.classList.remove('aktiv'); });
     v.querySelectorAll('[data-lack]').forEach(lackPruefen);
-    qi('vk_bekannte_maengel').classList.remove('iz-pflicht');
+    v.querySelectorAll('.iz-pflicht').forEach(function (el) { el.classList.remove('iz-pflicht'); });
+    fzsZuruecksetzen();
+    q('#iz_ueb_platz').innerHTML = '';
     rechneSumme(); zeichneFormFotos();
+    zeichneKopf(null);
+    markClean();
+  }
+  function setzeAkteKlasse() {
+    var sec = S.root && S.root.closest ? S.root.closest('section') : null;
+    document.body.classList.toggle('iz-akte', S.view === 'form' && !!sec && !sec.hidden);
   }
   function zeigeFormular() {
     S.view = 'form';
     S.root.querySelector('#iz-v-liste').style.display = 'none';
     S.root.querySelector('#iz-v-form').style.display = '';
+    setzeAkteKlasse(); kopfHoehe();
     window.scrollTo(0, 0);
   }
   function neuerAnkauf() {
     if (!S.root.querySelector('#iz_vk_vorname')) baueFormular();
-    setzeFormZurueck(); zeigeFormular();
+    setzeFormZurueck(); initAbschnitte(); markClean(); zeigeFormular();
   }
   async function formVerlassen() {
-    if (S.uploads.length) {
-      if (!(await bestaetigen('Nicht gespeicherte Eingaben und Fotos verwerfen?'))) return;
+    if (S.dirty || S.uploads.length) {
+      if (!(await bestaetigen('Du hast ungespeicherte Änderungen. Wirklich zur Liste zurück? Die Änderungen und neu hochgeladene Fotos gehen verloren.', { ja: 'Verwerfen', nein: 'Weiter bearbeiten', gefahr: true }))) return;
     }
     await aufraeumenUploads();
+    markClean();
     zeigeListe(); ladeListe();
   }
+  // Rückfrage vor dem Reiterwechsel (EG.zeigeTab wird in anmelden() umhüllt)
+  function formHatAenderungen() { return S.view === 'form' && (S.dirty || S.uploads.length > 0); }
 
-  function bearbeiten(id) {
+  /* Block „Übernahme bei der Abgabe“ (früher im Detailfenster), nur wenn uebernahme_status gesetzt */
+  function uebernahmeHtml(a, admin) {
+    var u = a.uebernahme_status; if (!u) return '';
+    var abw = Array.isArray(a.uebernahme_abweichungen) ? a.uebernahme_abweichungen : [];
+    var stand = { offen: 'offen', ok: 'übernommen, ohne Abweichung', abweichung_offen: 'Abweichung offen', abweichung_geklaert: 'übernommen, Abweichung geklärt' }[u] || u;
+    var kmSchl = [];
+    if (a.uebernahme_km != null) kmSchl.push(fmtKm(a.uebernahme_km));
+    if (a.uebernahme_schluessel != null) kmSchl.push(a.uebernahme_schluessel + (a.uebernahme_schluessel === 1 ? ' Schlüssel' : ' Schlüssel'));
+    var html = '<section class="iz-sec ak-uebernahme" id="iz_ueb"><h3>Übernahme bei der Abgabe ' + badge(a) + '</h3><div class="ak-ueb-grid"><div>' +
+      '<div class="iz-zeile"><span>Stand</span><span>' + esc(stand) + '</span></div>' +
+      (a.uebernahme_am ? '<div class="iz-zeile"><span>Übernommen am / von</span><span>' + fmtDatumZeit(a.uebernahme_am) + ' · ' + esc(a.uebernahme_von_name || '–') + '</span></div>' : '') +
+      (kmSchl.length ? '<div class="iz-zeile"><span>km / Schlüssel bei Übernahme</span><span>' + esc(kmSchl.join(' · ')) + '</span></div>' : '') +
+      (a.abweichung_betrag != null ? '<div class="iz-zeile"><span>Geschätzter Betrag</span><span>' + fmtEuro(a.abweichung_betrag) + '</span></div>' : '') +
+      (u === 'abweichung_offen' ? '<div class="iz-hinweis rot" style="margin-top:8px">Betrag über ' + GRENZE_EURO + ' €: Oli entscheidet.</div>' : '') +
+      '</div><div>' + (abw.length ? abweichungenHtml(abw) : '<div class="iz-ok" style="margin-top:0">Keine Abweichung zur Bewertung.</div>') + '</div></div>' +
+      (a.abweichung_entscheidung ? '<div class="iz-hinweis blau"><b>Entscheidung</b> (' + esc(a.abweichung_entschieden_von_name || '–') + ', ' + fmtDatumZeit(a.abweichung_entschieden_am) + ')<div style="white-space:pre-wrap">' + esc(a.abweichung_entscheidung) + '</div></div>' : '');
+    var cl = a.uebernahme_checkliste || {};
+    var uf = [];
+    if (cl.km_foto) uf.push(cl.km_foto);
+    (cl.neue_schaeden || []).forEach(function (s) { if (s.foto) uf.push(s.foto); });
+    if (uf.length) html += '<div class="iz-fotos">' + uf.map(function (p) { return thumbHtml(p, false); }).join('') + '</div>';
+    if (u === 'abweichung_offen') {
+      if (admin) {
+        html += '<div class="ak-ueb-ent"><div class="iz-fg"><label for="iz-ent">Entscheidung Oli – Betrag über ' + GRENZE_EURO + ' €, Preisanpassung (z. B. um … €)</label><textarea id="iz-ent" rows="2"></textarea></div>' +
+          '<div><button type="button" class="iz-btn iz-btn-g" data-entscheiden>✔ Entscheidung speichern</button></div></div>';
+      } else {
+        html += '<div class="iz-hinweis rot">Das Fahrzeug wird nicht ohne Klärung übernommen. Oli entscheidet über die Preisanpassung (Betrag über ' + GRENZE_EURO + ' €).</div>';
+      }
+    }
+    return html + '</section>';
+  }
+  async function entscheidungSpeichern(btn) {
+    if (!S.editId) return;
+    if (S.dirty) { toast('Bitte zuerst speichern (es gibt ungespeicherte Änderungen).', 'error'); return; }
+    var feld = q('#iz-ent'), txt = feld ? feld.value.trim() : '';
+    if (!txt) { toast('Bitte die Entscheidung als Text eintragen.', 'error'); return; }
+    var id = S.editId;
+    btn.disabled = true;
+    try {
+      await Daten.aendern(id, {
+        uebernahme_status: 'abweichung_geklaert', abweichung_entscheidung: txt,
+        abweichung_entschieden_von_name: nutzerName(), abweichung_entschieden_am: new Date().toISOString()
+      });
+      toast('Entscheidung gespeichert ✓', 'success');
+      await ladeListe(); await bearbeiten(id);
+    } catch (er) { toast('Fehler: ' + fehlerText(er), 'error'); btn.disabled = false; }
+  }
+  function uebernehmenStart() {
+    if (!S.editId) return;
+    if (S.dirty) { toast('Bitte zuerst speichern, dann übernehmen (es gibt ungespeicherte Änderungen).', 'error'); return; }
+    oeffneUebernahme(S.editId);
+  }
+  async function druckAnsicht(art) {
+    if (!S.editId) return;
+    if (S.dirty && !(await bestaetigen('Du hast ungespeicherte Änderungen. Gedruckt wird der zuletzt gespeicherte Stand. Trotzdem drucken?', { ja: 'Trotzdem drucken', nein: 'Abbrechen' }))) return;
+    druck(S.editId, art);
+  }
+
+  /* ===== Fahrzeugschein per Foto/Scan einlesen (aus der alten App v5.2; Edge Function „fahrzeugschein-lesen“ unverändert) ===== */
+  // Formularfeld ← Feld aus der Antwort der Edge Function
+  var FZS_ZUORDNUNG = [
+    ['vk_vorname', function (f) { return f.halter_vorname; }],
+    ['vk_nachname', function (f) { return f.halter_name; }],
+    ['vk_strasse', function (f) { return f.halter_strasse; }],
+    ['vk_plz', function (f) { return f.halter_plz; }],
+    ['vk_ort', function (f) { return f.halter_ort; }],
+    ['fz_hersteller', function (f) { return f.marke; }],
+    ['fz_modell', function (f) { return f.modell; }],
+    ['fz_kennzeichen', function (f) { return f.kennzeichen ? String(f.kennzeichen).toUpperCase() : null; }],
+    ['fz_fahrgestellnr', function (f) { return f.fin ? String(f.fin).replace(/\s/g, '').toUpperCase() : null; }],
+    ['fz_erstzulassung', function (f) { return /^\d{4}-\d{2}-\d{2}$/.test(f.erstzulassung || '') ? f.erstzulassung : null; }],   // Feld type=date
+    ['fz_kraftstoff', function (f) { return f.kraftstoff; }],
+    ['fz_leistung_kw', function (f) { return f.leistung_kw ? Math.round(Number(f.leistung_kw) * 1.35962) : null; }],   // Feld zeigt PS
+    ['fz_farbe', function (f) { return f.farbe; }],
+    ['fz_sitzplaetze', function (f) { return f.sitzplaetze ? (Number(f.sitzplaetze) > 9 ? 'mehr als 9' : String(f.sitzplaetze)) : null; }],
+    ['fz_hu_datum', function (f) { return /^\d{4}-\d{2}$/.test(f.hu_monat || '') ? f.hu_monat : null; }]   // Feld type=month
+  ];
+  var FZS_UNSICHER_KEY = { vk_vorname: 'halter_vorname', vk_nachname: 'halter_name', vk_strasse: 'halter_strasse', vk_plz: 'halter_plz', vk_ort: 'halter_ort',
+    fz_hersteller: 'marke', fz_modell: 'modell', fz_kennzeichen: 'kennzeichen', fz_fahrgestellnr: 'fin', fz_erstzulassung: 'erstzulassung',
+    fz_kraftstoff: 'kraftstoff', fz_leistung_kw: 'leistung_kw', fz_farbe: 'farbe', fz_sitzplaetze: 'sitzplaetze', fz_hu_datum: 'hu_monat' };
+  // Demo-Modus: erfundene Werte statt echtem Aufruf
+  var FZS_DEMO = { ist_fahrzeugschein: true, halter_vorname: 'Demo', halter_name: 'Mustermann', halter_strasse: 'Beispielweg 1', halter_plz: '00000', halter_ort: 'Musterstadt',
+    marke: 'Demo-Marke', modell: 'Testmodell', kennzeichen: 'xx-de 4711', fin: 'TESTFIN0000000099', erstzulassung: '2020-03-15', kraftstoff: 'Benzin',
+    leistung_kw: 110, farbe: 'Blau', sitzplaetze: 5, hu_monat: '2027-06', unsicher: ['fin'] };
+
+  function fzsLabel(el) {
+    var fg = el.closest ? el.closest('.iz-fg') : null, lb = fg ? fg.querySelector('label') : null;
+    return ((lb && lb.textContent) || el.id).replace(/\s*\*$/, '').replace(/\s*\(TT\.MM\.JJJJ\)/, '').trim();
+  }
+  function fzsStatus(html, art) {
+    var box = qi('fzs_status'); if (!box) return;
+    box.innerHTML = html; box.className = 'iz-fzs-status' + (art ? ' ' + art : ''); box.hidden = false;
+  }
+  function fzsZuruecksetzen() {
+    if (!S.root) return;
+    S.root.querySelectorAll('#iz-v-form .iz-scan-pruefen').forEach(function (el) { el.classList.remove('iz-scan-pruefen'); });
+    var box = qi('fzs_status'); if (box) { box.hidden = true; box.innerHTML = ''; }
+  }
+  // Bild verkleinern (max. 2000 px, JPEG) bzw. PDF unverändert als Base64
+  function fzsDateiVorbereiten(file) {
+    return new Promise(function (resolve, reject) {
+      if (file.type === 'application/pdf') {
+        if (file.size > 4.5 * 1024 * 1024) return reject(new Error('PDF ist zu groß (max. 4,5 MB).'));
+        var r = new FileReader();
+        r.onload = function () { resolve({ daten: String(r.result).split(',')[1], typ: 'application/pdf' }); };
+        r.onerror = function () { reject(new Error('Datei konnte nicht gelesen werden.')); };
+        return r.readAsDataURL(file);
+      }
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var max = 2000, f = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * f); c.height = Math.round(img.height * f);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve({ daten: c.toDataURL('image/jpeg', 0.88).split(',')[1], typ: 'image/jpeg' });
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Bildformat wird nicht unterstützt – bitte als JPG oder PNG versuchen.')); };
+      img.src = url;
+    });
+  }
+  async function fahrzeugscheinLesen(input) {
+    var file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    fzsStatus('⏳ Fahrzeugschein wird gelesen … (ca. 5–15 Sekunden)');
+    try {
+      if (istDemo()) {   // Demo: nichts hochladen, erfundene Werte
+        await new Promise(function (r) { setTimeout(r, 500); });
+        fzsUebernehmen(FZS_DEMO);
+        return;
+      }
+      var vorb = await fzsDateiVorbereiten(file);
+      var res = await EGx().sb.functions.invoke('fahrzeugschein-lesen', { body: vorb });
+      if (res.error) throw new Error(res.error.message || 'Aufruf fehlgeschlagen');
+      if (!res.data || !res.data.ok) throw new Error((res.data && res.data.error) || 'Keine Daten erkannt');
+      fzsUebernehmen(res.data.felder || {});
+    } catch (e) {
+      fzsStatus('⚠️ Einlesen fehlgeschlagen: ' + esc(e.message || e) + '<br>Bitte noch einmal mit einem scharfen, gerade aufgenommenen Foto versuchen oder die Daten von Hand eintragen.', 'fehler');
+    }
+  }
+  function fzsUebernehmen(f) {
+    if (f.ist_fahrzeugschein === false) {
+      fzsStatus('⚠️ Auf dem Bild wurde kein Fahrzeugschein erkannt. Bitte die Vorderseite der Zulassungsbescheinigung Teil I fotografieren.', 'fehler');
+      return;
+    }
+    var unsicher = Array.isArray(f.unsicher) ? f.unsicher : [];
+    var uebernommen = [], abweichend = [];
+    FZS_ZUORDNUNG.forEach(function (z) {
+      var id = z[0], el = qi(id); if (!el) return;
+      var wert = z[1](f);
+      if (wert === null || wert === undefined || String(wert).trim() === '') return;
+      wert = String(wert).trim();
+      var alt = String(el.value || '').trim();
+      if (alt) {   // nur leere Felder füllen
+        if (alt.toUpperCase() !== wert.toUpperCase()) abweichend.push({ label: fzsLabel(el), alt: alt, wert: wert });
+        return;
+      }
+      if (el.tagName === 'SELECT') {   // Wert muss in der Auswahl stehen (Groß-/Kleinschreibung egal)
+        var treffer = Array.prototype.filter.call(el.options, function (o) { return o.value && o.value.toLowerCase() === wert.toLowerCase(); })[0];
+        if (!treffer) return;
+        el.value = treffer.value; wert = treffer.value;
+      } else el.value = wert;
+      el.classList.add('iz-scan-pruefen');
+      var weg = function () { el.classList.remove('iz-scan-pruefen'); aktualisiereStatus(); };
+      el.addEventListener('input', weg, { once: true });
+      el.addEventListener('change', weg, { once: true });
+      var sek = el.closest('.ak-sek'); if (sek) oeffneSektion(+sek.getAttribute('data-sek'), true);   // gelbe Felder sichtbar machen
+      var anzeige = el.type === 'date' ? wert.split('-').reverse().join('.') : el.type === 'month' ? wert.split('-').reverse().join('/') : wert;
+      uebernommen.push({ label: fzsLabel(el), wert: anzeige, unsicher: unsicher.indexOf(FZS_UNSICHER_KEY[id]) >= 0 });
+    });
+    if (!uebernommen.length && !abweichend.length) {
+      fzsStatus('ℹ️ Es konnten keine Felder gelesen werden. Bitte ein schärferes Foto versuchen.', 'fehler');
+      return;
+    }
+    var html = '';
+    if (uebernommen.length) {
+      html += '<strong>' + uebernommen.length + ' Felder übernommen</strong> (gelb markiert) – bitte mit dem Fahrzeugschein vergleichen:<ul>' +
+        uebernommen.map(function (u) { return '<li>' + esc(u.label) + ': <strong>' + esc(u.wert) + '</strong>' + (u.unsicher ? ' <span style="color:var(--iz-rot);font-weight:700">(schwer lesbar – genau prüfen)</span>' : '') + '</li>'; }).join('') + '</ul>';
+    }
+    if (abweichend.length) {
+      html += '<strong>Nicht überschrieben</strong> (Feld war schon ausgefüllt, Fahrzeugschein sagt etwas anderes):<ul>' +
+        abweichend.map(function (a) { return '<li>' + esc(a.label) + ': Formular „' + esc(a.alt) + '“ · Fahrzeugschein „' + esc(a.wert) + '“</li>'; }).join('') + '</ul>';
+    }
+    html += 'Leistung wurde von kW in PS umgerechnet. KM-Stand, Getriebe, Vorbesitzer und Schlüssel stehen nicht im Fahrzeugschein.';
+    if (uebernommen.length) html += '<div style="margin-top:10px"><button type="button" class="iz-btn iz-btn-g iz-btn-sm" data-fzs-geprueft>✓ Daten geprüft</button></div>';
+    fzsStatus(html, 'ok');
+    if (uebernommen.length) markDirty();
+    aktualisiereStatus();
+  }
+  function fzsGeprueft() {
+    S.root.querySelectorAll('#iz-v-form .iz-scan-pruefen').forEach(function (el) { el.classList.remove('iz-scan-pruefen'); });
+    fzsStatus('✓ Übernommene Fahrzeugschein-Daten wurden geprüft.', '');
+    aktualisiereStatus();
+  }
+
+  async function bearbeiten(id) {
     var a = S.alle.find(function (x) { return x.id === id; }); if (!a) return;
+    var admin = await istAdmin();
     if (!S.root.querySelector('#iz_vk_vorname')) baueFormular();
     setzeFormZurueck();
-    S.editId = id; S.newId = null;
+    S.editId = id; S.newId = null; S.rec = a;
+    qi('fz_pruefer_name').value = '';   // beim Bearbeiten nur den gespeicherten Prüfer zeigen
     F_ALLE.forEach(function (f) {
       var el = qi(f.c); if (!el) return;
       var val = a[f.c];
@@ -1035,6 +1583,11 @@
       else if (val !== null && val !== undefined) el.value = val;
     });
     CHECKS.forEach(function (c) { var el = qi(c); if (el) el.checked = !!a[c]; });
+    ZUS_ROWS.forEach(function (r) {
+      var w = zusAnzeige(a, r);
+      qi('zus_' + r.key + '_ja').checked = w === true;
+      qi('zus_' + r.key + '_nein').checked = w === false;
+    });
     REIFEN.forEach(function (t) {
       qi('reifen_' + t.typ).checked = !!a['reifen_' + t.typ];
       var alt = a['reifen_' + t.typ + '_profil'];
@@ -1053,8 +1606,9 @@
     LACK_POINTS.forEach(function (p) { var el = qi('lack_' + p.key); el.value = lm[p.key] != null ? lm[p.key] : ''; lackPruefen(el); });
     S.fotos = Array.isArray(a.fotos) ? a.fotos.slice() : [];
     zeichneFormFotos(); rechneSumme();
-    qi('speichern').textContent = '✏️ Änderungen speichern';
-    q('#iz-form-titel').innerHTML = 'Ankauf <em>bearbeiten</em>';
+    zeichneKopf(a);
+    var ub = q('#iz_ueb_platz'); ub.innerHTML = uebernahmeHtml(a, admin); bilderLaden(ub);
+    initAbschnitte(); markClean();
     zeigeFormular();
   }
 
@@ -1073,6 +1627,8 @@
     });
     if (!o.fz_hu_datum && S.huRoh) o.fz_hu_datum = S.huRoh;
     CHECKS.forEach(function (c) { o[c] = !!(qi(c) && qi(c).checked); });
+    ZUS_ROWS.forEach(function (r) { o['zusicherung_' + r.key] = zusSpeicherwert(r); });
+    o.zus_ja_nein = true;   // Merker: Zusicherungen mit Ja/Nein erfasst (alte Datensätze: false = nur „nicht angehakt“)
     REIFEN.forEach(function (t) {
       var an = qi('reifen_' + t.typ).checked;
       o['reifen_' + t.typ] = an;
@@ -1094,18 +1650,53 @@
     return o;
   }
 
+  function speichernKnoepfe(busy) {
+    S.root.querySelectorAll('[data-ak="speichern"]').forEach(function (b) {
+      b.disabled = !!busy; b.textContent = busy ? '⏳ Speichern…' : '💾 Speichern';
+    });
+  }
+  function zeigeFehlerFeld(sekNr, el) {
+    oeffneSektion(sekNr, true);
+    if (!el) return;
+    el.classList.add('iz-pflicht');
+    if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try { el.focus({ preventScroll: true }); } catch (e) { /* ignorieren */ }
+  }
+
   async function speichern() {
-    var btn = qi('speichern'), txt = S.editId ? '✏️ Änderungen speichern' : '💾 Ankauf speichern';
+    // Fahrzeugschein-Daten müssen geprüft sein (gelb markierte Felder)
+    if (scanOffen()) {
+      oeffneSektion(1, true);
+      var sb = qi('fzs_status'); if (sb && sb.scrollIntoView) sb.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Bitte die gelb markierten Fahrzeugschein-Daten prüfen und „Daten geprüft“ klicken.', 'error');
+      return;
+    }
     var o = sammle();
-    if (!o.fz_hersteller || !o.fz_modell) { toast('Bitte Hersteller und Modell angeben!', 'error'); return; }
+    if (!o.fz_hersteller || !o.fz_modell) {
+      var fehl = !o.fz_hersteller ? qi('fz_hersteller') : qi('fz_modell');
+      if (!o.fz_hersteller) qi('fz_hersteller').classList.add('iz-pflicht');
+      if (!o.fz_modell) qi('fz_modell').classList.add('iz-pflicht');
+      zeigeFehlerFeld(2, fehl);
+      toast('Bitte Hersteller und Modell angeben!', 'error'); return;
+    }
     var bm = qi('vk_bekannte_maengel');
     if (!o.vk_bekannte_maengel) {
-      bm.classList.add('iz-pflicht'); bm.focus(); bm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      zeigeFehlerFeld(4, bm);
       toast('Bitte „Bekannte Mängel“ ausfüllen (Pflichtfeld). Falls keine bekannt: „Keine Mängel bekannt“ eintragen.', 'error');
       return;
     }
     bm.classList.remove('iz-pflicht');
-    btn.disabled = true; btn.textContent = '⏳ Speichern…';
+    // Zusicherungen: jede Zeile braucht Ja oder Nein
+    var offeneZus = ZUS_ROWS.filter(function (r) { return zusWert(r) === null; });
+    ZUS_ROWS.forEach(function (r) { var row = q('#iz_zus_row_' + r.key); if (row) row.classList.toggle('iz-zus-leer', zusWert(r) === null); });
+    if (offeneZus.length) {
+      oeffneSektion(4, true);
+      var zr = q('#iz_zus_row_' + offeneZus[0].key);
+      if (zr && zr.scrollIntoView) zr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Bitte bei allen Zusicherungen Ja oder Nein ankreuzen (offen: ' + offeneZus.map(function (r) { return r.label; }).join(', ') + ').', 'error');
+      return;
+    }
+    speichernKnoepfe(true);
     try {
       await holeUser();
       if (S.editId) {
@@ -1116,18 +1707,22 @@
         await Daten.neu(o);
       }
       var f = await fotosEntfernen(S.entfernt.slice());
+      var neu = !S.editId;
       if (f) toast('Gespeichert. Entfernte Foto-Dateien konnten nicht gelöscht werden (Löschen darf nur ein Admin).', 'info');
-      else toast(S.editId ? 'Ankauf aktualisiert ✓' : 'Ankauf gespeichert ✓', 'success');
+      else toast(neu ? 'Ankauf gespeichert ✓' : 'Ankauf aktualisiert ✓', 'success');
       S.uploads = []; S.entfernt = []; S.fotos = [];
+      markClean();
+      speichernKnoepfe(false);
       zeigeListe(); await ladeListe();
+      return;
     } catch (e) {
       toast('Fehler: ' + fehlerText(e), 'error');
     }
-    btn.disabled = false; btn.textContent = txt;
+    speichernKnoepfe(false);
   }
 
   /* ===================================================================
-     9. Detailansicht
+     9. Übernahme-Hilfen (das frühere Detailfenster ist in der Ankauf-Ansicht aufgegangen)
      =================================================================== */
   function schliesseModal(ov) { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }
   function neuesModal(inner, fest) {
@@ -1142,103 +1737,6 @@
     if (!liste || !liste.length) return '';
     return '<div class="iz-abw"><b style="color:var(--iz-rot)">Abweichungen zur Bewertung</b><ul>' +
       liste.map(function (x) { return '<li>' + esc(x.text || x) + '</li>'; }).join('') + '</ul></div>';
-  }
-
-  async function zeigeDetail(id) {
-    var a = S.alle.find(function (x) { return x.id === id; }); if (!a) return;
-    var admin = await istAdmin();
-    var gesamt = summeKosten(a);
-    var rows = [
-      ['Interne Nr.', a.interne_nr || '–'], ['Datum', fmtDatum(a.erstellt_am)], ['Kennzeichen', a.fz_kennzeichen || '–'],
-      ['Fahrgestell', a.fz_fahrgestellnr || '–'], ['Erstzulassung', a.fz_erstzulassung ? fmtDatumDE(a.fz_erstzulassung) : '–'],
-      ['KM-Stand', a.fz_km_stand ? fmtKm(a.fz_km_stand) : '–'], ['Kraftstoff', a.fz_kraftstoff || '–'], ['Getriebe', a.fz_getriebe || '–'],
-      ['Antrieb', a.fz_antrieb || '–'], ['Leistung', a.fz_leistung_kw ? a.fz_leistung_kw + ' PS' : '–'],
-      ['Hubraum', a.fz_hubraum ? a.fz_hubraum + ' cm³' : '–'],
-      ['Farbe', a.fz_farbe || '–'], ['Sitzplätze', a.fz_sitzplaetze || '–'], ['Vorbesitzer', a.fz_halteranzahl || '–'],
-      ['HU bis', a.fz_hu_datum || '–'], ['Anzahl Schlüssel', a.fz_anzahl_schluessel != null ? a.fz_anzahl_schluessel : '–'],
-      ['Verkäufer', ((a.vk_vorname || '') + ' ' + (a.vk_nachname || '')).trim() || '–'], ['Telefon', a.vk_telefon || '–'],
-      ['Gesamtkosten', gesamt > 0 ? fmtEuro(gesamt) : '–']
-    ];
-    var ausst = AUSST.filter(function (x) { return a[x[0]]; }).map(function (x) { return x[2]; });
-    var reif = REIFEN.filter(function (t) { return a['reifen_' + t.typ]; }).map(function (t) { return t.name + reifenProfilLabel(a, t.typ); });
-    var zus = ZUSICH.filter(function (x) { return a[x[0]]; }).map(function (x) { return x[2]; });
-    var chips = function (arr) { return arr.length ? '<div class="iz-chips">' + arr.map(function (x) { return '<span class="iz-chip">' + esc(x) + '</span>'; }).join('') + '</div>' : '–'; };
-    var lm = a.lack_messung || {};
-    var lackTxt = LACK_POINTS.filter(function (p) { return lm[p.key] != null; }).map(function (p) { return p.label + ': ' + String(lm[p.key]).replace('.', ',') + ' µm' + (lm[p.key] > 200 ? ' ⚠' : ''); });
-    var fotos = Array.isArray(a.fotos) ? a.fotos : [];
-    var uebernehmbar = a.status === 'vertrag_erstellt' && ['ok', 'abweichung_geklaert'].indexOf(a.uebernahme_status) < 0;
-    var u = a.uebernahme_status;
-
-    var html = '<div class="iz-modal-kopf"><h3>' + esc(fzBez(a) || 'Fahrzeugdetails') + '</h3><button type="button" class="iz-x" data-x aria-label="Schließen">✕</button></div>' +
-      rows.map(function (r) { return '<div class="iz-zeile"><span>' + r[0] + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') +
-      '<div class="iz-zeile"><span>Status</span><span>' + badge(a) + '</span></div>' +
-      '<div class="iz-zeile"><span>Bearbeiter</span><span>' + esc(a.bearbeiter_name || '–') + '</span></div>' +
-      '<div class="iz-zeile"><span>Ausstattung</span><span>' + chips(ausst) + '</span></div>' +
-      '<div class="iz-zeile"><span>Bereifung</span><span>' + chips(reif) + '</span></div>' +
-      '<div class="iz-zeile"><span>Zusicherungen</span><span>' + chips(zus) + '</span></div>' +
-      (lackTxt.length ? '<div class="iz-zeile"><span>Lackmessung</span><span>' + chips(lackTxt) + '</span></div>' : '') +
-      (a.vk_bekannte_maengel ? '<div class="iz-hinweis"><b style="font-size:12px;text-transform:uppercase;letter-spacing:.8px">Bekannte Mängel (vom Verkäufer)</b><div style="white-space:pre-wrap">' + esc(a.vk_bekannte_maengel) + '</div></div>' : '') +
-      (a.ankaufspreis ? '<div class="iz-preis"><span class="iz-soll">Ankaufspreis</span><b>' + fmtEuro(a.ankaufspreis) + '</b></div>' : '') +
-      '<div class="iz-hinweis rot">Auszahlung nur per Überweisung – nie bar.</div>';
-
-    // Übernahme-Block
-    if (u) {
-      var abw = Array.isArray(a.uebernahme_abweichungen) ? a.uebernahme_abweichungen : [];
-      html += '<div class="iz-sub"><div class="iz-sub-l">Übernahme bei der Abgabe</div>' +
-        '<div class="iz-zeile"><span>Stand</span><span>' + ({ offen: 'offen', ok: 'übernommen, ohne Abweichung', abweichung_offen: 'Abweichung offen', abweichung_geklaert: 'übernommen, Abweichung geklärt' }[u] || esc(u)) + '</span></div>' +
-        (a.uebernahme_am ? '<div class="iz-zeile"><span>Übernommen am / von</span><span>' + fmtDatumZeit(a.uebernahme_am) + ' · ' + esc(a.uebernahme_von_name || '–') + '</span></div>' : '') +
-        (a.uebernahme_km != null ? '<div class="iz-zeile"><span>km bei Übernahme</span><span>' + fmtKm(a.uebernahme_km) + '</span></div>' : '') +
-        (a.uebernahme_schluessel != null ? '<div class="iz-zeile"><span>Schlüssel bei Übernahme</span><span>' + a.uebernahme_schluessel + '</span></div>' : '') +
-        abweichungenHtml(abw) +
-        (a.abweichung_betrag != null ? '<div class="iz-zeile"><span>Geschätzter Betrag</span><span>' + fmtEuro(a.abweichung_betrag) + '</span></div>' : '') +
-        (a.abweichung_entscheidung ? '<div class="iz-hinweis blau"><b>Entscheidung</b> (' + esc(a.abweichung_entschieden_von_name || '–') + ', ' + fmtDatumZeit(a.abweichung_entschieden_am) + ')<div style="white-space:pre-wrap">' + esc(a.abweichung_entscheidung) + '</div></div>' : '');
-      var cl = a.uebernahme_checkliste || {};
-      var uf = [];
-      if (cl.km_foto) uf.push(cl.km_foto);
-      (cl.neue_schaeden || []).forEach(function (s) { if (s.foto) uf.push(s.foto); });
-      if (uf.length) html += '<div class="iz-fotos">' + uf.map(function (p) { return thumbHtml(p, false); }).join('') + '</div>';
-      if (u === 'abweichung_offen') {
-        if (admin) {
-          html += '<div class="iz-hinweis rot" style="margin-top:12px">Betrag über ' + GRENZE_EURO + ' €: Oli entscheidet über die Preisanpassung.</div>' +
-            '<div class="iz-fg full" style="margin-top:10px"><label for="iz-ent">Entscheidung (z. B. Preisanpassung um … €)</label><textarea id="iz-ent" rows="3"></textarea></div>' +
-            '<div class="iz-modal-akt"><button type="button" class="iz-btn iz-btn-g" data-entscheiden>✔ Entscheidung speichern</button></div>';
-        } else {
-          html += '<div class="iz-hinweis rot" style="margin-top:12px">Das Fahrzeug wird nicht ohne Klärung übernommen. Oli entscheidet über die Preisanpassung (Betrag über ' + GRENZE_EURO + ' €).</div>';
-        }
-      }
-    }
-    if (fotos.length) html += '<div class="iz-sub"><div class="iz-sub-l">Fotos (' + fotos.length + ')</div><div class="iz-fotos">' + fotos.map(function (p) { return thumbHtml(p, false); }).join('') + '</div></div>';
-
-    html += '<div class="iz-modal-akt">' +
-      '<button type="button" class="iz-btn iz-btn-o" data-x>Schließen</button>' +
-      '<button type="button" class="iz-btn iz-btn-p" data-edit>✏️ Bearbeiten</button>' +
-      '<button type="button" class="iz-btn iz-btn-o" data-druck="zustand">📋 Zustandsbericht</button>' +
-      '<button type="button" class="iz-btn iz-btn-o" data-druck="kauf">🖨️ Kaufvertrag drucken</button>' +
-      '<button type="button" class="iz-btn iz-btn-o" data-druck="uebergabe">🖨️ Übergabeprotokoll</button>' +
-      (uebernehmbar ? '<button type="button" class="iz-btn iz-btn-g" data-uebernehmen>🚗 ' + (u === 'abweichung_offen' ? 'Übernahme neu erfassen' : 'Fahrzeug übernehmen') + '</button>' : '') +
-      '</div>';
-
-    var ov = neuesModal(html);
-    bilderLaden(ov);
-    ov.addEventListener('click', async function (e) {
-      var t = e.target.closest('button'); if (!t) return;
-      if (t.hasAttribute('data-x')) schliesseModal(ov);
-      else if (t.hasAttribute('data-edit')) { schliesseModal(ov); bearbeiten(id); }
-      else if (t.hasAttribute('data-druck')) druck(id, t.getAttribute('data-druck'));
-      else if (t.hasAttribute('data-uebernehmen')) { schliesseModal(ov); oeffneUebernahme(id); }
-      else if (t.hasAttribute('data-entscheiden')) {
-        var txt = ov.querySelector('#iz-ent').value.trim();
-        if (!txt) { toast('Bitte die Entscheidung als Text eintragen.', 'error'); return; }
-        t.disabled = true;
-        try {
-          await Daten.aendern(id, {
-            uebernahme_status: 'abweichung_geklaert', abweichung_entscheidung: txt,
-            abweichung_entschieden_von_name: nutzerName(), abweichung_entschieden_am: new Date().toISOString()
-          });
-          toast('Entscheidung gespeichert ✓', 'success'); schliesseModal(ov); await ladeListe();
-        } catch (er) { toast('Fehler: ' + fehlerText(er), 'error'); t.disabled = false; }
-      }
-    });
   }
 
   /* ===================================================================
@@ -1455,7 +1953,7 @@
           status === 'abweichung_geklaert' ? 'Fahrzeug übernommen ✓ – Abweichung bis ' + GRENZE_EURO + ' € geklärt.' :
             'Gespeichert – Abweichung über ' + GRENZE_EURO + ' €: Oli entscheidet über die Preisanpassung.', status === 'abweichung_offen' ? 'info' : 'success');
         schliesseModal(ov); await ladeListe();
-        zeigeDetail(id);
+        await bearbeiten(id);   // Ansicht mit dem neuen Übernahme-Stand neu aufbauen
       } catch (er) { toast('Fehler: ' + fehlerText(er), 'error'); btn.disabled = false; }
     }
     aktualisieren();
@@ -1464,27 +1962,54 @@
   /* ===================================================================
      11. Druckansichten (Wortlaut 1:1 aus der alten App)
      =================================================================== */
-  var LOGO_SVG = '<svg viewBox="0 0 1100 240" width="280" height="61" xmlns="http://www.w3.org/2000/svg" aria-label="Autohaus Stieber GmbH MehrmarkenCenter">' +
-    '<text x="550" y="78" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="76" fill="#1d54a8" letter-spacing="0">AUTOHAUS STIEBER GMBH</text>' +
-    '<line x1="80" y1="108" x2="1020" y2="108" stroke="#9aa4b3" stroke-width="1.4"/>' +
-    '<text x="550" y="200" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="500" font-size="80" fill="#5a6474" letter-spacing="6">MehrmarkenCenter</text></svg>';
+  /* Logo: echtes Bild wie in der Zahlungsaufstellung (der frühere Text-SVG wurde im Druck abgeschnitten).
+     Beim Drucken wird das Bild als data-URL eingebettet (Rückfall: die URL selbst). */
+  var LOGO_URL = (window.VK_ZE && window.VK_ZE.LOGO_URL) || 'https://www.autohaus-stieber.de/idbilder/logo.jpg';
+  function logoHtml() {
+    return '<img class="logo" src="' + LOGO_URL + '" alt="Autohaus Stieber GmbH – MehrmarkenCenter" width="260" style="display:block;width:260px;max-width:100%;height:auto">';
+  }
+  var logoCache = null;
+  async function logoDataUrl() {
+    if (logoCache) return logoCache;
+    try {
+      var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var t = ctl ? setTimeout(function () { ctl.abort(); }, 4000) : null;
+      var r = await fetch(LOGO_URL, ctl ? { signal: ctl.signal } : undefined);
+      if (t) clearTimeout(t);
+      if (!r.ok) return LOGO_URL;
+      var b = await r.blob();
+      logoCache = await new Promise(function (ok) { var fr = new FileReader(); fr.onload = function () { ok(String(fr.result)); }; fr.onerror = function () { ok(LOGO_URL); }; fr.readAsDataURL(b); });
+      return logoCache;
+    } catch (err) { return LOGO_URL; }
+  }
   var ADR_ZEILE = 'Autohaus Stieber GmbH · Emerholzweg 5 · 70439 Stuttgart-Stammheim<br>Tel. 0711 80 60 94 - 0 · service@autohaus-stieber.de';
   var FUSS_ZEILE = 'Autohaus Stieber GmbH · Emerholzweg 5 · 70439 Stuttgart-Stammheim · Tel. 0711 80 60 94 - 0 · service@autohaus-stieber.de';
 
   function heute() { return new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
   function euroPlain(n) { return fmtEuro(n); }
 
-  function druckFenster(html, breite, hoehe) {
-    var mitDruck = html.replace('<!--DRUCK-->', '<script>window.onload=function(){window.print()}<\/script>');
+  // wartet, bis alle Bilder des Dokuments geladen/dekodiert sind (Logo, Fotos) – höchstens 8 s
+  var BILDER_WARTEN = 'Promise.race([Promise.all(Array.prototype.slice.call(document.images).map(function(i){return i.decode?i.decode().catch(function(){}):(i.complete?Promise.resolve():new Promise(function(r){i.onload=i.onerror=r}))})),new Promise(function(r){setTimeout(r,8000)})])';
+  async function druckFenster(html, breite, hoehe) {
+    // Fenster sofort öffnen (Klick-Geste), Inhalt danach schreiben
     var w = null;
     try { w = window.open('', '_blank', 'width=' + breite + ',height=' + hoehe); } catch (e) { w = null; }
-    if (w) { w.document.write(mitDruck); w.document.close(); return; }
+    var logo = await logoDataUrl();
+    html = html.split('src="' + LOGO_URL + '"').join('src="' + logo + '"');
+    if (w) {
+      var mitDruck = html.replace('<!--DRUCK-->', '<script>window.onload=function(){' + BILDER_WARTEN + '.then(function(){setTimeout(function(){window.print()},150)})}<\/script>');
+      w.document.write(mitDruck); w.document.close(); return;
+    }
     // Rückfall: unsichtbarer Rahmen (wenn Pop-ups blockiert sind)
     var fr = document.createElement('iframe');
     fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
     document.body.appendChild(fr);
     fr.contentDocument.open(); fr.contentDocument.write(html.replace('<!--DRUCK-->', '')); fr.contentDocument.close();
-    setTimeout(function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { toast('Drucken nicht möglich – bitte Pop-ups erlauben.', 'error'); } }, 700);
+    var imgs = Array.prototype.slice.call(fr.contentDocument.images).map(function (i) {
+      return i.decode ? i.decode().catch(function () { }) : (i.complete ? Promise.resolve() : new Promise(function (r) { i.onload = i.onerror = r; }));
+    });
+    await Promise.race([Promise.all(imgs), new Promise(function (r) { setTimeout(r, 8000); })]);
+    setTimeout(function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { toast('Drucken nicht möglich – bitte Pop-ups erlauben.', 'error'); } }, 300);
     setTimeout(function () { if (fr.parentNode) fr.parentNode.removeChild(fr); }, 120000);
   }
 
@@ -1530,7 +2055,7 @@
       '.preis-label{font-size:10pt;opacity:0.75}.preis-value{font-size:22pt;font-weight:700;color:#c8982a;font-family:Georgia,serif}' +
       '.footer{margin-top:20pt;border-top:1px solid #ddd;padding-top:6pt;font-size:7.5pt;color:#aaa;text-align:center;line-height:1.7}' +
       '@media print{body{padding:10mm 14mm}@page{margin:10mm}}</style></head><body>' +
-      '<div class="hd"><div>' + LOGO_SVG + '<div class="adr" style="margin-top:8pt;">' + ADR_ZEILE + '</div></div>' +
+      '<div class="hd"><div>' + logoHtml() + '<div class="adr" style="margin-top:8pt;">' + ADR_ZEILE + '</div></div>' +
       '<div class="doc-info"><strong style="color:#003366;font-size:11pt;">ZUSTANDSBERICHT</strong><br>' +
       (a.interne_nr ? 'Interne Nr.: <strong>' + esc(a.interne_nr) + '</strong><br>' : '') + 'Datum: ' + heute() + (a.bearbeiter_name ? '<br>Bearbeiter: ' + esc(a.bearbeiter_name) : '') + '</div></div>' +
       '<h1>Fahrzeug-Zustandsbericht</h1><div class="subtitle">Interne Ankaufsbewertung – Autohaus Stieber GmbH</div>' +
@@ -1559,7 +2084,7 @@
   /* Seite „Fahrzeugübergabe-Protokoll“ – in Kaufvertrag (Seite 2) und einzeln gleich */
   function uebergabeSeite(a, fuss) {
     var fz = fzBez(a), vkName = ((a.vk_vorname || '') + ' ' + (a.vk_nachname || '')).trim();
-    return '<div class="hd"><div>' + LOGO_SVG + '</div><div class="doc-info"><div class="kv-nr">FAHRZEUGÜBERGABE</div><div>Datum: ' + heute() + '</div></div></div>' +
+    return '<div class="ue"><div class="hd"><div>' + logoHtml() + '</div><div class="doc-info"><div class="kv-nr">FAHRZEUGÜBERGABE</div><div>Datum: ' + heute() + '</div></div></div>' +
       '<h1 style="margin-bottom:6pt;">Fahrzeugübergabe-Protokoll</h1><div class="subtitle">' + esc(fz) + ' · ' + esc(a.fz_kennzeichen || '') + '</div>' +
       '<div class="sec"><div class="sec-title">Übergabe durch Verkäufer an Käufer</div><table class="daten">' +
       '<tr><td>Übergabedatum:</td><td>___________________________</td></tr><tr><td>Übergabezeit:</td><td>_______________ Uhr</td></tr>' +
@@ -1574,50 +2099,54 @@
       '<tr><td>Kaufpreis:</td><td><strong>' + (a.ankaufspreis ? euroPlain(a.ankaufspreis) : '– €') + '</strong></td></tr>' +
       '<tr><td>Zahlungsart:</td><td>Überweisung auf ein Konto des Verkäufers bzw. Verrechnung mit dem Kaufpreis des Neufahrzeugs – keine Barauszahlung</td></tr><tr><td>Betrag erhalten am:</td><td>___________________________</td></tr></table>' +
       '<div class="box-info" style="margin-top:10pt;">Der Verkäufer bestätigt den vollständigen Erhalt des Kaufpreises. Mit Unterzeichnung dieses Übergabeprotokolls gilt das Fahrzeug als ordnungsgemäß übergeben und die Kaufabwicklung als abgeschlossen.</div></div>' +
-      '<div class="unt" style="margin-top:32pt;"><div class="unt-block"><div class="unt-linie"></div><strong>' + (esc(vkName) || 'Verkäufer') + '</strong><br>Ort, Datum &amp; Unterschrift Verkäufer</div>' +
+      '<div class="unt" style="margin-top:18pt;"><div class="unt-block"><div class="unt-linie"></div><strong>' + (esc(vkName) || 'Verkäufer') + '</strong><br>Ort, Datum &amp; Unterschrift Verkäufer</div>' +
       '<div class="unt-block"><div class="unt-linie"></div><strong>Autohaus Stieber GmbH</strong><br>Ort, Datum &amp; Unterschrift Käufer</div></div>' +
-      '<div class="footer">' + FUSS_ZEILE + '<br>' + fuss + '</div>';
+      '<div class="footer">' + FUSS_ZEILE + '<br>' + fuss + '</div></div>';
   }
-  var KV_CSS = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;background:white;padding:20mm 20mm;line-height:1.5}' +
-    '.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #003366;padding-bottom:10pt;margin-bottom:14pt}' +
-    '.adr{font-size:8.5pt;color:#444;margin-top:5pt;line-height:1.6}.doc-info{text-align:right;font-size:9pt;color:#555;line-height:1.8}.kv-nr{font-size:11pt;font-weight:700;color:#003366}' +
-    'h1{font-size:16pt;font-weight:700;color:#003366;font-family:Georgia,serif;text-align:center;margin:14pt 0 4pt}' +
-    '.subtitle{text-align:center;font-size:9pt;color:#888;margin-bottom:16pt;text-transform:uppercase;letter-spacing:1px}.sec{margin-bottom:13pt;page-break-inside:avoid}' +
-    '.sec-title{font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#003366;border-bottom:1.5px solid #c8982a;padding-bottom:3pt;margin-bottom:8pt}' +
-    '.zwei{display:grid;grid-template-columns:1fr 1fr;gap:18pt}table.daten{width:100%;border-collapse:collapse;font-size:9.5pt}' +
-    'table.daten td{padding:4pt 6pt;border-bottom:1px solid #eee;vertical-align:top}table.daten td:first-child{color:#555;font-weight:600;width:44%;white-space:nowrap}' +
-    '.preis-box{background:#f0f5ff;border:2px solid #003366;border-radius:6pt;padding:10pt 14pt;margin:10pt 0}.preis-label{font-size:8.5pt;color:#555;margin-bottom:2pt}' +
-    '.preis-wert{font-size:22pt;font-weight:700;color:#003366;font-family:Georgia,serif}.preis-text{font-size:8.5pt;color:#888;margin-top:3pt}' +
-    'ul.checks{list-style:none;padding:0}ul.checks li{padding:2.5pt 0;font-size:9.5pt}ul.checks li::before{content:\'✓  \';color:#1e6e42;font-weight:700}' +
-    '.box-warn{background:#fffbf0;border-left:3px solid #c8982a;padding:8pt 12pt;font-size:9pt;color:#333;line-height:1.6;margin-top:8pt}' +
-    '.box-info{background:#f0f5ff;border-left:3px solid #003366;padding:8pt 12pt;font-size:9pt;color:#333;line-height:1.6;margin-top:8pt}' +
-    '.unt{margin-top:22pt;display:grid;grid-template-columns:1fr 1fr;gap:36pt;page-break-inside:avoid}.unt-block{border-top:1.5px solid #333;padding-top:5pt;font-size:8.5pt;color:#555;line-height:1.6}' +
-    '.unt-linie{height:32pt;border-bottom:1px dashed #bbb;margin-bottom:5pt}.footer{margin-top:22pt;border-top:1px solid #ddd;padding-top:7pt;font-size:7.5pt;color:#aaa;text-align:center;line-height:1.7}' +
-    '.page-break{page-break-before:always;padding-top:16pt}@media print{body{padding:12mm 14mm}@page{margin:12mm}}' +
-    'table.mn2 th{background:#003366;color:white;padding:6pt;font-size:8.5pt;text-align:left}table.mn2 th:last-child{text-align:right}' +
-    'table.mn2 td{padding:4pt 6pt;border-bottom:1px solid #eee;font-size:9pt;vertical-align:top}table.mn2 td:last-child{text-align:right;white-space:nowrap}';
+  /* Kaufvertrag + Übergabeprotokoll: alles schwarz auf weiß (Oli, 25.11.2026) – nur das Logo bleibt farbig.
+     Umbrüche: Paragraphen dürfen umbrechen; zusammen bleiben nur Überschrift + erster Inhalt, Tabellenzeilen, Unterschriftsblöcke. */
+  var KV_CSS = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#000;background:#fff;padding:20mm 20mm;line-height:1.5}' +
+    '.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #000;padding-bottom:10pt;margin-bottom:14pt;page-break-inside:avoid}' +
+    '.adr{font-size:8.5pt;color:#000;margin-top:5pt;line-height:1.6}.doc-info{text-align:right;font-size:9pt;color:#000;line-height:1.8}.kv-nr{font-size:11pt;font-weight:700;color:#000}' +
+    'h1,h2{page-break-after:avoid}h1{font-size:16pt;font-weight:700;color:#000;font-family:Georgia,serif;text-align:center;margin:14pt 0 4pt}' +
+    '.subtitle{text-align:center;font-size:9pt;color:#000;margin-bottom:16pt;text-transform:uppercase;letter-spacing:1px;page-break-after:avoid}.sec{margin-bottom:13pt}' +
+    '.sec-title{font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#000;border-bottom:1.5pt solid #000;padding-bottom:3pt;margin-bottom:8pt;page-break-after:avoid}' +
+    '.zwei{display:grid;grid-template-columns:1fr 1fr;gap:18pt}table.daten{width:100%;border-collapse:collapse;font-size:9.5pt}tr{page-break-inside:avoid}' +
+    'table.daten td{padding:4pt 6pt;border-bottom:0.5pt solid #000;vertical-align:top;color:#000}table.daten td:first-child{color:#000;font-weight:600;width:44%;white-space:nowrap}' +
+    '.preis-box{background:#fff;border:2px solid #000;border-radius:6pt;padding:10pt 14pt;margin:10pt 0;page-break-inside:avoid}.preis-label{font-size:8.5pt;color:#000;margin-bottom:2pt}' +
+    '.preis-wert{font-size:22pt;font-weight:700;color:#000;font-family:Georgia,serif}.preis-text{font-size:8.5pt;color:#000;margin-top:3pt}' +
+    'ul.checks{list-style:none;padding:0}ul.checks li{padding:2.5pt 0;font-size:9.5pt}ul.checks li::before{content:\'✓  \';color:#000;font-weight:700}' +
+    '.box-warn{background:#fff;border:1pt solid #000;border-left:3px solid #000;padding:8pt 12pt;font-size:9pt;color:#000;line-height:1.6;margin-top:8pt}' +
+    '.box-info{background:#fff;border:1pt solid #000;border-left:3px solid #000;padding:8pt 12pt;font-size:9pt;color:#000;line-height:1.6;margin-top:8pt;page-break-inside:avoid}' +
+    '.box-text{background:#fff;border:1pt solid #000;border-radius:4pt;padding:9pt 12pt;font-size:9.5pt;color:#000;line-height:1.55;white-space:pre-wrap}' +
+    '.zusammen{page-break-inside:avoid}' +
+    '.unt{margin-top:22pt;display:grid;grid-template-columns:1fr 1fr;gap:36pt;page-break-inside:avoid}.unt-block{border-top:1.5pt solid #000;padding-top:5pt;font-size:8.5pt;color:#000;line-height:1.6}' +
+    '.unt-linie{height:32pt;border-bottom:0.5pt solid #000;margin-bottom:5pt}.footer{margin-top:22pt;border-top:0.5pt solid #000;padding-top:7pt;font-size:7.5pt;color:#000;text-align:center;line-height:1.7;page-break-inside:avoid}' +
+    '.ue .sec{margin-bottom:9pt}.ue h1{margin:6pt 0 2pt}.ue .subtitle{margin-bottom:8pt}.ue .unt{margin-top:16pt}.ue .unt-linie{height:26pt}.ue .footer{margin-top:12pt}' +
+    '.page-break{page-break-before:always;padding-top:0}@media print{body{padding:0 4mm}@page{size:A4;margin:12mm 12mm 16mm;@bottom-center{content:"Seite " counter(page) " von " counter(pages);font:8pt Arial,sans-serif;color:#000}}}' +
+    'table.mn2{width:100%;border-collapse:collapse}table.mn2 th{background:#fff;color:#000;border-top:1.5pt solid #000;border-bottom:1.5pt solid #000;padding:6pt;font-size:8.5pt;text-align:left}table.mn2 th:last-child{text-align:right}' +
+    'table.mn2 td{padding:4pt 6pt;border-bottom:0.5pt solid #000;font-size:9pt;vertical-align:top;color:#000}table.mn2 td:last-child{text-align:right;white-space:nowrap}';
 
   function htmlKaufvertrag(a) {
     var fz = fzBez(a), vkName = ((a.vk_vorname || '') + ' ' + (a.vk_nachname || '')).trim();
     var vkAdresse = [a.vk_strasse, a.vk_plz && a.vk_ort ? a.vk_plz + ' ' + a.vk_ort : ''].filter(Boolean).join(', ');
     var tot = summeKosten(a);
     var ausstL = ausstListe(a), reifenL = reifenListe(a);
-    var zusL = ZUSICH.filter(function (z) { return a[z[0]]; }).map(function (z) { return z[2]; });
     var bekannte = MN_ROWS.filter(function (r) { return a['mn_' + r.key] || pnum(a['mn_' + r.key + '_kosten']) > 0; }).map(function (r) {
-      return '<tr><td style="padding:4pt 6pt;border-bottom:1px solid #eee;font-size:9pt;">' + r.label + '</td><td style="padding:4pt 6pt;border-bottom:1px solid #eee;font-size:9pt;">' + (esc(a['mn_' + r.key]) || '–') +
-        '</td><td style="padding:4pt 6pt;border-bottom:1px solid #eee;font-size:9pt;text-align:right;">' + (a['mn_' + r.key + '_kosten'] > 0 ? euroPlain(a['mn_' + r.key + '_kosten']) : '–') + '</td></tr>';
+      return '<tr><td>' + r.label + '</td><td>' + (esc(a['mn_' + r.key]) || '–') +
+        '</td><td style="text-align:right;">' + (a['mn_' + r.key + '_kosten'] > 0 ? euroPlain(a['mn_' + r.key + '_kosten']) : '–') + '</td></tr>';
     }).join('');
     var z = function (lab, val) { return val ? '<tr><td>' + lab + '</td><td>' + val + '</td></tr>' : ''; };
     var kdAn = a.kd_km_faellig || a.kd_datum_faellig || a.kd_alle_durchgefuehrt;
     return '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Kaufvertrag – ' + esc(fz) + '</title><style>' + KV_CSS + '</style></head><body>' +
-      '<div class="hd"><div>' + LOGO_SVG + '<div class="adr" style="margin-top:8pt;">' + ADR_ZEILE + '</div></div>' +
+      '<div class="hd"><div>' + logoHtml() + '<div class="adr" style="margin-top:8pt;">' + ADR_ZEILE + '</div></div>' +
       '<div class="doc-info"><div class="kv-nr">KAUFVERTRAG</div>' + (a.interne_nr ? '<div>Interne Nr.: <strong>' + esc(a.interne_nr) + '</strong></div>' : '') +
       '<div>Datum: ' + heute() + '</div>' + (a.bearbeiter_name ? '<div>Bearbeiter: ' + esc(a.bearbeiter_name) + '</div>' : '') + '</div></div>' +
       '<h1>Kaufvertrag für ein gebrauchtes Kraftfahrzeug</h1><div class="subtitle">Privatkauf – Privat an Gewerbetreibenden</div>' +
-      '<div class="sec"><div class="sec-title">§ 1 · Vertragsparteien</div><div class="zwei"><div><strong style="font-size:8.5pt;text-transform:uppercase;color:#555;">Verkäufer (Privat)</strong>' +
+      '<div class="sec"><div class="sec-title">§ 1 · Vertragsparteien</div><div class="zwei"><div><strong style="font-size:8.5pt;text-transform:uppercase;">Verkäufer (Privat)</strong>' +
       '<table class="daten" style="margin-top:6pt"><tr><td>Name:</td><td>' + (esc(vkName) || '–') + '</td></tr><tr><td>Adresse:</td><td>' + (esc(vkAdresse) || '–') + '</td></tr>' +
       z('Telefon:', esc(a.vk_telefon)) + z('E-Mail:', esc(a.vk_email)) + '</table></div>' +
-      '<div><strong style="font-size:8.5pt;text-transform:uppercase;color:#555;">Käufer (Gewerbetreibender)</strong><table class="daten" style="margin-top:6pt">' +
+      '<div><strong style="font-size:8.5pt;text-transform:uppercase;">Käufer (Gewerbetreibender)</strong><table class="daten" style="margin-top:6pt">' +
       '<tr><td>Firma:</td><td>Autohaus Stieber GmbH</td></tr><tr><td>Adresse:</td><td>Emerholzweg 5, 70439 Stuttgart-Stammheim</td></tr><tr><td>Vertreten durch:</td><td>Oliver Stieber</td></tr></table></div></div></div>' +
       '<div class="sec"><div class="sec-title">§ 2 · Kaufgegenstand – Fahrzeug</div><table class="daten">' +
       (a.interne_nr ? '<tr><td>Interne Nr.:</td><td><strong>' + esc(a.interne_nr) + '</strong></td></tr>' : '') +
@@ -1629,28 +2158,37 @@
       z('Bereifung:', esc(reifenL.join(' · '))) + z('Ausstattung:', esc(ausstL.join(' · '))) + '</table></div>' +
       '<div class="sec"><div class="sec-title">§ 3 · Kaufpreis und Zahlung</div><div class="preis-box"><div class="preis-label">Vereinbarter Kaufpreis (brutto, inkl. gesetzl. MwSt.)</div>' +
       '<div class="preis-wert">' + (a.ankaufspreis ? euroPlain(a.ankaufspreis) : '– €') + '</div><div class="preis-text">Der Kaufpreis wird per Überweisung auf ein Konto des Verkäufers gezahlt oder mit dem Kaufpreis eines Neufahrzeugs verrechnet. Eine Barauszahlung ist nicht möglich.</div></div>' +
-      '<p style="font-size:9pt;color:#555;margin-top:6pt;">Der Kaufpreis ist fällig und zahlbar bei Übergabe des Fahrzeugs. Mit vollständiger Zahlung gehen Besitz, Nutzen und Gefahr auf den Käufer über.</p></div>' +
-      (zusL.length || kdAn ? '<div class="sec"><div class="sec-title">§ 4 · Zusicherungen des Verkäufers</div>' +
-        (zusL.length ? '<p style="font-size:9pt;margin-bottom:6pt;">Der Verkäufer versichert ausdrücklich:</p><ul class="checks">' + zusL.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>' : '') +
-        (kdAn ? '<table class="daten" style="margin-top:8pt">' + (a.kd_alle_durchgefuehrt ? '<tr><td>Kundendiensthistorie:</td><td>Alle Kundendienste lückenlos nachgewiesen</td></tr>' : '') +
-          (a.kd_km_faellig ? '<tr><td>Nächster KD fällig bei:</td><td>' + Number(a.kd_km_faellig).toLocaleString('de-DE') + ' km</td></tr>' : '') +
-          (a.kd_datum_faellig ? '<tr><td>Nächster KD fällig am:</td><td>' + fmtDatumDE(a.kd_datum_faellig) + '</td></tr>' : '') + '</table>' : '') + '</div>' : '') +
+      '<p style="font-size:9pt;margin-top:6pt;">Der Kaufpreis ist fällig und zahlbar bei Übergabe des Fahrzeugs. Mit vollständiger Zahlung gehen Besitz, Nutzen und Gefahr auf den Käufer über.</p></div>' +
+      /* § 4 wie alte App v5: immer gedruckt (gesonderte Unterschrift des Verkäufers); Wortlaut 1:1, ohne eigene Kilometer-Zeile */
+      '<div class="sec"><div class="sec-title">§ 4 · Zusicherungen des Verkäufers</div>' +
+      '<p style="font-size:9pt;margin-bottom:6pt;">Der Verkäufer erklärt ausdrücklich:</p><table class="daten">' +
+      ZUS_ROWS.map(function (r) {
+        var w = zusAnzeige(a, r);
+        return '<tr><td>' + esc(r.vertrag) + ':</td><td>' + (w === true ? '☒' : '☐') + ' Ja &nbsp;&nbsp; ' + (w === false ? '☒' : '☐') + ' Nein</td></tr>';
+      }).join('') + '</table>' +
+      (kdAn ? '<table class="daten" style="margin-top:8pt">' + (a.kd_alle_durchgefuehrt ? '<tr><td>Kundendiensthistorie:</td><td>Alle Kundendienste lückenlos nachgewiesen</td></tr>' : '') +
+        (a.kd_km_faellig ? '<tr><td>Nächster KD fällig bei:</td><td>' + Number(a.kd_km_faellig).toLocaleString('de-DE') + ' km</td></tr>' : '') +
+        (a.kd_datum_faellig ? '<tr><td>Nächster KD fällig am:</td><td>' + fmtDatumDE(a.kd_datum_faellig) + '</td></tr>' : '') + '</table>' : '') +
+      '<p style="font-size:9pt;margin:10pt 0 5pt;page-break-after:avoid;"><strong>Schäden laut Verkäufer (welche und wo):</strong></p>' +
+      '<div class="box-text" style="min-height:30pt;">' + (a.vk_schaeden ? esc(a.vk_schaeden) : '______________________________________________________________________________\n______________________________________________________________________________') + '</div>' +
+      '<div class="zusammen"><p style="font-size:8.5pt;margin-top:8pt;">Der Verkäufer bestätigt mit seiner Unterschrift, dass die Zusicherungen und die Angaben zu Schäden in diesem Paragraphen vollständig und wahrheitsgemäß sind.</p>' +
+      '<div class="unt" style="margin-top:10pt;grid-template-columns:1fr;max-width:50%;"><div class="unt-block" style="border-top:none;padding-top:0"><div class="unt-linie"></div><strong>' + (esc(vkName) || 'Verkäufer') + '</strong><br>Ort, Datum &amp; Unterschrift Verkäufer zu § 4</div></div></div></div>' +
       '<div class="sec"><div class="sec-title">§ 5 · Bekannte Mängel und Zustand</div>' +
       (a.vk_bekannte_maengel ? '<p style="font-size:9pt;margin-bottom:5pt;"><strong>Vom Verkäufer ausdrücklich angegeben (Pflichtangabe):</strong></p>' +
-        '<div style="background:#fffbf0;border:1.5px solid #c8982a;border-radius:4pt;padding:9pt 12pt;font-size:9.5pt;color:#222;line-height:1.55;white-space:pre-wrap;margin-bottom:10pt;">' + esc(a.vk_bekannte_maengel) + '</div>' : '') +
-      (bekannte ? '<p style="font-size:9pt;margin-bottom:7pt;">Folgende Mängel wurden vom Käufer dokumentiert und werden bei der Kaufpreisfindung berücksichtigt:</p>' +
-        '<table class="mn2" style="width:100%;border-collapse:collapse;"><thead><tr><th style="width:25%">Baugruppe</th><th>Beschreibung</th><th style="width:100pt;text-align:right;">Kosten (€)</th></tr></thead><tbody>' + bekannte + '</tbody>' +
-        (tot > 0 ? '<tfoot><tr><td colspan="2" style="padding:6pt;font-weight:700;background:#f0f5ff;border-top:1.5px solid #003366;">Gesamt Instandsetzungskosten</td><td style="padding:6pt;font-weight:700;text-align:right;background:#f0f5ff;border-top:1.5px solid #003366;">' + euroPlain(tot) + '</td></tr></tfoot>' : '') + '</table>' : '') + '</div>' +
+        '<div class="box-text" style="margin-bottom:10pt;">' + esc(a.vk_bekannte_maengel) + '</div>' : '') +
+      (bekannte ? '<p style="font-size:9pt;margin-bottom:7pt;page-break-after:avoid;">Folgende Mängel wurden vom Käufer dokumentiert und werden bei der Kaufpreisfindung berücksichtigt:</p>' +
+        '<table class="mn2"><thead><tr><th style="width:25%">Baugruppe</th><th>Beschreibung</th><th style="width:100pt;text-align:right;">Kosten (€)</th></tr></thead><tbody>' + bekannte + '</tbody>' +
+        (tot > 0 ? '<tfoot><tr><td colspan="2" style="padding:6pt;font-weight:700;border-top:1.5pt solid #000;">Gesamt Instandsetzungskosten</td><td style="padding:6pt;font-weight:700;text-align:right;border-top:1.5pt solid #000;">' + euroPlain(tot) + '</td></tr></tfoot>' : '') + '</table>' : '') + '</div>' +
       '<div class="sec"><div class="sec-title">§ 6 · Gewährleistung und Haftungsausschluss</div><div class="box-warn">' +
       'Das Fahrzeug wird als gebrauchtes Kraftfahrzeug <strong>unter Ausschluss jeglicher Gewährleistung</strong> verkauft, soweit nicht durch zwingende gesetzliche Vorschriften eine Haftung vorgesehen ist. Arglistig verschwiegene Mängel und zugesicherte Eigenschaften sind von diesem Ausschluss ausgenommen.<br><br>' +
       'Der Käufer hat das Fahrzeug besichtigt und den technischen Zustand geprüft. Das Fahrzeug wird im gegenwärtigen Zustand verkauft und übernommen.<br><br>' +
       '<strong>Klausel zu unbekannten Mängeln:</strong> Werden bei der Fahrzeugübergabe weitere Mängel festgestellt, die zum Zeitpunkt der Vertragsunterzeichnung nicht bekannt waren und im vorliegenden Vertrag nicht dokumentiert sind, werden die anfallenden Instandsetzungskosten vom vereinbarten Kaufpreis in Abzug gebracht. Der Verkäufer erkennt dieses Verfahren mit seiner Unterschrift ausdrücklich an.</div></div>' +
-      '<div class="sec"><div class="sec-title">§ 7 · Sondervereinbarungen</div><div style="min-height:36pt;border:1px dashed #ccc;border-radius:4pt;padding:8pt;font-size:9pt;color:#aaa;">' +
+      '<div class="sec"><div class="sec-title">§ 7 · Sondervereinbarungen</div><div style="min-height:36pt;border:0.5pt solid #000;border-radius:4pt;padding:8pt;font-size:9pt;color:#000;">' +
       '______________________________________________________________________________________<br>______________________________________________________________________________________</div></div>' +
       '<div class="unt"><div class="unt-block"><div class="unt-linie"></div><strong>' + (esc(vkName) || 'Verkäufer') + '</strong><br>Ort, Datum &amp; Unterschrift Verkäufer<br><span style="font-size:7.5pt;">– Privat –</span></div>' +
       '<div class="unt-block"><div class="unt-linie"></div><strong>Autohaus Stieber GmbH</strong><br>Ort, Datum &amp; Unterschrift Käufer<br><span style="font-size:7.5pt;">– Gewerbetreibender –</span></div></div>' +
-      '<div class="footer">' + FUSS_ZEILE + '<br>Kaufvertrag Seite 1 von 2 · Erstellt am ' + heute() + '</div>' +
-      '<div class="page-break">' + uebergabeSeite(a, 'Kaufvertrag Seite 2 von 2 – Fahrzeugübergabe-Protokoll') + '</div><!--DRUCK--></body></html>';
+      '<div class="footer">' + FUSS_ZEILE + '<br>Kaufvertrag · Erstellt am ' + heute() + '</div>' +
+      '<div class="page-break">' + uebergabeSeite(a, 'Kaufvertrag – Fahrzeugübergabe-Protokoll') + '</div><!--DRUCK--></body></html>';
   }
   function htmlUebergabe(a) {
     return '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Fahrzeugübergabe-Protokoll – ' + esc(fzBez(a)) + '</title><style>' + KV_CSS + '</style></head><body>' +
@@ -1684,6 +2222,7 @@
     }
     if (S.root.parentNode !== container) { container.innerHTML = ''; container.appendChild(S.root); }
     if (S.view === 'liste') ladeListe();
+    setzeAkteKlasse(); kopfHoehe();
   }
 
   var angemeldet = false;
@@ -1692,9 +2231,42 @@
     var eg = window.EG;
     if (!eg || typeof eg.onTab !== 'function') return false;
     eg.onTab(TAB, render);
-    angemeldet = true;
+    /* Reiterwechsel: bei ungespeicherten Änderungen erst fragen (App-Dialog), Rest wie bisher.
+       Der Reiter wird über EG.zeigeTab umgeschaltet – wir hüllen die Funktion ein. */
+    if (typeof eg.zeigeTab === 'function' && !eg.zeigeTab.izGeschuetzt) {
+      var orig = eg.zeigeTab;
+      var geschuetzt = function (name) {
+        var sec = S.root && S.root.closest ? S.root.closest('section') : null;
+        var hier = !!sec && !sec.hidden;
+        if (hier && name !== TAB && formHatAenderungen()) {
+          var args = arguments;
+          bestaetigen('Du hast ungespeicherte Änderungen im Ankauf. Reiter wirklich wechseln? Die Änderungen gehen verloren.', { ja: 'Verwerfen und wechseln', nein: 'Hier bleiben', gefahr: true }).then(async function (ok) {
+            if (!ok) return;
+            await aufraeumenUploads(); markClean(); zeigeListe();
+            orig.apply(eg, args); setzeAkteKlasse();
+          });
+          return;
+        }
+        var r = orig.apply(eg, arguments);
+        setzeAkteKlasse();
+        return r;
+      };
+      geschuetzt.izGeschuetzt = true;
+      eg.zeigeTab = geschuetzt;
+    }
     return true;
   }
+  // Neu laden / Fenster schließen mit ungespeicherten Änderungen: Standard-Hinweis des Browsers
+  window.addEventListener('beforeunload', function (e) {
+    if (formHatAenderungen()) { e.preventDefault(); e.returnValue = ''; return ''; }
+  });
+  // Drucken-Menüs schließen, wenn woanders geklickt wird
+  document.addEventListener('click', function (e) {
+    if (!S.root) return;
+    if (e.target && e.target.closest && e.target.closest('[data-menue]')) return;
+    S.root.querySelectorAll('.ak-menue.offen').forEach(function (m) { m.classList.remove('offen'); });
+    S.root.querySelectorAll('[data-menue]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  });
   if (!anmelden()) {
     // eingang-core.js noch nicht geladen → kurz warten
     var versuche = 0;
@@ -1706,6 +2278,6 @@
   window.EG_INZAHLUNG = {
     render: render, berechneAbweichungen: berechneAbweichungen, htmlKaufvertrag: htmlKaufvertrag,
     htmlZustandsbericht: htmlZustandsbericht, htmlUebergabe: htmlUebergabe, anzeigeStatus: anzeigeStatus, parseMonat: parseMonat,
-    GRENZE_EURO: GRENZE_EURO, KM_TOLERANZ: KM_TOLERANZ, _S: S
+    GRENZE_EURO: GRENZE_EURO, KM_TOLERANZ: KM_TOLERANZ, _S: S, bearbeiten: bearbeiten, neuerAnkauf: neuerAnkauf, pflichtLuecken: pflichtLuecken
   };
 })();

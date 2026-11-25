@@ -1,4 +1,5 @@
-/* Stieber-App – Reiter „Zahlungen“ (Bereich A1: Zahlungen Kunde und Lieferant), Version 4.1, Stand 25.11.2026 (P4b: Felder bearbeiten, P4c: Zahlungsaufstellung drucken)
+/* Stieber-App – Reiter „Zahlungen“ (Bereich A1: Zahlungen Kunde und Lieferant), Version 4.2, Stand 25.11.2026 (P4b: Felder bearbeiten, P4c: Zahlungsaufstellung drucken;
+   v4.2 Oli „A umsetzen“: Punkt 65 „Zahlungsaufstellung für die Buchhaltung“ gilt auch als erledigt, wenn ein PDF der Art zahlungsaufstellung in den Unterlagen der Akte liegt – VK_DU.dokumenteFuerAkten → pm.dok, Anzeige mit Sprung zu #du-box)
    Paket VA4 des Bauplans Verkaufsablauf. Plan: „Anpassungen Verkaufsablauf“ v2 (A1, Zeilen 55–70), Bauplan v1 (E1, E6).
    Sichtbar und bedienbar nur für admin, dispo, buchhaltung (zusätzlich zur Rollenliste in eingang.html und zur Sperre in der Datenbank).
 
@@ -119,6 +120,14 @@
     (rows || []).forEach(function (r) { if (istAcZeile(r)) return; (m[r.phase] = m[r.phase] || {})[r.punkt_key] = r; });
     return m;
   }
+  /** PDFs in den Unterlagen (verkauf.dokument) für viele Akten → { akte_id: { art: Zeile } }; ohne Modul/Leserecht {} (Quelle zählt nicht). */
+  async function dokumenteLaden(akten) {
+    if (!window.VK_DU || typeof window.VK_DU.dokumenteFuerAkten !== 'function') return {};
+    try { return await window.VK_DU.dokumenteFuerAkten((akten || []).map(function (a) { return a.id; })); } catch (e) { console.warn('Unterlagen als Quelle:', e && e.message); return {}; }
+  }
+  function dokInPm(pm, dokMap) {
+    if (window.VK_DU && typeof window.VK_DU.dokumenteInPm === 'function') window.VK_DU.dokumenteInPm(pm, dokMap || {}); else pm.dok = {};
+  }
   function zeilenAus(pm) {
     var z = [];
     Object.keys(pm).forEach(function (ph) {
@@ -226,9 +235,11 @@
       });
     });
     await ladeBestandListe(S.akten);
+    var dokAlle = await dokumenteLaden(S.akten);
     S.zahlstandAlle = window.VK_ZAHLSTAND ? await window.VK_ZAHLSTAND.lade(S.akten.map(function (a) { return a.id; })) : {};
     S.akten.forEach(function (a) {
       var pm = S.pmAlle[a.id] = S.pmAlle[a.id] || {};
+      dokInPm(pm, dokAlle[a.id]);
       S.listCalc[a.id] = berechne(pm, S.zahlungAlle[a.fahrzeug_id] || null, S.einkaufAlle[a.fahrzeug_id] || null, S.zahlstandAlle[a.id]);
     });
     zeichneListe();
@@ -317,6 +328,7 @@
     if (x[0].error || !x[0].data) { EG.toast('Akte nicht gefunden.', 'fehler'); S.id = null; return ladeListe(); }
     chk(x[1]);
     S.akte = x[0].data; S.pm = zuMap(x[1].data);
+    dokInPm(S.pm, (await dokumenteLaden([S.akte]))[S.akte.id]);
     S.zahlung = null; S.einkauf = null; S.bestandHinweis = '';
     if (S.akte.fahrzeug_id) {
       try {
@@ -613,7 +625,15 @@
       var zeile = (st === 'ok' ? 'Erledigt' : st === 'nok' ? 'NOK' : st === 'entfaellt' ? 'Entfällt' : 'Offen') +
         (dv && p.datenquelle ? ' · Wert in der Masterliste: ' + dv : '') + (dd ? ' (' + dd + ')' : '');
       karte.appendChild(h('div', { class: 'vk-auto', text: zeile }));
-      karte.appendChild(h('div', { class: 'klein muted', style: 'margin-top:4px', text: 'Kommt aus der Masterliste (Schritt 1a) – hier nur lesbar.' }));
+      var dqs = (p.quelle || []).filter(function (q) { return q.dokument; });
+      karte.appendChild(h('div', { class: 'klein muted', style: 'margin-top:4px', text: dqs.length ? 'Kommt aus der Masterliste (Schritt 1a) oder aus den Unterlagen (PDF) – hier nur lesbar.' : 'Kommt aus der Masterliste (Schritt 1a) – hier nur lesbar.' }));
+      if (dqs.length) {
+        var dd2 = S.pm.dok && S.pm.dok[dqs[0].dokument];
+        var dz = h('div', { class: 'vk-auto vk-dok' + (dd2 ? ' vk-dok-da' : ' vk-dok-fehlt'), 'data-dok-art': dqs[0].dokument,
+          text: dd2 ? 'Erledigt – PDF in den Unterlagen' + (dd2.wert && dd2.wert.text ? ' (' + dd2.wert.text + ')' : '') : 'Noch kein PDF in den Unterlagen – der Punkt gilt als erledigt, sobald es dort liegt.' });
+        dz.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-klein', style: 'margin-left:8px', text: 'Zu den Unterlagen', onclick: function () { if (window.VK_DU && S.akte) window.VK_DU.springe(S.akte.id); } }));
+        karte.appendChild(dz);
+      }
       karte.appendChild(h('div', { style: 'margin-top:6px' }, EG.pill(st === 'ok' ? 'Erledigt' : st === 'nok' ? 'NOK' : st === 'entfaellt' ? 'Entfällt' : 'Offen', st === 'ok' ? 'gruen' : st === 'nok' ? 'rot' : 'grau')));
       return karte;
     }

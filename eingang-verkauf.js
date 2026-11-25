@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Verkauf“ (Verkaufsakten mit 11 Phasen, Version 4.8; 25.11.2026: Bereich „Unterlagen“ + Lieferanten-AB über verkauf-unterlagen.js, Link #verkauf&nr=<interne_nr>)
+/* Stieber-App – Reiter „Verkauf“ (Verkaufsakten mit 11 Phasen, Version 4.9; 25.11.2026 (Oli „A umsetzen“): PDFs in den Unterlagen zählen als Quelle für Punkt 45/65 (VK_DU.dokumenteFuerAkten → pm.dok, an Liste, Übersicht und Akte), Hinweise mit Sprung zu #du-box an Punkt 99/102; 25.11.2026: Bereich „Unterlagen“ + Lieferanten-AB über verkauf-unterlagen.js, Link #verkauf&nr=<interne_nr>)
    Stand 15.11.2026 (Verkaufsablauf, Paket VA3; Nachträge Welle 4: eVB-Nr. aus der Akte, „Gesehen“ für OS an Freigabe in Vertretung und schlechter Umfrage). Plan: „Anpassungen Verkaufsablauf“ v2 (Abschnitte 2, 3, 6), Bauplan Verkaufsablauf v1 (E1, E2, E6).
    Daten: Schema verkauf (akte, punkt, freigabe). Phasen und Haken: verkauf-phasen.js (window.VK_PHASEN, 11 Phasen p01–p11 plus Bereiche a1_*, a2_*),
    Ampel und „Was fehlt noch, bei wem“: verkauf-ampel.js (window.VK_AMPEL, Berechnung im Browser, E2).
@@ -222,6 +222,15 @@
       default: return null;
     }
   }
+  /** PDFs in den Unterlagen (verkauf.dokument) für viele Akten mit einer Abfrage-Gruppe → { akte_id: { art: Zeile } }. Fehlt das Modul oder das Leserecht: {} (Quelle zählt nicht). */
+  async function dokumenteLaden(akten) {
+    if (!window.VK_DU || typeof window.VK_DU.dokumenteFuerAkten !== 'function') return {};
+    try { return await window.VK_DU.dokumenteFuerAkten((akten || []).map(function (a) { return a.id; })); } catch (e) { console.warn('Unterlagen als Quelle:', e && e.message); return {}; }
+  }
+  /** Legt die Unterlagen der Akte als virtuelle Haken unter pm.dok ab (nie gespeichert); die Quelle { dokument: art } in verkauf-phasen.js liest sie. */
+  function dokInPm(pm, dokMap) {
+    if (window.VK_DU && typeof window.VK_DU.dokumenteInPm === 'function') window.VK_DU.dokumenteInPm(pm, dokMap || {}); else pm.dok = {};
+  }
   function zeilenAus(pm) {
     var z = [];
     Object.keys(pm).forEach(function (ph) {
@@ -333,6 +342,13 @@
     });
   });
   document.addEventListener('eg-bereit', function () { if (meineRolle() === 'dispo' || meineRolle() === 'admin') swStart(); });
+  window.VK_AKTE_AKTUELL = function () { return S.id; };   // für VK_DU.springe
+  // Unterlagen hochgeladen oder gelöscht (verkauf-unterlagen.js): Stand der Punkte in der offenen Akte neu rechnen
+  document.addEventListener('vk-dokumente-geaendert', function (ev) {
+    var id = ev && ev.detail && ev.detail.akteId;
+    if (!id || S.id !== id || !S.akte || !S.pm) return;
+    dokumenteLaden([S.akte]).then(function (m) { dokInPm(S.pm, m[id]); aktualisiere(true); }).catch(function (e) { console.warn('Unterlagen neu rechnen:', e && e.message); });
+  });
   window.VK_AKTE_OEFFNEN = function (id) { S.id = id; S.geoeffnetFuer = null; EG.zeigeTab('verkauf'); };
   window.VK_AKTE_ANLEGEN = async function (vb) {
     vb = vb || {};
@@ -374,9 +390,10 @@
       Promise.all(teile.map(function (t) { return T.punkt().select('*').in('akte_id', t); })),
       T.frei().select('*'),
       ladeAc(offene.map(function (a) { return a.interne_nr; })),   // Auslieferungs-Checkliste je interne Nr.
-      ladeBestand(offene)
+      ladeBestand(offene),
+      dokumenteLaden(offene)   // PDFs in den Unterlagen (Quelle für Punkt 45/65)
     ]);
-    var fr = chk(x[1]), acAlle = x[2];
+    var fr = chk(x[1]), acAlle = x[2], dokAlle = x[4];
     S.pmAlle = {}; S.freiAlle = {}; S.listCalc = {}; S.kxAlle = x[3];
     x[0].forEach(function (res) {
       chk(res);
@@ -389,6 +406,7 @@
     offene.forEach(function (a) {
       var pm = S.pmAlle[a.id] = S.pmAlle[a.id] || {};
       pm.ac = a.interne_nr ? (acAlle[a.interne_nr] || {}) : {};
+      dokInPm(pm, dokAlle[a.id]);
       S.listCalc[a.id] = berechne(a, pm, S.freiAlle[a.id] || [], S.kxAlle[a.id]);
     });
     zeichneListe();
@@ -408,7 +426,8 @@
         Promise.all(teile.map(function (t) { return T.punkt().select('*').in('akte_id', t); })),
         T.frei().select('*'),
         ladeAc(offene.map(function (a) { return a.interne_nr; })),
-        ladeBestand(offene)
+        ladeBestand(offene),
+        dokumenteLaden(offene)
       ]);
       var pmA = {}, frA = {};
       x[0].forEach(function (res) {
@@ -422,6 +441,7 @@
       return offene.map(function (a) {
         var pm = pmA[a.id] = pmA[a.id] || {};
         pm.ac = a.interne_nr ? (x[2][a.interne_nr] || {}) : {};
+        dokInPm(pm, x[4][a.id]);
         return { akte: a, calc: berechne(a, pm, frA[a.id] || [], x[3][a.id]), kx: x[3][a.id] || {}, frei: frA[a.id] || [] };
       });
     }
@@ -745,8 +765,9 @@
     S.akte = x[0].data; S.pm = zuMap(x[1].data); S.frei = x[2].data || []; S.umfragen = x[3]; S.trCache = {};
     // Auslieferungs-Checkliste: eigene Tabelle, Schlüssel = interne Nr. der Akte; dazu Zahlungsstand, Transport, Fehlteile
     var nr = S.akte.interne_nr;
-    var y = await Promise.all([nr ? ladeAc([nr]) : Promise.resolve({}), ladeBestand([S.akte])]);
+    var y = await Promise.all([nr ? ladeAc([nr]) : Promise.resolve({}), ladeBestand([S.akte]), dokumenteLaden([S.akte])]);
     S.pm.ac = nr ? (y[0][nr] || {}) : {};
+    dokInPm(S.pm, y[2][S.akte.id]);
     S.kx = y[1][S.akte.id] || {};
     neuBerechnen();
     if (S.geoeffnetFuer !== S.id) {   // beim ersten Öffnen: aktuelle Phase aufklappen
@@ -1228,8 +1249,21 @@
     });
     return seg;
   }
+  /** Erste Unterlagen-Quelle { dokument: art } eines Punktes (oder null). */
+  function dokQuelle(p) {
+    var l = (p.quelle || []).filter(function (q) { return q.dokument; });
+    return l.length ? { art: l[0].dokument } : null;
+  }
+  /** Zeile „PDF in den Unterlagen“ mit Sprung zu #du-box. Liegt ein PDF der Art vor → textDa (+ Datum, von), sonst textFehlt. */
+  function dokZeile(art, textDa, textFehlt) {
+    var d = (S.pm && S.pm.dok && S.pm.dok[art]) || null, akteId = S.akte && S.akte.id;
+    var z = h('div', { class: 'vk-auto vk-dok' + (d ? ' vk-dok-da' : ' vk-dok-fehlt'), 'data-dok-art': art, text: d ? (textDa + (d.wert && d.wert.text ? ' (' + d.wert.text + ')' : '')) : textFehlt });
+    if (akteId) z.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-klein', style: 'margin-left:8px', text: 'Zu den Unterlagen', onclick: function () { if (window.VK_DU) window.VK_DU.springe(akteId); } }));
+    return z;
+  }
   /** Woher kommt der Stand, wenn der Punkt nicht in der App beschreibbar ist? */
   function herkunftText(p) {
+    if (p.quelle && p.quelle.some(function (q) { return q.dokument; })) return 'Kommt aus der Masterliste oder aus den Unterlagen (PDF).';
     if (p.quelle && p.quelle.length && p.quelle.every(function (q) { return q.nurLesen; })) return 'Kommt aus der Masterliste.';
     if (p.datenquelle) return 'Kommt aus den Fahrzeugdaten (' + p.datenquelle + ').';
     return 'Kommt aus einer anderen Quelle.';
@@ -1264,10 +1298,13 @@
     }
     karte.appendChild(titel);
     if (p.hinweis) karte.appendChild(h('div', { class: 'punkt-hinweis', text: p.hinweis }));
+    if (p.dokHinweis) karte.appendChild(dokZeile(p.dokHinweis.art, p.dokHinweis.text, p.dokHinweis.fehlt));
     if (p.nurLesen) {   // Masterliste oder Datenfeld: nur Stand anzeigen
       var raw = pe.row ? AMP.wertAus(pe.row.wert) : null;
       karte.appendChild(h('div', { class: 'vk-auto', text: herkunftText(p) + ' Stand: ' + (st === 'ok' ? 'erledigt' : st === 'nok' ? 'NOK' : st === 'entfaellt' ? 'entfällt' : 'offen') + (raw ? ' (' + raw + ')' : '') + (pe.grund && st !== 'ok' ? ' – ' + pe.grund : '') }));
       var szl = statusZeile(pe); if (szl) karte.appendChild(szl);
+      var dq = dokQuelle(p);
+      if (dq) karte.appendChild(dokZeile(dq.art, 'Erledigt – PDF in den Unterlagen', 'Noch kein PDF in den Unterlagen – der Punkt gilt als erledigt, sobald es dort liegt.'));
       return karte;
     }
     if (st === 'ok' && pe.eigenSt !== 'ok') karte.appendChild(h('div', { class: 'vk-auto', text: p.datenquelle === 'verkauf.akte.evb_nr' && S.akte && S.akte.evb_nr ? 'Erledigt: eVB-Nr. steht in der Akte (' + S.akte.evb_nr + ').' : 'Erledigt laut Masterliste oder anderem Eintrag.' }));

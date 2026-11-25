@@ -1,4 +1,8 @@
 /* Stieber-App – Verkaufsablauf in 11 Phasen + Bereiche (window.VK_PHASEN)
+   Nachtrag 25.11.2026 (Oli „A umsetzen“): neue Quellenart { dokument: '<art>' } (art = ab | zahlungsaufstellung | schild | uebergabeprotokoll, wie in verkauf.dokument).
+   Sie wird in qParse zur Quelle { phase:'dok', k:<art>, nurLesen:true, dokument:<art> }; die Zeile dazu liefert verkauf-unterlagen.js (VK_DU.dokumenteInPm → pm.dok.<art>,
+   status ok, sobald ein PDF der Art zur Akte vorliegt). Punkt 45 und 65 gelten damit auch als erledigt, wenn das PDF in den Unterlagen liegt (oder-Verknüpfung mit der Masterliste).
+   Eigenschaft dokHinweis:{ art, text, fehlt } (Punkt 99, 102) zeigt in der Akte den Hinweis mit Sprung zu #du-box; ändert den Status nicht.
    Stand 14.11.2026 (Entwurf VA1, ersetzt später die Live-Datei verkauf-phasen.js mit v1–v10).
    Quelle: Plan „Anpassungen Verkaufsablauf“ v2, Abschnitt 2 (Phasen), 3 (Entscheidungen) und 6 (113 Zeilen: P / o / –).
    Bauplan Verkaufsablauf v1: E1 (Speicher-Schlüssel bleiben), E2 (Ampel im Browser aus dieser Definition).
@@ -56,6 +60,7 @@
 
   /* ---------- Hilfsfunktion: Punkt bauen ---------- */
   function qParse(s) {
+    if (s && typeof s === 'object' && s.dokument) return { phase: 'dok', k: s.dokument, nurLesen: true, dokument: s.dokument };   // PDF in verkauf.dokument (Unterlagen der Akte)
     var o = typeof s === 'string' ? { q: s } : s, i = o.q.indexOf('.');
     var r = { phase: o.q.slice(0, i), k: o.q.slice(i + 1) };
     if (o.okWerte) r.okWerte = o.okWerte;
@@ -213,7 +218,8 @@
           [{ q: 'nach_verkauf.finanzierungsunterlagen_pruefen', okWerte: ['Vollständig', 'Hat keine'] }], { entfaelltWenn: [KEINE_FIN], hinweis: 'Kommt aus der Masterliste (Dispo).' }),
         P(43, 'abholung_lieferung', 'Abholung oder Lieferung', true, ['v5.abholung_lieferung'], { eingabe: 'auswahl', label: 'Übergabe', optionen: ['Abholung', 'Lieferung'] }),
         P(44, 'wunschtermin', 'Wunschtermin des Kunden', true, ['v5.wunschtermin'], { eingabe: 'datum', label: 'Wunschtermin', setzeUebergabetermin: true }),
-        P(45, 'auftragsbestaetigung_kunde', 'Auftragsbestätigung an den Kunden (Mail in OneDrive)', true, ['nach_verkauf.auftragsbestaetigung_kunde', 'nach_verkauf.auftragsbest_mail_onedrive'], { hinweis: 'Kommt aus der Masterliste (Dispo).' }),
+        P(45, 'auftragsbestaetigung_kunde', 'Auftragsbestätigung an den Kunden (Mail in OneDrive)', true, ['nach_verkauf.auftragsbestaetigung_kunde', 'nach_verkauf.auftragsbest_mail_onedrive', { dokument: 'ab' }],
+          { hinweis: 'Kommt aus der Masterliste (Dispo) – oder gilt als erledigt, sobald die Auftragsbestätigung als PDF unter Unterlagen liegt.' }),
         P(46, 'claude_eintraege', 'Claude: Masterliste, Lead Liste, Börsen/ONLINE aus, Akte angelegt', true, ['v5.claude_eintraege'], { hinweis: 'Nach dem Umschalten (1b) ohne Masterliste.' })
       ]
     },
@@ -302,10 +308,12 @@
         P(96, 'uebergabetermin', 'Übergabetermin festgelegt (→ Masterliste)', true, ['v8.uebergabetermin'], { eingabe: 'datum', label: 'Übergabe am', setzeUebergabetermin: true, rollen: VERKAUF, wer: 'Verkauf oder Dispo' }),   // Oli 15.11.: Verkäufer darf den Übergabetermin setzen
         P(97, 'bereit', 'Fahrzeug bereit', true, ['v8.bereit'], { rollen: BUERO, wer: 'Dispo', keinEntfaellt: true, seg: ['ok'], segLabels: { ok: 'Bereit' } }),   // nurNachAllen entfällt: Phase 10 enthält auch die Übergabe selbst
         P(98, 'car_garantie', 'Garantie abgeschlossen', true, [{ q: 'nach_verkauf.car_garantie', okWerte: ['Ja', 'Nein, hat keine', 'Über SCB'] }], { hinweis: '„Hat keine“ zählt als erledigt (kommt aus der Masterliste).' }),
-        P(99, 'schild_co2_label', '„Ich freu mich auf“-Schild + CO2-Label in Kfz gelegt (Pkw-EnVKV)', true, ['auslieferung.schild_co2_label', 'ac.ac_ichfreumich'], { rollen: AC_ROLLEN, wer: 'Aufbereiter, Dispo' }),
+        P(99, 'schild_co2_label', '„Ich freu mich auf“-Schild + CO2-Label in Kfz gelegt (Pkw-EnVKV)', true, ['auslieferung.schild_co2_label', 'ac.ac_ichfreumich'], { rollen: AC_ROLLEN, wer: 'Aufbereiter, Dispo',
+          dokHinweis: { art: 'schild', text: 'Schild liegt unter Unterlagen in der Akte – in Farbe drucken.', fehlt: 'Schild: noch nicht in den Unterlagen.' } }),
         P(100, 'einweisung', 'Einweisung gemacht', false, ['v9.einweisung']),
         P(101, 'unterlagen', 'Unterlagen übergeben (ZB I, Rechnung „bezahlt“, COC, Serviceheft, Schlüssel)', true, ['v9.unterlagen']),
-        P(102, 'uebergabeprotokoll', 'Übergabeprotokoll unterschrieben (Vorlage 72)', true, ['v9.uebergabeprotokoll', 'auslieferung.uebergabeprotokoll_autrado'], { foto: true, fotoPflicht: true }),
+        P(102, 'uebergabeprotokoll', 'Übergabeprotokoll unterschrieben (Vorlage 72)', true, ['v9.uebergabeprotokoll', 'auslieferung.uebergabeprotokoll_autrado'], { foto: true, fotoPflicht: true,
+          dokHinweis: { art: 'uebergabeprotokoll', text: 'Vorausgefülltes Protokoll liegt unter Unterlagen in der Akte – drucken.', fehlt: 'Übergabeprotokoll: noch nicht in den Unterlagen.' } }),
         P(103, 'eu_mitteilung', 'EU-Mitteilung (nur bei EU-Fahrzeug)', true, ['v9.eu_mitteilung'], { hinweis: 'Kein EU-Fahrzeug? Dann „entfällt“ mit Grund.' }),
         P(104, 'uebergabefotos', 'Übergabefoto: Kunde mit Fahrzeug', true, ['v9.uebergabefotos'], { foto: true, fotoPflicht: true, hinweis: 'Will der Kunde kein Foto? Dann „entfällt“ mit Grund. Mündliches Ja reicht nur für die Mail an ihn.' }),
         // VA8 (15.11.2026): Zufriedenheit bei der Übergabe. Beim Speichern ruft die App VK_UEBERGABE.nachZufriedenheit(akte, wert) auf: „Nein“ öffnet die Reklamation in Phase 11 (NOK + roter Punkt).
@@ -357,7 +365,8 @@
         P(62, 'restzahlung', 'Restzahlung eingegangen (→ Masterliste Geldeingang)', true, ['v7.restzahlung'], { eingabe: 'betrag', label: 'Eingegangen in €' }),
         P(63, 'zahlungsbestaetigung', 'Zahlungsbestätigung an den Kunden gesendet', false, ['v7.zahlungsbestaetigung']),
         P(64, 'kontoplanung', 'Zahlungen in der Kontoplanung eingetragen', true, ['nach_verkauf.kontoplanung']),
-        P(65, 'zahlungsaufstellung_bh', 'Zahlungsaufstellung für die Buchhaltung', true, ['nach_verkauf.zahlungsaufstellung_bh']),
+        P(65, 'zahlungsaufstellung_bh', 'Zahlungsaufstellung für die Buchhaltung', true, ['nach_verkauf.zahlungsaufstellung_bh', { dokument: 'zahlungsaufstellung' }],
+          { hinweis: 'Kommt aus der Masterliste – oder gilt als erledigt, sobald die Zahlungsaufstellung als PDF unter Unterlagen liegt.' }),
         P(66, 'voll_bezahlt', 'Voll bezahlt – Übergabe frei', true, ['v7.voll_bezahlt'], { keinEntfaellt: true, nurNachAllen: true, seg: ['ok'], segLabels: { ok: 'Voll bezahlt' },
           hinweis: 'Erst wenn das Geld da ist.' })
       ]

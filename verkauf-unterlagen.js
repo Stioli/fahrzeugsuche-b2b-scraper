@@ -1,4 +1,9 @@
-/* Stieber-App – Bereich „Unterlagen“ und Feld „Lieferanten-AB“ in der Verkaufsakte (Version 1.0, Stand 25.11.2026, Skill dispo-unterlagen P1/P2)
+/* Stieber-App – Bereich „Unterlagen“ und Feld „Lieferanten-AB“ in der Verkaufsakte (Version 1.1, Stand 25.11.2026, Skill dispo-unterlagen P1/P2)
+   v1.1 (25.11.2026, Oli „A umsetzen“): PDFs in den Unterlagen zählen als Quelle für Punkte des Verkaufsablaufs (verkauf-phasen.js, Quelle { dokument: '<art>' }):
+   - VK_DU.dokumenteFuerAkten(ids) → { akte_id: { art: neueste Zeile } } – EINE Abfrage für viele Akten (je 30 Akten ein Aufruf); Rollen ohne Leserecht oder fehlende Tabelle → leer, kein Fehler
+   - VK_DU.dokumenteInPm(pm, dokMap) → setzt pm.dok.<art> = Zeile mit status 'ok' (so rechnen Ampel, Fortschritt und alle Reiter damit wie mit jedem Haken)
+   - VK_DU.springe(akteId) → scrollt zu #du-box (öffnet bei Bedarf zuerst die Akte im Reiter Verkauf)
+   - Nach Upload/Löschen meldet das Modul das Ereignis „vk-dokumente-geaendert“ ({ akteId }) – der Reiter Verkauf rechnet dann neu.
    Eingebunden von eingang-verkauf.js (Detailansicht der Akte): window.VK_DU.zeichne(box, akte, beiAkteNeu).
 
    Daten (SQL: 08b Fahrzeug-Verkauft/Skills/dispo-unterlagen/sql/2026-11-25_dispo_unterlagen_p1-p3_v1.sql, im Hauptprojekt erst nach Olis Ja):
@@ -71,7 +76,8 @@
       var zeilen = [
         { art: 'ab', t: '20261120-101500', n: 'AB_Demo_v1.pdf', ts: '2026-11-20T10:15:00Z' },
         { art: 'ab', t: '20261122-143000', n: 'AB_Demo_v2.pdf', ts: '2026-11-22T14:30:00Z' },
-        { art: 'zahlungsaufstellung', t: '20261123-090000', n: 'Zahlungsaufstellung_Demo.pdf', ts: '2026-11-23T09:00:00Z' }
+        { art: 'zahlungsaufstellung', t: '20261123-090000', n: 'Zahlungsaufstellung_Demo.pdf', ts: '2026-11-23T09:00:00Z' },
+        { art: 'schild', t: '20261124-081000', n: 'Schild_Demo.pdf', ts: '2026-11-24T08:10:00Z' }
       ];
       var rows = [];
       for (var i = 0; i < zeilen.length; i++) {
@@ -91,6 +97,61 @@
       if (r.error) { console.warn('Unterlagen nicht verfügbar (SQL eingespielt?):', r.error.message); return { ok: false, liste: [] }; }
       return { ok: true, liste: r.data || [] };
     } catch (e) { console.warn('Unterlagen:', e && e.message); return { ok: false, liste: [] }; }
+  }
+
+  /* ---------- Quelle für den Verkaufsablauf (v1.1) ---------- */
+  /** Neueste PDF je Art für viele Akten mit wenigen Abfragen. → { akte_id: { art: Zeile } }. Kein Leserecht / Tabelle fehlt → {} (Quelle zählt dann einfach nicht). */
+  async function dokumenteFuerAkten(ids) {
+    var out = {};
+    ids = (ids || []).filter(Boolean);
+    if (!darfSehen() || !ids.length) return out;
+    try {
+      await demoSaat();
+      var teile = [];
+      for (var i = 0; i < ids.length; i += 30) teile.push(ids.slice(i, i + 30));
+      var res = await Promise.all(teile.map(function (t) {
+        return EG.tab('verkauf', 'dokument').select('akte_id,art,created_at,erstellt_von_name,dateiname').in('akte_id', t).order('created_at', { ascending: false });
+      }));
+      res.forEach(function (r) {
+        if (r.error) { console.warn('Unterlagen (Quelle für Punkte) nicht lesbar:', r.error.message); return; }
+        (r.data || []).forEach(function (d) {
+          var m = (out[d.akte_id] = out[d.akte_id] || {});
+          if (!m[d.art]) m[d.art] = d;   // neueste zuerst
+        });
+      });
+    } catch (e) { console.warn('Unterlagen (Quelle für Punkte):', e && e.message); }
+    return out;
+  }
+  /** Legt je vorhandener Art eine „ok“-Zeile unter pm.dok ab (wird bei jedem Laden neu gesetzt, nie gespeichert). */
+  function dokumenteInPm(pm, dokMap) {
+    var m = {};
+    Object.keys(dokMap || {}).forEach(function (art) {
+      var d = dokMap[art];
+      m[art] = { status: 'ok', wert: { text: EG.fmtDatum(d.created_at) + (d.erstellt_von_name ? ', von ' + d.erstellt_von_name : '') },
+        erledigt_von_name: d.erstellt_von_name || null, erledigt_am: d.created_at || null, grund: null, dokument: true, dateiname: d.dateiname || null };
+    });
+    pm.dok = m;
+    return pm;
+  }
+  function melde(akteId) {
+    try { document.dispatchEvent(new CustomEvent('vk-dokumente-geaendert', { detail: { akteId: akteId } })); } catch (e) { /* egal */ }
+  }
+  /** Springt zu #du-box. Ist die Akte nicht offen, wird sie im Reiter Verkauf geöffnet und dann gescrollt. */
+  function springe(akteId) {
+    function los() {
+      var b = document.getElementById('du-box');
+      if (b) { try { b.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { b.scrollIntoView(); } return true; }
+      return false;
+    }
+    var box = document.getElementById('du-box');
+    var offen = !!box && box.offsetParent !== null && window.VK_AKTE_AKTUELL && window.VK_AKTE_AKTUELL() === akteId;
+    if (offen && los()) return;
+    if (typeof window.VK_AKTE_OEFFNEN === 'function') window.VK_AKTE_OEFFNEN(akteId);
+    var n = 0, t = setInterval(function () {
+      n++;
+      var b = document.getElementById('du-box');
+      if ((b && b.childNodes.length && los()) || n > 50) clearInterval(t);
+    }, 150);
   }
 
   /* ---------- Öffnen ---------- */
@@ -125,6 +186,7 @@
     }
     EG.toast('gespeichert', 'ok');
     await neuZeichnen('gespeichert');
+    melde(akte.id);
   }
 
   /* ---------- Löschen (nur admin) ---------- */
@@ -137,6 +199,7 @@
     try { await bucket().remove([d.pfad]); } catch (e) { console.warn('Datei im Bucket nicht entfernt:', e && e.message); }
     EG.toast('Unterlage gelöscht.', 'ok');
     await neuZeichnen();
+    melde(d.akte_id);
   }
 
   /* ---------- Darstellung ---------- */
@@ -239,8 +302,11 @@
   }
 
   window.VK_DU = {
-    version: '1.0',
+    version: '1.1',
     ARTEN: ARTEN,
+    dokumenteFuerAkten: dokumenteFuerAkten,
+    dokumenteInPm: dokumenteInPm,
+    springe: springe,
     zeichne: function (box, akte, beiAkteNeu) { return zeichne(box, akte, beiAkteNeu).catch(function (e) { console.warn('Unterlagen:', e && e.message); if (box) box.innerHTML = ''; }); }
   };
 })();
