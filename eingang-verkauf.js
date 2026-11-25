@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Verkauf“ (Verkaufsakten mit 11 Phasen, Version 4.6)
+/* Stieber-App – Reiter „Verkauf“ (Verkaufsakten mit 11 Phasen, Version 4.8; 25.11.2026: Bereich „Unterlagen“ + Lieferanten-AB über verkauf-unterlagen.js, Link #verkauf&nr=<interne_nr>)
    Stand 15.11.2026 (Verkaufsablauf, Paket VA3; Nachträge Welle 4: eVB-Nr. aus der Akte, „Gesehen“ für OS an Freigabe in Vertretung und schlechter Umfrage). Plan: „Anpassungen Verkaufsablauf“ v2 (Abschnitte 2, 3, 6), Bauplan Verkaufsablauf v1 (E1, E2, E6).
    Daten: Schema verkauf (akte, punkt, freigabe). Phasen und Haken: verkauf-phasen.js (window.VK_PHASEN, 11 Phasen p01–p11 plus Bereiche a1_*, a2_*),
    Ampel und „Was fehlt noch, bei wem“: verkauf-ampel.js (window.VK_AMPEL, Berechnung im Browser, E2).
@@ -58,12 +58,14 @@
   var S = {
     root: null, id: null, akte: null, pm: {}, frei: [], umfragen: [], kx: null, calc: null, offen: {}, geoeffnetFuer: null,
     akten: [], pmAlle: {}, freiAlle: {}, kxAlle: {}, listCalc: {}, filter: 'offen', suche: '', listenBox: null, gesaet: false,
-    kopfBox: null, fehltBox: null, phasenBox: null, filterGesetzt: false, pushMe: null, swDa: false, trCache: {}
+    kopfBox: null, fehltBox: null, phasenBox: null, duBox: null, nr: null, filterGesetzt: false, pushMe: null, swDa: false, trCache: {}
   };
   // Aus einem Link der Meldung (#verkauf&id=<akte_id>) gleich die Akte öffnen
   (function hashLesen() {
     var m = /^#verkauf&id=([0-9a-f-]{36})/i.exec(location.hash || '');
     if (m) S.id = m[1];
+    var n = /^#verkauf&nr=([^&]+)/i.exec(location.hash || '');   // Link über die interne Nummer (für Automaten): #verkauf&nr=<interne_nr>
+    if (n && !m) S.nr = decodeURIComponent(n[1]);
   })();
   var T = {
     akte: function () { return EG.tab('verkauf', 'akte'); },
@@ -321,7 +323,11 @@
      ==================================================================== */
   EG.onTab('verkauf', function (root) {
     S.root = root;
-    return demoNachladen().then(function () {
+    return demoNachladen().then(async function () {
+      if (S.nr && !S.id) {   // Link #verkauf&nr=<interne_nr>: Akte über die interne Nummer suchen
+        var nr = S.nr; S.nr = null;
+        try { var rr = await T.akte().select('id').eq('interne_nr', nr).limit(1); if (rr.data && rr.data[0]) S.id = rr.data[0].id; else EG.toast('Keine Akte zur Nummer ' + nr + ' gefunden.', 'fehler'); } catch (e) { console.warn('Akte nach Nr.:', e && e.message); }
+      }
       if (!S.filterGesetzt) { S.filterGesetzt = true; if (meineRolle() === 'dispo' || meineRolle() === 'buchhaltung') S.filter = 'dispo'; }   // Startansicht der Dispo (und der Buchhaltung)
       return S.id ? ladeDetail() : ladeListe();
     });
@@ -798,8 +804,11 @@
     root.appendChild(S.kopfBox); root.appendChild(S.fehltBox);
     root.appendChild(h('h2', { text: 'Phasen', style: 'margin:18px 0 8px' }));
     root.appendChild(S.phasenBox);
+    S.duBox = h('div', { id: 'du-box' });   // Unterlagen + Lieferanten-AB (verkauf-unterlagen.js); blendet sich aus, solange die Tabelle fehlt
+    root.appendChild(S.duBox);
     root.appendChild(untenKarte());
     zeichneKopf(); zeichnePhasen();
+    if (window.VK_DU) window.VK_DU.zeichne(S.duBox, S.akte, function (neu) { if (neu) S.akte = neu; });
     window.scrollTo(0, y);
   }
   function zeichneKopf() {

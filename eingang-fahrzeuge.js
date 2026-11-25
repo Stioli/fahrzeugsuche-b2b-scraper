@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Fahrzeuge“ (Etappe 1b, B3 + B4, Plan 25.11.2026)                     Stand 25.11.2026 v1.1 (K2: Kunde öffnen, Höhe)
+/* Stieber-App – Reiter „Fahrzeuge“ (Etappe 1b, B3 + B4, Plan 25.11.2026)                     Stand 25.11.2026 v1.2 (P4b: Mehrfeld-Dialog für den Reiter Zahlungen)
    Alle Felder der Masterliste je Fahrzeug – lesen, bearbeiten, neu anlegen. Eine Quelle für Rechte und Felder:
    bestand.feld_katalog (Oli 25.11.2026: admin, Dispo, Buchhaltung sehen/ändern alles und legen an; übrige Rollen
    lesen ohne EK/Zahlung/Ertrag und ändern nur ihre Punkte).
@@ -6,6 +6,8 @@
    Ändern:  Edge Function bestand_schreiben  (zeile → aktueller Masterliste-Wert + stand; aendern; anlegen)
             schreibt zuerst in die Masterliste, der Import zieht nach Supabase nach (wenige Sekunden).
             Schalter bestand.einstellung 'fahrzeug_schreiben' = probe → nichts wird gespeichert (Hinweis in der App).
+   v1.2: window.EG_FZ.felderBearbeiten(stieberId, [sp_intern …]) – ein Dialog für mehrere Felder (nur geänderte Werte gehen an
+         bestand_schreiben, mit Konfliktschutz). Nutzt der Reiter Zahlungen; eine Schreiblogik für beide Reiter.
    Baut auf window.EG (eingang-core.js) auf. Demo (?demo=1): erfundene Fahrzeuge, nichts verlässt die Seite. */
 (function () {
   'use strict';
@@ -47,6 +49,8 @@
   /* Verknüpfung Kunde ↔ Fahrzeug (K2, 25.11.2026): der Reiter „Kunden“ öffnet hierüber ein Fahrzeug. */
   window.EG_FZ = {
     darf: function () { var b = document.getElementById('tabk-fahrzeuge'); return !!b && !b.hidden; },
+    katalog: katalogSichern,
+    felderBearbeiten: felderBearbeiten,
     oeffnen: async function (stieberId) {
       if (!S.kat.length) {
         var k = EG.demo ? demoKatalog() : (chk(await EG.sb.schema('bestand').rpc('feld_katalog_meine')).data || []);
@@ -61,6 +65,72 @@
       return detail(stieberId);
     }
   };
+
+  /** Katalog der Rolle laden (einmalig). */
+  async function katalogSichern() {
+    if (!S.kat.length) {
+      var k = EG.demo ? demoKatalog() : (chk(await EG.sb.schema('bestand').rpc('feld_katalog_meine')).data || []);
+      S.kat = k; S.katMap = {}; k.forEach(function (f) { S.katMap[f.sp_intern] = f; });
+    }
+    return S.katMap;
+  }
+  /** Gleicher Vergleichswert für „geändert?“ (Zahl, Datum, Liste, Text). */
+  function vergleich(f, v) {
+    if (v == null || v === '') return '';
+    if (Array.isArray(v)) return v.slice().sort().join(';');
+    if (f.typ === 'Number' || f.typ === 'Currency') { var n = num(String(v).replace(',', '.')); return n == null ? String(v) : String(n); }
+    if (f.typ === 'DateTime') return String(v).slice(0, 10);
+    return String(v).trim();
+  }
+  /** P4b (25.11.2026): mehrere Felder eines Fahrzeugs in einem Dialog ändern – über denselben Weg wie ✎ im Reiter Fahrzeuge
+      (Edge Function bestand_schreiben: aktuell lesen + stand, dann aendern). Einträge, die mit „#“ beginnen, sind Zwischenüberschriften.
+      opts: { titel, vorgabe (nur Demo: sp_intern → Wert) } → Promise<{ gespeichert, werte (nur die geänderten), probe, demo } | null> */
+  async function felderBearbeiten(stieberId, liste, opts) {
+    opts = opts || {};
+    await katalogSichern();
+    var felder = liste.filter(function (k) { return k.charAt(0) === '#' || (S.katMap[k] && S.katMap[k].darf_aendern); });
+    var echte = felder.filter(function (k) { return k.charAt(0) !== '#'; });
+    if (!echte.length) { EG.toast('Keines dieser Felder darf deine Rolle ändern.', 'fehler'); return null; }
+    var aktuell = {}, stand = '';
+    if (EG.demo) { aktuell = Object.assign({}, opts.vorgabe || {}); }
+    else {
+      var z = await EG.sb.functions.invoke('bestand_schreiben', { body: { aktion: 'zeile', stieber_id: stieberId, felder: echte } });
+      if (z.error) throw new Error(await fehlerText(z.error));
+      aktuell = z.data.werte || {}; stand = z.data.stand;
+    }
+    var ein = {}, inhalt = [];
+    felder.forEach(function (k) {
+      if (k.charAt(0) === '#') { inhalt.push(h('h3', { class: 'fz-zwischen', text: k.slice(1).trim() })); return; }
+      var f = S.katMap[k];
+      ein[k] = eingabeFuer(f, aktuell[k]);
+      inhalt.push(EG.feld(f.anzeigename, ein[k].el));
+    });
+    inhalt.push(h('p', { class: 'klein muted', text: 'Geändert wird nur, was du hier anders einträgst. Die Änderung geht direkt in die Masterliste und ist in wenigen Sekunden in der App.' }));
+    var ergebnis = null, geaendert = {};
+    var ok = await EG.dialog({
+      titel: opts.titel || 'Felder ändern', inhalt: h('div', { class: 'fz-mehrfeld' }, inhalt), breit: true,
+      knoepfe: [{ text: 'Abbrechen', art: 'ghost', wert: null }, {
+        text: 'Speichern', art: 'primary', wert: 'ok',
+        aktion: async function () {
+          geaendert = {};
+          echte.forEach(function (k) {
+            var f = S.katMap[k], neu = ein[k].wert();
+            if (vergleich(f, neu) !== vergleich(f, aktuell[k])) geaendert[k] = neu;
+          });
+          if (!Object.keys(geaendert).length) return 'Es wurde nichts geändert.';
+          if (EG.demo) { ergebnis = { gesendet: true, demo: true }; return true; }
+          var r = await EG.sb.functions.invoke('bestand_schreiben', { body: { aktion: 'aendern', stieber_id: stieberId, stand: stand, werte: geaendert } });
+          if (r.error) return await fehlerText(r.error);
+          ergebnis = r.data; return true;
+        }
+      }]
+    });
+    if (ok !== 'ok' || !ergebnis) return null;
+    if (ergebnis.modus === 'probe') { EG.toast('Probe: Die Änderung wurde geprüft, aber noch NICHT gespeichert (Schreiben ist noch aus).'); return { gespeichert: false, probe: true, werte: geaendert }; }
+    EG.toast(EG.demo ? 'Demo: geändert (nur auf dieser Seite).' : 'Gespeichert. Die App aktualisiert in wenigen Sekunden.', 'ok');
+    if (!EG.demo) await warte(6000);
+    return { gespeichert: true, demo: !!EG.demo, werte: geaendert };
+  }
 
   /** Tabelle so hoch, dass ihr unterer Rand (mit der waagrechten Bildlaufleiste) im Fenster bleibt. */
   function hoeheAnpassen() {
@@ -370,6 +440,20 @@
     dk('KaufvertragDatum', 'Kaufvertrag Datum', 'DateTime', 'verkauf', ALLE, BUERO), dk('Verk_x00e4_ufer1', 'Verkäufer', 'User', 'verkauf', ALLE, BUERO),
     dk('VK_x002d_Preis_x002d_Kunde', 'Kd-Fzg-VK Preis', 'Currency', 'zahlung', BUERO, BUERO), dk('Fertig', 'Kd-Geldeingang', 'Choice', 'zahlung', BUERO, BUERO, ['nein', 'Teilzahlung', 'komplett erhalten']),
     dk('Kd_x002d_Zahlart', 'Kd-Zahlart', 'MultiChoice', 'zahlung', BUERO, BUERO, ['Bar', 'Überweisung', 'Finanzierung SCB', 'Anzahlung', 'Inzahlungnahme']),
+    /* Zahlung/Einkauf (nur Demo, für den Reiter Zahlungen) */
+    dk('Kd_x002d_Barzahlung', 'Kd-Bar', 'Currency', 'zahlung', BUERO, BUERO), dk('Ld_x002d_Barz_x002d_Datum', 'Kd-Bar-Dat', 'DateTime', 'zahlung', BUERO, BUERO),
+    dk('Kd_x002d_1Uebw', 'Kd-1Uebw', 'Currency', 'zahlung', BUERO, BUERO), dk('Kd_x002d__x00dc_berw_x002d_Datum', 'Kd-1Uebw-Dat', 'DateTime', 'zahlung', BUERO, BUERO),
+    dk('Kd_x002d_2Uebw', 'Kd-2Uebw', 'Currency', 'zahlung', BUERO, BUERO), dk('_x0031_DatumGeldeingang', 'Kd-2Uebw-Dat', 'DateTime', 'zahlung', BUERO, BUERO),
+    dk('Kd_x002d_3Uebw', 'Kd-3Uebw', 'Currency', 'zahlung', BUERO, BUERO), dk('_x0033_DatumGeldeingang', 'Kd-3Uebw-Dat', 'DateTime', 'zahlung', BUERO, BUERO),
+    dk('Kd_x002d_Finz', 'Kd-Finz-€', 'Currency', 'zahlung', BUERO, BUERO), dk('Kd_x002d_Finz_x002d_Datum', 'Kd-Finz-Dat', 'DateTime', 'zahlung', BUERO, BUERO),
+    dk('Inz_x002d_Betrag', 'Inz-Wert', 'Currency', 'inzahlung', BUERO, BUERO), dk('Inz_x002d_Datum', 'Inz-Datum', 'DateTime', 'inzahlung', BUERO, BUERO),
+    dk('Inzahlungnahme', 'Inz ?', 'Choice', 'inzahlung', BUERO, BUERO, ['nein', 'ja']),
+    dk('Zusatzrechnung', 'Kd-Zusatz-Rg', 'Number', 'zahlung', BUERO, BUERO), dk('KdZusatzRgDatum', 'Kd Zusatz Rg Datum', 'DateTime', 'zahlung', BUERO, BUERO),
+    dk('Lieferant_x002d_Nr_x002e_', 'Lief-Nr', 'Text', 'einkauf', BUERO, BUERO), dk('Rechnung_x002d_Lieferant', 'Lief-Rg-Nr', 'Text', 'einkauf', BUERO, BUERO),
+    dk('Rg_x002d_Datum', 'Lief-Rg-Datum', 'DateTime', 'einkauf', BUERO, BUERO), dk('Lief_x002d_Rg_x002d_Betr_x002d_b', 'Lief-Rg-Betr-brutto', 'Currency', 'einkauf', BUERO, BUERO),
+    dk('Fahrzeugbezahlt', 'Lief-Fzg bezahlt', 'Choice', 'einkauf', BUERO, BUERO, ['nein', 'ja']), dk('Lief_x002d_Rg_x002d_bezahlt', 'Lief-Rg-bez-Datum', 'DateTime', 'einkauf', BUERO, BUERO),
+    dk('EK_x002d_Finanz', 'EK-Finz', 'Choice', 'finanzierung', BUERO, BUERO, ['nein', 'ja']), dk('EK_x002d_Betrag', 'EK-Finz-€', 'Currency', 'finanzierung', BUERO, BUERO),
+    dk('EK_x002d_Geldeingang', 'EK-Finz-Geldein-Datum', 'DateTime', 'finanzierung', BUERO, BUERO), dk('DatumEK_x002d_Abl_x00f6_se', 'EK-Finz-Abl-Datum', 'DateTime', 'finanzierung', BUERO, BUERO),
     dk(STANDTAGE, 'Standtage', 'Calculated', 'kennzahlen', BUERO, []), dk('Ertrag', 'Ertrag', 'Calculated', 'kennzahlen', BUERO, [])
   ];
   function demoKatalog() {

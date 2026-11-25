@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Zahlungen“ (Bereich A1: Zahlungen Kunde und Lieferant), Version 4.0, Stand 15.11.2026
+/* Stieber-App – Reiter „Zahlungen“ (Bereich A1: Zahlungen Kunde und Lieferant), Version 4.1, Stand 25.11.2026 (P4b: Felder bearbeiten, P4c: Zahlungsaufstellung drucken)
    Paket VA4 des Bauplans Verkaufsablauf. Plan: „Anpassungen Verkaufsablauf“ v2 (A1, Zeilen 55–70), Bauplan v1 (E1, E6).
    Sichtbar und bedienbar nur für admin, dispo, buchhaltung (zusätzlich zur Rollenliste in eingang.html und zur Sperre in der Datenbank).
 
@@ -18,7 +18,14 @@
    Schnittstelle für andere Reiter:  window.VK_ZAHLUNGEN.oeffne(akte_id)  → springt in den Reiter und öffnet die Akte.
    Link-Form: #zahlungen&id=<akte_id>
 
-   Nicht Aufgabe dieses Reiters: akte.phase_aktuell nachführen (macht der Reiter Verkauf) und Masterliste-Felder schreiben (kommt mit Schritt 1b).
+   v4.1 (25.11.2026, P4b): Die Lesekarte „Daten aus der Masterliste“ ist für admin/dispo/buchhaltung bearbeitbar (Knöpfe „Kunde bearbeiten“ und
+   „Lieferant bearbeiten“). Gespeichert wird über window.EG_FZ.felderBearbeiten (eingang-fahrzeuge.js) = derselbe Weg wie im Reiter Fahrzeuge:
+   Edge Function bestand_schreiben (erst Masterliste, dann Import nach Supabase), Rechte je Feld aus bestand.feld_katalog (aendern), Konfliktschutz
+   per eTag, Protokoll in bestand.aenderung_log. Hier gibt es KEINE zweite Schreiblogik. Nach dem Speichern wird die Akte neu geladen.
+   Demo (?demo=1): nichts geht an die Masterliste; die Werte werden nur im Speicher der Seite übernommen.
+   v4.1 (P4c): Knopf „Zahlungsaufstellung drucken“ im Kopf der Akte → verkauf-zahlungsaufstellung.js (A4-Druckansicht).
+
+   Nicht Aufgabe dieses Reiters: akte.phase_aktuell nachführen (macht der Reiter Verkauf).
    Demo (?demo=1): legt – nur wenn sie fehlen – die Demo-Akten mit fahrzeug_id ST-26-9001, ST-26-9002, ST-26-9003 samt bestand.zahlung,
    bestand.einkauf und einigen A1-Häkchen an. Vorhandene Zeilen werden nie überschrieben.
    Baut auf window.EG (eingang-core.js), window.VK_PHASEN (verkauf-phasen.js) und window.VK_AMPEL (verkauf-ampel.js) auf. */
@@ -74,7 +81,7 @@
   var S = {
     root: null, id: null, akte: null, pm: {}, zahlung: null, einkauf: null, calc: null, offen: {}, geoeffnetFuer: null,
     akten: [], pmAlle: {}, zahlstandAlle: {}, zahlstand: null, zahlungAlle: {}, einkaufAlle: {}, listCalc: {}, filter: 'offen', suche: '', listenBox: null, chipBox: null,
-    kopfBox: null, fehltBox: null, bereicheBox: null, bestandHinweis: '', demoFertig: false, verkaufAngestossen: false
+    kopfBox: null, bestandKarteBox: null, fehltBox: null, bereicheBox: null, bestandHinweis: '', demoFertig: false, verkaufAngestossen: false
   };
   (function hashLesen() {
     var m = /^#zahlungen&id=([0-9a-f-]{36})/i.exec(location.hash || '');
@@ -386,6 +393,10 @@
     if (typeof window.VK_AKTE_OEFFNEN === 'function') {
       knoepfe.appendChild(h('button', { type: 'button', class: 'btn btn-ghost btn-klein', text: 'Zur Verkaufsakte', onclick: function () { window.VK_AKTE_OEFFNEN(a.id); } }));
     }
+    if (window.VK_ZAHLUNGSAUFSTELLUNG) {   // P4c: A4-Druckansicht nach Blatt „10. Zahlungsaufstellung“
+      knoepfe.appendChild(h('button', { type: 'button', class: 'btn btn-primary btn-klein', style: 'margin-left:8px', text: 'Zahlungsaufstellung drucken',
+        onclick: function () { window.VK_ZAHLUNGSAUFSTELLUNG.oeffnen({ akte: S.akte, zahlung: S.zahlung, einkauf: S.einkauf }).catch(EG.fehler); } }));
+    }
     return h('div', { class: 'karte' },
       h('div', { class: 'karte-kopf' }, h('h2', { text: akteTitel(a) }), EG.pill('Zahlung: ' + STAND_TEXT[c.stand], STAND_PILL[c.stand])),
       (a.farbe || a.fin) ? h('div', { class: 'fz-zeile', text: [a.farbe, a.fin ? 'FIN ' + a.fin : ''].filter(Boolean).join(' · ') }) : null,
@@ -423,11 +434,79 @@
     }, 40);
   }
 
+  /* ---------- Bearbeiten (P4b): Masterliste-Feld → Spalte in bestand.zahlung/einkauf bzw. verkauf.akte (nur für die Demo-Übernahme und die Vorgabe) ---------- */
+  /* Art: z = Zahl, d = Datum, t = Text, b = ja/nein, l = Liste */
+  var ZUORD = {
+    Fertig: ['zahlung', 'kd_geldeingang', 't'], Kd_x002d_Zahlart: ['zahlung', 'kd_zahlart', 'l'],
+    Kd_x002d_Barzahlung: ['zahlung', 'kd_bar', 'z'], Ld_x002d_Barz_x002d_Datum: ['zahlung', 'kd_bar_datum', 'd'],
+    Kd_x002d_1Uebw: ['zahlung', 'kd_1uebw', 'z'], Kd_x002d__x00dc_berw_x002d_Datum: ['zahlung', 'kd_1uebw_datum', 'd'],
+    Kd_x002d_2Uebw: ['zahlung', 'kd_2uebw', 'z'], _x0031_DatumGeldeingang: ['zahlung', 'kd_2uebw_datum', 'd'],
+    Kd_x002d_3Uebw: ['zahlung', 'kd_3uebw', 'z'], _x0033_DatumGeldeingang: ['zahlung', 'kd_3uebw_datum', 'd'],
+    Kd_x002d_Finz: ['zahlung', 'kd_finanzierung_betrag', 'z'], Kd_x002d_Finz_x002d_Datum: ['zahlung', 'kd_finanzierung_datum', 'd'],
+    Inzahlungnahme: ['zahlung', 'inzahlung', 'b'], Inz_x002d_Betrag: ['zahlung', 'inz_wert', 'z'], Inz_x002d_Datum: ['zahlung', 'inz_datum', 'd'],
+    InzAbloese: ['zahlung', 'inz_abloese_betrag', 'z'], InzAbloeseDatum: ['zahlung', 'inz_abloese_datum', 'd'], InzAbloeseBank: ['zahlung', 'inz_abloese_bank', 't'],
+    Netting: ['zahlung', 'netting_betrag', 'z'], Netting_x002d_Datum: ['zahlung', 'netting_datum', 'd'],
+    _x20ac__x002d_Geldaus_x002d_EKFi: ['zahlung', 'netting_abbuchung_betrag', 'z'], EK_x002d_Abl_x00f6_se_x002d_Kto: ['zahlung', 'netting_abbuchung_datum', 'd'],
+    VK_x002d_Preis_x002d_Kunde: ['zahlung', 'ml_vk_preis', 'z'], Zusatzrechnung: ['akte', 'kd_zusatz_rg', 'z'], KdZusatzRgDatum: ['akte', 'kd_zusatz_rg_datum', 'd'],
+    Lieferant: ['einkauf', 'lieferant', 't'], Lieferant_x002d_Nr_x002e_: ['einkauf', 'lieferant_nr', 't'], Rechnung_x002d_Lieferant: ['einkauf', 'lief_rg_nr', 't'],
+    Rg_x002d_Datum: ['einkauf', 'lief_rg_datum', 'd'], Lief_x002d_Rg_x002d_Betr_x002d_b: ['einkauf', 'lief_rg_betrag_brutto', 'z'], Kaufpreisnetto: ['einkauf', 'ek_netto', 'z'],
+    Fahrzeugbezahlt: ['einkauf', 'lief_fzg_bezahlt', 'b'], Lief_x002d_Rg_x002d_bezahlt: ['einkauf', 'lief_rg_bezahlt_datum', 'd'],
+    EK_x002d_Finanz: ['einkauf', 'ek_finanzierung', 'b'], EK_x002d_Betrag: ['einkauf', 'ek_finanzierung_betrag', 'z'],
+    EK_x002d_Geldeingang: ['einkauf', 'ek_finanzierung_geldeingang_datum', 'd'], DatumEK_x002d_Abl_x00f6_se: ['einkauf', 'ek_finanzierung_abloese_datum', 'd']
+  };
+  var FELDER_KUNDE = ['#Rechnung', 'VK_x002d_Preis_x002d_Kunde', 'Zusatzrechnung', 'KdZusatzRgDatum', '#Zahlung', 'Fertig', 'Kd_x002d_Zahlart',
+    'Kd_x002d_Barzahlung', 'Ld_x002d_Barz_x002d_Datum', 'Kd_x002d_1Uebw', 'Kd_x002d__x00dc_berw_x002d_Datum', 'Kd_x002d_2Uebw', '_x0031_DatumGeldeingang',
+    'Kd_x002d_3Uebw', '_x0033_DatumGeldeingang', 'Kd_x002d_Finz', 'Kd_x002d_Finz_x002d_Datum',
+    '#Inzahlungnahme', 'Inzahlungnahme', 'Inz_x002d_Betrag', 'Inz_x002d_Datum', 'InzAbloese', 'InzAbloeseDatum', 'InzAbloeseBank',
+    '#Netting Openbank', 'Netting', 'Netting_x002d_Datum', '_x20ac__x002d_Geldaus_x002d_EKFi', 'EK_x002d_Abl_x00f6_se_x002d_Kto'];
+  var FELDER_LIEF = ['#Lieferant', 'Lieferant', 'Lieferant_x002d_Nr_x002e_', '#Rechnung und Zahlung', 'Rechnung_x002d_Lieferant', 'Rg_x002d_Datum',
+    'Lief_x002d_Rg_x002d_Betr_x002d_b', 'Kaufpreisnetto', 'Fahrzeugbezahlt', 'Lief_x002d_Rg_x002d_bezahlt',
+    '#EK-Finanzierung (Openbank)', 'EK_x002d_Finanz', 'EK_x002d_Betrag', 'EK_x002d_Geldeingang', 'DatumEK_x002d_Abl_x00f6_se'];
+  function zeileVon(tab) { return tab === 'zahlung' ? S.zahlung : tab === 'einkauf' ? S.einkauf : S.akte; }
+  /** Nur Demo: aktuelle Werte der Felder (Text/ja-nein/Liste) als Vorgabe für den Dialog */
+  function demoVorgabe(liste) {
+    var v = {};
+    liste.forEach(function (sp) {
+      var zu = ZUORD[sp], row = zu && zeileVon(zu[0]);
+      if (!zu || !row || row[zu[1]] == null) return;
+      v[sp] = zu[2] === 'b' ? (row[zu[1]] ? 'ja' : 'nein') : row[zu[1]];
+    });
+    return v;
+  }
+  /** Nur Demo: geänderte Werte im Speicher der Seite übernehmen (nichts geht in die Masterliste) */
+  function demoUebernehmen(werte) {
+    Object.keys(werte).forEach(function (sp) {
+      var zu = ZUORD[sp], row = zu && zeileVon(zu[0]); if (!zu || !row) return;
+      var w = werte[sp], art = zu[2], leer = w == null || w === '' || (Array.isArray(w) && !w.length);
+      if (art === 'z') { var n = parseBetrag(w); row[zu[1]] = leer || isNaN(n) ? null : n; }
+      else if (art === 'b') row[zu[1]] = leer ? null : w === 'ja';
+      else if (art === 'l') row[zu[1]] = Array.isArray(w) ? w : [];
+      else row[zu[1]] = leer ? null : w;
+    });
+  }
+  /** Knopf „Kunde bearbeiten“ / „Lieferant bearbeiten“ → Mehrfeld-Dialog des Reiters Fahrzeuge (Weg: bestand_schreiben) */
+  async function bearbeiten(gruppe) {
+    if (!darf() || !S.akte || !S.akte.fahrzeug_id) return;
+    if (!window.EG_FZ || !window.EG_FZ.felderBearbeiten) { EG.toast('Das Bearbeiten ist gerade nicht verfügbar (eingang-fahrzeuge.js fehlt).', 'fehler'); return; }
+    var liste = gruppe === 'kunde' ? FELDER_KUNDE : FELDER_LIEF;
+    var id = S.id;
+    var r = await window.EG_FZ.felderBearbeiten(S.akte.fahrzeug_id, liste, {
+      titel: (gruppe === 'kunde' ? 'Zahlung Kunde' : 'Zahlung Lieferant') + ' bearbeiten – ' + akteTitel(S.akte),
+      vorgabe: EG.demo ? demoVorgabe(liste) : null
+    });
+    if (!r || !r.gespeichert || S.id !== id) return;
+    if (r.demo) { demoUebernehmen(r.werte); aktualisiere(true); S.bestandKarteBox && S.bestandKarteBox.replaceWith(S.bestandKarteBox = bestandKarte()); return; }
+    await ladeDetail();   // frisch aus der Datenbank (Import hat nachgezogen; sonst zeigt der nächste Neuladen den Stand)
+  }
+
   /* ---------- Lesekarte: Felder aus bestand.zahlung und bestand.einkauf ---------- */
   function bestandKarte() {
     var z = S.zahlung, e = S.einkauf;
-    var karte = h('div', { class: 'karte vkz-lese', style: 'margin-top:18px' }, h('h2', { text: 'Daten aus der Masterliste (nur lesen)' }));
-    karte.appendChild(h('p', { class: 'vkz-herkunft', text: 'Diese Felder kommen aus der Masterliste (Schritt 1a) und lassen sich hier nur ansehen. Bearbeitet werden sie in der Masterliste; in der App folgt das mit Schritt 1b.' }));
+    var karte = h('div', { class: 'karte vkz-lese', style: 'margin-top:18px' }, h('h2', { text: 'Daten aus der Masterliste' }));
+    var kannBearb = darf() && !!S.akte.fahrzeug_id && !!window.EG_FZ;
+    karte.appendChild(h('p', { class: 'vkz-herkunft', text: kannBearb
+      ? 'Diese Felder gehören zur Masterliste. Mit „Bearbeiten“ änderst du sie hier: Die Änderung geht zuerst in die Masterliste und ist nach wenigen Sekunden in der App (nur Felder, die deine Rolle ändern darf).'
+      : 'Diese Felder kommen aus der Masterliste und lassen sich hier nur ansehen.' }));
     if (S.bestandHinweis) karte.appendChild(EG.banner(S.bestandHinweis, 'warn'));
     function dl(zeilen) {
       var d = h('dl', { class: 'kv' });
@@ -462,8 +541,9 @@
       ['Ablöse EK-Finanzierung (Netting)', e.ek_finanzierung_abloese_datum ? EG.fmtDatum(e.ek_finanzierung_abloese_datum) : '']
     ] : [['Lieferant', 'Keine Einkaufsdaten vorhanden (bestand.einkauf).']];
     karte.appendChild(h('div', { class: 'vkz-spalten' },
-      h('div', {}, h('h3', { text: 'Kunde' }), dl(kd)),
-      h('div', {}, h('h3', { text: 'Lieferant' }), dl(lf))));
+      h('div', {}, h('h3', { text: 'Kunde' }), dl(kd), kannBearb ? h('button', { type: 'button', class: 'btn btn-ghost btn-klein', style: 'margin-top:8px', text: 'Kunde bearbeiten', onclick: function () { bearbeiten('kunde').catch(EG.fehler); } }) : null),
+      h('div', {}, h('h3', { text: 'Lieferant' }), dl(lf), kannBearb ? h('button', { type: 'button', class: 'btn btn-ghost btn-klein', style: 'margin-top:8px', text: 'Lieferant bearbeiten', onclick: function () { bearbeiten('lief').catch(EG.fehler); } }) : null)));
+    S.bestandKarteBox = karte;
     return karte;
   }
 
