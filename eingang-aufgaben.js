@@ -146,7 +146,7 @@
      ==================================================================== */
   var ROLLEN = {
     vor_ort: ['admin', 'dispo', 'verkauf', 'werkstatt', 'aufbereitung'], dispo: ['admin', 'dispo'], werkstatt: ['admin', 'werkstatt'],
-    aufbereitung: ['admin', 'aufbereitung'], verkauf_akte: ['admin', 'dispo', 'verkauf'], oli: ['admin']
+    aufbereitung: ['admin', 'aufbereitung', 'werkstatt'], verkauf_akte: ['admin', 'dispo', 'verkauf'], oli: ['admin']
   };
   function demoMeine(a) { return (ROLLEN[a.abteilung] || ['admin']).indexOf(EG.rolle) >= 0; }
   function demoAktion(a, art, grund, name) {
