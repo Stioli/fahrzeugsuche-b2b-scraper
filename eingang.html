@@ -107,6 +107,7 @@
         <button class="tab-knopf" role="tab" id="tabk-zahlungen" data-tab="zahlungen" data-rollen="admin,dispo,buchhaltung" aria-selected="false" aria-controls="tab-zahlungen" type="button">Zahlungen</button>
         <button class="tab-knopf" role="tab" id="tabk-transport" data-tab="transport" data-rollen="admin,verkauf,dispo,buchhaltung,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-transport" type="button">Transport</button>
         <button class="tab-knopf" role="tab" id="tabk-auslieferung" data-tab="auslieferung" data-rollen="admin,verkauf,dispo,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-auslieferung" type="button">Auslieferung</button>
+        <button class="tab-knopf" role="tab" id="tabk-fahrzeuge" data-tab="fahrzeuge" data-rollen="admin" aria-selected="false" aria-controls="tab-fahrzeuge" type="button">Fahrzeuge</button>
         <button class="tab-knopf" role="tab" id="tabk-anlieferung" data-tab="anlieferung" aria-selected="true" aria-controls="tab-anlieferung" type="button">Anlieferungen</button>
         <button class="tab-knopf" role="tab" id="tabk-inzahlung" data-tab="inzahlung" aria-selected="false" aria-controls="tab-inzahlung" type="button">Inzahlungnahmen</button>
       </div>
@@ -127,6 +128,7 @@
     <!-- Reiter Auslieferung: Fahrzeugliste + Auslieferungs-Checkliste ohne Verkaufsdaten, auch für Aufbereiter/Meister (eingang-auslieferung.js) -->
     <section id="tab-auslieferung" role="tabpanel" aria-labelledby="tabk-auslieferung" hidden></section>
     <section id="tab-aufgaben" role="tabpanel" aria-labelledby="tabk-aufgaben" hidden></section>
+    <section id="tab-fahrzeuge" role="tabpanel" aria-labelledby="tabk-fahrzeuge" hidden></section>
     <!-- Reiter 1: Lieferantenfahrzeuge (eingang-anlieferung.js) -->
     <section id="tab-anlieferung" role="tabpanel" aria-labelledby="tabk-anlieferung"></section>
     <!-- Reiter 2: Inzahlungnahmen (Inhalt kommt aus eingang-inzahlung.js) -->
@@ -155,7 +157,9 @@
 <script src="verkauf-bewertungen.js?v=4.7"></script>   <!-- Bewertungen zuordnen (VA9), Abschnitt im Reiter Übersicht für admin/dispo/buchhaltung -->   <!-- Reiter Übersicht (A4), nutzt VK_PHASEN/VK_AMPEL -->
 <!-- BAU-KOPIE Welle 2 (Verkaufsablauf, 14.11.2026) – nicht live. Live-Stand: Fahrzeugeingang-Tool/web -->
 
-<script src="eingang-aufgaben.js?v=1.0"></script>   <!-- Reiter Aufgaben (Laufzettel LZ5) -->
+<script src="eingang-aufgaben.js?v=1.1"></script>   <!-- Reiter Aufgaben (Laufzettel LZ5) -->
+<script src="eingang-fahrzeuge.js?v=1.0"></script>   <!-- Reiter Fahrzeuge (Etappe 1b): alle Masterliste-Felder lesen, ändern, anlegen -->
+<link rel="stylesheet" href="eingang-fahrzeuge.css?v=1.0">
 <script>EG.start();</script>
 </body>
 </html>

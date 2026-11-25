@@ -1,0 +1,23 @@
+/* Stieber-App – Reiter „Fahrzeuge“ (Etappe 1b)                                   Stand 25.11.2026 v1 */
+.fz-scroll{overflow:auto;max-height:calc(100vh - var(--tabs-h, 120px) - 190px);border:1px solid var(--border);border-radius:12px;background:#fff}
+.fz-tabelle{border-collapse:collapse;width:100%;font-size:15px}
+.fz-tabelle th{position:sticky;top:0;background:#F4F7FB;z-index:1;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.fz-th{all:unset;cursor:pointer;display:block;padding:10px 10px;font-weight:700;color:var(--blau-dark)}
+.fz-th:focus-visible{outline:2px solid var(--blau);outline-offset:-2px}
+.fz-tabelle td{padding:9px 10px;border-bottom:1px solid #EEF1F5;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.fz-zeile{cursor:pointer}
+.fz-zeile:hover td,.fz-zeile:focus td{background:#F4F8FE}
+.fz-zeile:focus{outline:2px solid var(--blau);outline-offset:-2px}
+.fz-detail{max-height:70vh;overflow:auto}
+.dlg.breit:has(.fz-detail){width:min(1100px,96vw);max-width:none}
+.fz-abschnitt{border:1px solid var(--border);border-radius:12px;margin:10px 0;padding:0 12px;background:#fff}
+.fz-abschnitt summary{cursor:pointer;font-weight:700;padding:12px 0;color:var(--blau-dark)}
+.fz-dl{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 18px;margin:0 0 12px}
+.fz-paar{border-bottom:1px solid #EEF1F5;padding:4px 0}
+.fz-paar dt{font-size:13px;color:var(--sub)}
+.fz-paar dd{margin:2px 0 0;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;white-space:pre-wrap;word-break:break-word}
+.fz-edit{border:1px solid var(--border);background:#fff;border-radius:10px;min-width:44px;min-height:44px;cursor:pointer;color:var(--blau-dark);font-size:18px;flex:0 0 auto}
+.fz-edit:hover{border-color:var(--blau)}
+.fz-multi{display:flex;align-items:center;gap:8px;min-height:40px}
+.fz-verlauf{font-size:14px;padding-left:18px;margin:0 0 12px}
+.fz-verlauf li{margin:4px 0}
