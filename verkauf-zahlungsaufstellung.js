@@ -1,4 +1,4 @@
-/* Stieber-App – „Zahlungsaufstellung drucken“ (P4c, Stand 25.11.2026 v1.1: + window.VK_ZA.html(akte_id) für Automaten)
+/* Stieber-App – „Zahlungsaufstellung drucken“ (P4c, Stand 25.11.2026 v1.2: eigenes Kästchen TZ neben NW/GW; v1.1: + window.VK_ZA.html(akte_id) für Automaten)
    Druckansicht (A4, 1 Seite) nach dem Blatt „10. Zahlungsaufstellung“ der alten Excel-Fahrzeugakte.
    Wird im Reiter Zahlungen (verkauf-zahlungen.js) je Akte über einen Knopf geöffnet.
 
@@ -79,7 +79,7 @@
     return {
       kunde: a.kunde_name || '', kdnr: x.kdnr || '', verkaeufer: a.verkaeufer || '', intnr: a.interne_nr || '',
       fahrzeug: [a.hersteller, a.modell].filter(Boolean).join(' '), termin: a.uebergabe_termin || '', fin: a.fin || '',
-      nw: x.nwgw === 'NW', gw: x.nwgw === 'GW',
+      nw: x.nwgw === 'NW', gw: x.nwgw === 'GW', tz: x.nwgw === 'TZ',   // v1.2: TZ bleibt TZ (nur Repdoc kennt kein TZ → dort NW), Oli 25.11.2026
       lief: {
         name: e.lieferant || '', nr: e.lieferant_nr || '', rg: zahl(e.lief_rg_betrag_brutto), rgDatum: e.lief_rg_datum || '',
         gesamt: bezahlt ? zahl(e.lief_rg_betrag_brutto) : null, bezahltAm: bezahlt ? (e.lief_rg_bezahlt_datum || '') : ''
@@ -106,7 +106,7 @@
     h.push('<tr><td class="k">Verkäufer</td><td>' + esc(m.verkaeufer) + '</td><td class="k">Int.-Nr.</td><td>' + esc(m.intnr) + '</td></tr>');
     h.push('<tr><td class="k">Fahrzeug</td><td>' + esc(m.fahrzeug) + '</td><td class="k">Ausl.-Termin</td><td>' + esc(datum(m.termin)) + '</td></tr>');
     h.push('<tr><td class="k">Fgst.-Nr.</td><td colspan="3">' + esc(m.fin) + '</td></tr>');
-    h.push('<tr><td>' + haken(true) + 'Verkauf</td><td>' + haken(false) + 'Ankauf</td><td>' + haken(m.nw) + 'NW</td><td>' + haken(m.gw) + 'GW</td></tr>');
+    h.push('<tr><td>' + haken(true) + 'Verkauf</td><td>' + haken(false) + 'Ankauf</td><td>' + haken(m.nw) + 'NW</td><td>' + haken(m.gw) + 'GW &nbsp;&nbsp; ' + haken(m.tz) + 'TZ</td></tr>');
     h.push('</table>');
 
     /* Zahlungsausgang */
