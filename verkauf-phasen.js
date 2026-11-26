@@ -1,4 +1,5 @@
 /* Stieber-App – Verkaufsablauf in 11 Phasen + Bereiche (window.VK_PHASEN)
+   Nachtrag 26.11.2026 (Plan „AB an Kunde in der App“ v2): Punkt 45 ohne Quelle { dokument: 'ab' } – grün erst mit „AB an Kunden gesendet“ (verkauf-ab-kunde.js).
    Nachtrag 25.11.2026 (Oli „A umsetzen“): neue Quellenart { dokument: '<art>' } (art = ab | zahlungsaufstellung | schild | uebergabeprotokoll, wie in verkauf.dokument).
    Sie wird in qParse zur Quelle { phase:'dok', k:<art>, nurLesen:true, dokument:<art> }; die Zeile dazu liefert verkauf-unterlagen.js (VK_DU.dokumenteInPm → pm.dok.<art>,
    status ok, sobald ein PDF der Art zur Akte vorliegt). Punkt 45 und 65 gelten damit auch als erledigt, wenn das PDF in den Unterlagen liegt (oder-Verknüpfung mit der Masterliste).
@@ -218,8 +219,8 @@
           [{ q: 'nach_verkauf.finanzierungsunterlagen_pruefen', okWerte: ['Vollständig', 'Hat keine'] }], { entfaelltWenn: [KEINE_FIN], hinweis: 'Kommt aus der Masterliste (Dispo).' }),
         P(43, 'abholung_lieferung', 'Abholung oder Lieferung', true, ['v5.abholung_lieferung'], { eingabe: 'auswahl', label: 'Übergabe', optionen: ['Abholung', 'Lieferung'] }),
         P(44, 'wunschtermin', 'Wunschtermin des Kunden', true, ['v5.wunschtermin'], { eingabe: 'datum', label: 'Wunschtermin', setzeUebergabetermin: true }),
-        P(45, 'auftragsbestaetigung_kunde', 'Auftragsbestätigung an den Kunden (Mail in OneDrive)', true, ['nach_verkauf.auftragsbestaetigung_kunde', 'nach_verkauf.auftragsbest_mail_onedrive', { dokument: 'ab' }],
-          { hinweis: 'Kommt aus der Masterliste (Dispo) – oder gilt als erledigt, sobald die Auftragsbestätigung als PDF unter Unterlagen liegt.' }),
+        P(45, 'auftragsbestaetigung_kunde', 'Auftragsbestätigung an den Kunden (Mail in OneDrive)', true, ['nach_verkauf.auftragsbestaetigung_kunde', 'nach_verkauf.auftragsbest_mail_onedrive'],
+          { hinweis: 'Grün, sobald die AB an den Kunden gesendet ist: Knopf „AB an Kunden gesendet“ unter Unterlagen (schreibt die Masterliste). Das PDF allein reicht seit 26.11.2026 nicht mehr.' }),
         P(46, 'claude_eintraege', 'Claude: Masterliste, Lead Liste, Börsen/ONLINE aus, Akte angelegt', true, ['v5.claude_eintraege'], { hinweis: 'Nach dem Umschalten (1b) ohne Masterliste.' })
       ]
     },

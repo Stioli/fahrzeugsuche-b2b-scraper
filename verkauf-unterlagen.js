@@ -1,4 +1,5 @@
-/* Stieber-App – Bereich „Unterlagen“ und Feld „Lieferanten-AB“ in der Verkaufsakte (Version 1.1, Stand 25.11.2026, Skill dispo-unterlagen P1/P2)
+/* Stieber-App – Bereich „Unterlagen“ und Feld „Lieferanten-AB“ in der Verkaufsakte (Version 1.2, Stand 26.11.2026, Skill dispo-unterlagen P1/P2)
+   v1.2 (26.11.2026, Plan „AB an Kunde in der App“ v2): unter der Lieferanten-AB der Block „Auftragsbestätigung an den Kunden“ aus verkauf-ab-kunde.js (window.VK_AB), Box #ab-kunde-box.
    v1.1 (25.11.2026, Oli „A umsetzen“): PDFs in den Unterlagen zählen als Quelle für Punkte des Verkaufsablaufs (verkauf-phasen.js, Quelle { dokument: '<art>' }):
    - VK_DU.dokumenteFuerAkten(ids) → { akte_id: { art: neueste Zeile } } – EINE Abfrage für viele Akten (je 30 Akten ein Aufruf); Rollen ohne Leserecht oder fehlende Tabelle → leer, kein Fehler
    - VK_DU.dokumenteInPm(pm, dokMap) → setzt pm.dok.<art> = Zeile mit status 'ok' (so rechnen Ampel, Fortschritt und alle Reiter damit wie mit jedem Haken)
@@ -295,6 +296,11 @@
         else karte.appendChild(h('div', { class: 'karte-kopf' }, h('h2', { text: 'Lieferanten-AB' })));
         karte.appendChild(ab);
       }
+      if (window.VK_AB && dok.ok) {   // v1.2: Block „Auftragsbestätigung an den Kunden“ (verkauf-ab-kunde.js)
+        var abk = h('div', { id: 'ab-kunde-box', style: 'margin-top:16px;border-top:1px solid var(--border,#d5dbe5);padding-top:12px' });
+        karte.appendChild(abk);
+        window.VK_AB.zeichne(abk, akte);
+      }
       box.appendChild(karte);
       if (meldung) setTimeout(function () { var s = document.getElementById('du-status'); if (s && s.textContent === meldung) s.textContent = ''; }, 6000);
     }
@@ -302,7 +308,7 @@
   }
 
   window.VK_DU = {
-    version: '1.1',
+    version: '1.2',
     ARTEN: ARTEN,
     dokumenteFuerAkten: dokumenteFuerAkten,
     dokumenteInPm: dokumenteInPm,
