@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Verkauf“ (Verkaufsakten mit 11 Phasen, Version 4.9; 25.11.2026 (Oli „A umsetzen“): PDFs in den Unterlagen zählen als Quelle für Punkt 45/65 (VK_DU.dokumenteFuerAkten → pm.dok, an Liste, Übersicht und Akte), Hinweise mit Sprung zu #du-box an Punkt 99/102; 25.11.2026: Bereich „Unterlagen“ + Lieferanten-AB über verkauf-unterlagen.js, Link #verkauf&nr=<interne_nr>)
+/* Stieber-App – Reiter „Verkauf“ (Verkaufsakten mit 11 Phasen, Version 4.10; 27.11.2026: Banner „Übergabe an Dispo“ unter dem Kopf (verkauf-hinweise.js, #hw-box); 25.11.2026 (Oli „A umsetzen“): PDFs in den Unterlagen zählen als Quelle für Punkt 45/65 (VK_DU.dokumenteFuerAkten → pm.dok, an Liste, Übersicht und Akte), Hinweise mit Sprung zu #du-box an Punkt 99/102; 25.11.2026: Bereich „Unterlagen“ + Lieferanten-AB über verkauf-unterlagen.js, Link #verkauf&nr=<interne_nr>)
    Stand 15.11.2026 (Verkaufsablauf, Paket VA3; Nachträge Welle 4: eVB-Nr. aus der Akte, „Gesehen“ für OS an Freigabe in Vertretung und schlechter Umfrage). Plan: „Anpassungen Verkaufsablauf“ v2 (Abschnitte 2, 3, 6), Bauplan Verkaufsablauf v1 (E1, E2, E6).
    Daten: Schema verkauf (akte, punkt, freigabe). Phasen und Haken: verkauf-phasen.js (window.VK_PHASEN, 11 Phasen p01–p11 plus Bereiche a1_*, a2_*),
    Ampel und „Was fehlt noch, bei wem“: verkauf-ampel.js (window.VK_AMPEL, Berechnung im Browser, E2).
@@ -822,7 +822,9 @@
     root.innerHTML = '';
     root.appendChild(h('button', { type: 'button', class: 'btn btn-ghost zurueck', text: '← Zur Liste', onclick: zurListe }));
     S.kopfBox = h('div', {}); S.fehltBox = h('div', {}); S.phasenBox = h('div', { class: 'vk-phasen' });
-    root.appendChild(S.kopfBox); root.appendChild(S.fehltBox);
+    S.hwBox = h('div', { id: 'hw-box' });   // Übergabe an Dispo: Banner mit offenen Hinweisen (verkauf-hinweise.js), leer wenn nichts offen
+    root.appendChild(S.kopfBox); root.appendChild(S.hwBox); root.appendChild(S.fehltBox);
+    if (window.VK_HW) window.VK_HW.banner(S.hwBox, S.akte).catch(function (e) { console.warn('Hinweise:', e && e.message); });
     root.appendChild(h('h2', { text: 'Phasen', style: 'margin:18px 0 8px' }));
     root.appendChild(S.phasenBox);
     S.duBox = h('div', { id: 'du-box' });   // Unterlagen + Lieferanten-AB (verkauf-unterlagen.js); blendet sich aus, solange die Tabelle fehlt

@@ -1,4 +1,7 @@
-/* Stieber-App – Reiter „Dispo“ (Plan Dispo und Zahlungen v2, Abschnitt 4 / E4)               Stand 27.11.2026 v1.0 (Testversion)
+/* Stieber-App – Reiter „Dispo“ (Plan Dispo und Zahlungen v2, Abschnitt 4 / E4)               Stand 27.11.2026 v1.1 (Testversion)
+   v1.1 (27.11.2026, Plan „Übergabe an die Dispo“ P2): je Fahrzeugkarte ganz oben der Block „Übergabe von OS“
+   (verkauf-hinweise.js, window.VK_HW: Hinweise abhaken, „Übernommen“, + Hinweis), Kachel „Übergabe offen“,
+   überfällige Hinweise zählen als rot, Fahrzeuge mit offenen Hinweisen stehen im Filter „Mit offenen Aufgaben“.
    Sichtbar für admin und dispo. Je Fahrzeug im Durchlauf eine Karte mit
    - der Checkliste aus dem Plan (8 Schritte von der Lieferantenrechnung bis zur Info-Mail). Der Stand jedes Schritts kommt
      aus der Masterliste bzw. dem Laufzettel: ✓ erledigt · ○ offen · rot überfällig · ⏳ wartet (noch nicht dran) · – entfällt.
@@ -88,7 +91,9 @@
           .eq('abteilung', 'dispo').order('created_at', { ascending: true })
       ]);
       r.forEach(chk);
-      S.x = vorbereiten(r[0].data, r[1].data, r[2].data, r[3].data, r[4].data, r[5].data);
+      // Übergabe-Hinweise (verkauf-hinweise.js); fehlt die Tabelle, bleibt die Liste leer
+      var hw = window.VK_HW ? await window.VK_HW.fuerAkten((r[4].data || []).map(function (a) { return a.id; })) : {};
+      S.x = vorbereiten(r[0].data, r[1].data, r[2].data, r[3].data, r[4].data, r[5].data, hw);
       zeichnen();
     } catch (e) {
       console.error(e);
@@ -98,7 +103,8 @@
     } finally { S.laedt = false; }
   }
 
-  function vorbereiten(fz, ek, za, pu, ak, lz) {
+  function vorbereiten(fz, ek, za, pu, ak, lz, hw) {
+    hw = hw || {};
     var E = idx(ek, 'fahrzeug_id'), Z = idx(za, 'fahrzeug_id'), P = {}, A = {}, T = {};
     (pu || []).forEach(function (p) { (P[p.fahrzeug_id] = P[p.fahrzeug_id] || {})[p.punkt_key] = p; });
     (ak || []).forEach(function (a) {
@@ -111,18 +117,25 @@
     (fz || []).forEach(function (f) {
       var aufg = (f.interne_nr && T[f.interne_nr]) || [];
       var offene = aufg.filter(istOffen);
-      if (f.fahrzeugstatus === 'ausgeliefert' && !offene.length) return;   // fertig durch
       var a = A[f.stieber_id] || null;
+      var hws = (a && hw[a.id]) || [];
+      var hwOffen = hws.filter(function (y) { return y.status === 'offen'; });
+      if (f.fahrzeugstatus === 'ausgeliefert' && !offene.length && !hwOffen.length) return;   // fertig durch
+      var ia = aufg.filter(function (t) { return t.aufgabe_key === 'v_int_auftrag' && istOffen(t); })[0];
       var x = {
         sid: f.stieber_id, nr: f.interne_nr || '', titel: [f.hersteller, f.modell].filter(Boolean).join(' ') || 'Fahrzeug',
         status: f.fahrzeugstatus || '', lager: f.ml_kunde_art === 'stieber', nwgw: f.nw_gw || '',
         kunde: (a && a.kunde_name) || (f.ml_kunde_art === 'stieber' ? 'Stieber (Lager)' : ''),
         uebergabe: (a && a.uebergabe_termin) || f.auslieferungstermin || null,
         a: a, akteId: a ? a.id : null, e: E[f.stieber_id] || {}, z: Z[f.stieber_id] || {}, p: P[f.stieber_id] || {},
-        aufgaben: aufg, offene: offene
+        aufgaben: aufg, offene: offene,
+        hw: hws, hwOffen: hwOffen,
+        uebergabeOffen: !!(ia && ia.status === 'offen'),
+        uebernommenVon: ia && ia.status === 'uebernommen' ? (ia.uebernommen_von_name || '?') : null
       };
       x.schritte = schritte(x);
-      x.rot = offene.filter(function (t) { return t.frist && t.frist < heute(); }).length;
+      x.rot = offene.filter(function (t) { return t.frist && t.frist < heute(); }).length +
+        hwOffen.filter(function (y) { return y.frist && y.frist < heute(); }).length;
       x.heute = offene.filter(function (t) { return t.frist === heute(); }).length;
       x.naechste = offene.reduce(function (m, t) { return t.frist && (!m || t.frist < m) ? t.frist : m; }, null);
       liste.push(x);
@@ -207,9 +220,11 @@
   }
   function zeichnen() {
     var root = S.root; root.innerHTML = '';
-    var mitAufg = S.x.filter(function (x) { return x.offene.length; });
+    var mitAufg = S.x.filter(function (x) { return x.offene.length || x.hwOffen.length; });
     var alleOffen = [].concat.apply([], S.x.map(function (x) { return x.offene; }));
-    var rot = alleOffen.filter(function (t) { return t.frist && t.frist < heute(); }).length;
+    var uebOffen = S.x.filter(function (x) { return x.uebergabeOffen; }).length;
+    var rot = alleOffen.filter(function (t) { return t.frist && t.frist < heute(); }).length +
+      [].concat.apply([], S.x.map(function (x) { return x.hwOffen; })).filter(function (y) { return y.frist && y.frist < heute(); }).length;
     var heuteN = alleOffen.filter(function (t) { return t.frist === heute(); }).length;
 
     var chips = h('div', { class: 'chips' },
@@ -222,6 +237,7 @@
     if (EG.demo) root.appendChild(EG.banner('Demo: erfundene Fahrzeuge und Aufgaben, nichts wird gespeichert.', 'info'));
 
     root.appendChild(h('div', { class: 'dp-kacheln' },
+      h('div', { class: 'dp-kachel' + (uebOffen ? ' gold' : ' gruen'), title: 'Freigabe Verkauf erteilt, Übergabe noch nicht übernommen' }, h('span', { text: 'Übergabe offen' }), h('b', { text: String(uebOffen) })),
       h('div', { class: 'dp-kachel' + (rot ? ' rot' : alleOffen.length ? '' : ' gruen') }, h('span', { text: 'Offene Dispo-Aufgaben' }), h('b', { text: String(alleOffen.length) })),
       h('div', { class: 'dp-kachel' + (rot ? ' rot' : ' gruen') }, h('span', { text: 'Überfällig' }), h('b', { text: String(rot) })),
       h('div', { class: 'dp-kachel' + (heuteN ? ' gold' : ' gruen') }, h('span', { text: 'Heute fällig' }), h('b', { text: String(heuteN) })),
@@ -249,6 +265,8 @@
     var dots = h('span', { class: 'dp-dots', 'aria-label': erledigt + ' von ' + zaehlbar + ' Schritten erledigt' });
     x.schritte.forEach(function (s) { dots.appendChild(h('span', { class: 'dp-dot ' + s.st, title: s.titel + ': ' + s.info })); });
     var pills = [];
+    if (x.uebergabeOffen) pills.push(EG.pill('Übergabe offen', 'gold'));
+    if (x.hwOffen.length) pills.push(EG.pill(x.hwOffen.length + ' Hinweis' + (x.hwOffen.length === 1 ? '' : 'e'), 'gold'));
     if (x.rot) pills.push(EG.pill(x.rot + ' überfällig', 'rot'));
     else if (x.offene.length) pills.push(EG.pill(x.offene.length + ' Aufgabe' + (x.offene.length === 1 ? '' : 'n') + ' offen', x.heute ? 'gold' : 'blau'));
     if (x.uebergabe) pills.push(EG.pill('Übergabe ' + dat(x.uebergabe), 'grau'));
@@ -261,6 +279,11 @@
     d.addEventListener('toggle', function () { if (d.open) S.offen[x.sid] = true; else delete S.offen[x.sid]; });
 
     var inhalt = h('div', { class: 'dp-inhalt' });
+    // Übergabe von OS (verkauf-hinweise.js): ganz oben, vor der Checkliste
+    if (x.a && window.VK_HW) {
+      var ub = window.VK_HW.block(x.a, x.hw, { uebergabeOffen: x.uebergabeOffen, uebernommenVon: x.uebernommenVon, neuLaden: function () { S.offen[x.sid] = true; return laden(); } });
+      if (ub) inhalt.appendChild(ub);
+    }
     var ul = h('ol', { class: 'dp-schritte' });
     x.schritte.forEach(function (s, i) {
       var kn = s.t && istOffen(s.t) ? aufgabeKnoepfe(s.t) : null;
@@ -359,7 +382,18 @@
         z('97002', 'c_einfinanzieren', 'Einfinanzieren bei der Openbank (Papiere sind da)', t(-3)),
         z('97002', 'v_int_auftrag', 'Interner Auftrag mit Auslieferungstermin an Werkstatt und Aufbereitung', t(-6), { status: 'erledigt', erledigt_von_name: 'Celine (Demo)', erledigt_am: t(-6) }),
         z('97002', 'd_zulassung', 'Zulassung beauftragen bzw. prüfen', t(1)),
-        z('97003', 'c_repdoc_ankauf', 'Handelsakte + Ankauf in Repdoc buchen', t(-25), { status: 'erledigt', erledigt_von_name: 'Celine (Demo)', erledigt_am: t(-25) })
+        z('97003', 'c_repdoc_ankauf', 'Handelsakte + Ankauf in Repdoc buchen', t(-25), { status: 'erledigt', erledigt_von_name: 'Celine (Demo)', erledigt_am: t(-25) }),
+        z('97001', 'v_int_auftrag', 'Interner Auftrag mit Auslieferungstermin an Werkstatt und Aufbereitung', t(1))
+      ]);
+    }
+    // Übergabe-Hinweise (verkauf-hinweise.js)
+    var ak1 = await EG.tab('verkauf', 'akte').select('id').eq('fahrzeug_id', 'ST-26-9701');
+    if (ak1.data && ak1.data[0] && await fehlt('verkauf', 'hinweis', 'interne_nr', '97001')) {
+      var hw = function (text, art, frist) { return { id: EG.uuid(), akte_id: ak1.data[0].id, interne_nr: '97001', text: text, art: art, abteilung: 'dispo', frist: frist, status: 'offen', quelle: 'claude', erstellt_von_name: 'Oliver Stieber', created_at: new Date().toISOString() }; };
+      await EG.tab('verkauf', 'hinweis').insert([
+        hw('FIN fehlt – der Lieferant meldet sie vor der Lieferung; dann Akte, Autrado-Job und Masterliste', 'fehlt', null),
+        hw('km-Abweichung: Bestellung 10 km, Lieferant 50 km – klären', 'abweichung', null),
+        hw('Zahlungseinladung erstellen (Versand nur nach OS-Ja)', 'aufgabe', t(4))
       ]);
     }
   }
