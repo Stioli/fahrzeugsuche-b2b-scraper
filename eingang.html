@@ -100,7 +100,9 @@
     </header>
     <nav class="tabs" role="tablist" aria-label="Bereiche">
       <div class="tabs-in">
-        <button class="tab-knopf" role="tab" id="tabk-aufgaben" data-tab="aufgaben" data-rollen="admin,verkauf,dispo,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-aufgaben" type="button">Aufgaben</button>
+        <button class="tab-knopf" role="tab" id="tabk-aufgaben" data-tab="aufgaben" data-rollen="admin,verkauf,dispo,buchhaltung,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-aufgaben" type="button">Aufgaben</button>
+        <button class="tab-knopf" role="tab" id="tabk-dispo" data-tab="dispo" data-rollen="admin,dispo" aria-selected="false" aria-controls="tab-dispo" type="button">Dispo</button>
+        <button class="tab-knopf" role="tab" id="tabk-buchhaltung" data-tab="buchhaltung" data-rollen="admin,buchhaltung,dispo" aria-selected="false" aria-controls="tab-buchhaltung" type="button">Buchhaltung</button>
         <button class="tab-knopf" role="tab" id="tabk-anfragen" data-tab="anfragen" data-rollen="admin,verkauf" aria-selected="false" aria-controls="tab-anfragen" type="button">Anfragen</button>
         <button class="tab-knopf" role="tab" id="tabk-verkauf" data-tab="verkauf" data-rollen="admin,verkauf,dispo,buchhaltung" aria-selected="false" aria-controls="tab-verkauf" type="button">Verkauf</button>
         <button class="tab-knopf" role="tab" id="tabk-uebersicht" data-tab="uebersicht" data-rollen="admin,verkauf,dispo,buchhaltung,werkstatt,aufbereitung" aria-selected="false" aria-controls="tab-uebersicht" type="button">Übersicht</button>
@@ -129,6 +131,10 @@
     <!-- Reiter Auslieferung: Fahrzeugliste + Auslieferungs-Checkliste ohne Verkaufsdaten, auch für Aufbereiter/Meister (eingang-auslieferung.js) -->
     <section id="tab-auslieferung" role="tabpanel" aria-labelledby="tabk-auslieferung" hidden></section>
     <section id="tab-aufgaben" role="tabpanel" aria-labelledby="tabk-aufgaben" hidden></section>
+    <!-- Reiter Dispo (Plan Dispo und Zahlungen v2, E4): Checkliste je Fahrzeug + Dispo-Aufgaben (eingang-dispo.js) -->
+    <section id="tab-dispo" role="tabpanel" aria-labelledby="tabk-dispo" hidden></section>
+    <!-- Reiter Buchhaltung (Plan v2, E2/E3): Tagesbericht A/B/C + 4 Zahlungsteile + Aufgaben der Buchhaltung (eingang-buchhaltung.js) -->
+    <section id="tab-buchhaltung" role="tabpanel" aria-labelledby="tabk-buchhaltung" hidden></section>
     <section id="tab-fahrzeuge" role="tabpanel" aria-labelledby="tabk-fahrzeuge" hidden></section>
     <section id="tab-kunden" role="tabpanel" aria-labelledby="tabk-kunden" hidden></section>
     <!-- Reiter 1: Lieferantenfahrzeuge (eingang-anlieferung.js) -->
@@ -162,7 +168,9 @@
 <script src="verkauf-bewertungen.js?v=4.7"></script>   <!-- Bewertungen zuordnen (VA9), Abschnitt im Reiter Übersicht für admin/dispo/buchhaltung -->   <!-- Reiter Übersicht (A4), nutzt VK_PHASEN/VK_AMPEL -->
 <!-- BAU-KOPIE Welle 2 (Verkaufsablauf, 14.11.2026) – nicht live. Live-Stand: Fahrzeugeingang-Tool/web -->
 
-<script src="eingang-aufgaben.js?v=1.1"></script>   <!-- Reiter Aufgaben (Laufzettel LZ5) -->
+<script src="eingang-aufgaben.js?v=1.2"></script>   <!-- Reiter Aufgaben (Laufzettel LZ5), v1.2: Abteilung Buchhaltung -->
+<script src="eingang-dispo.js?v=1.0"></script>   <!-- Reiter Dispo (Plan Dispo und Zahlungen v2, E4) -->
+<script src="eingang-buchhaltung.js?v=1.0"></script>   <!-- Reiter Buchhaltung (Plan v2, E2/E3: Tagesbericht + 4 Zahlungsteile) -->
 <script src="eingang-fahrzeuge.js?v=1.3"></script>   <!-- Reiter Fahrzeuge (Etappe 1b): alle Masterliste-Felder lesen, ändern, anlegen -->
 <script src="eingang-kunden.js?v=1.2"></script>   <!-- Reiter Kunden (Etappe 1b, K1): Kontaktdaten und Fahrzeuge je Kunde -->
 <link rel="stylesheet" href="eingang-fahrzeuge.css?v=1.3">

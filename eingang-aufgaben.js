@@ -1,4 +1,4 @@
-/* Stieber-App – Reiter „Aufgaben“ (Laufzettel LZ5, Plan 25.11.2026, E2/E3)              Stand 25.11.2026 v1
+/* Stieber-App – Reiter „Aufgaben“ (Laufzettel LZ5, Plan 25.11.2026, E2/E3)              Stand 27.11.2026 v1.2 (Abteilung Buchhaltung)
    Zeigt die offenen Laufzettel-Aufgaben aus laufzettel.v_meine_aufgaben (RLS: jede Rolle sieht nur ihre,
    admin und Dispo alles). Ampel nach Frist: rot = überfällig, gelb = heute fällig, grün = später.
    Aktionen nur über RPCs (laufzettel.uebernehmen / erledigen / entfaellt); die Datenbank prüft die Rechte.
@@ -9,7 +9,7 @@
   var EG = window.EG, h = EG && EG.h;
   if (!EG) return;
 
-  var ABT = { vor_ort: 'Wer da ist', dispo: 'Dispo', werkstatt: 'Werkstatt', aufbereitung: 'Aufbereitung', verkauf_akte: 'Verkäufer', oli: 'Oli' };
+  var ABT = { vor_ort: 'Wer da ist', dispo: 'Dispo', buchhaltung: 'Buchhaltung', werkstatt: 'Werkstatt', aufbereitung: 'Aufbereitung', verkauf_akte: 'Verkäufer', oli: 'Oli' };
   var AMPEL = { rot: { t: 'Überfällig', art: 'rot' }, gelb: { t: 'Heute fällig', art: 'gold' }, gruen: { t: 'Später', art: 'gruen' } };
   var S = { root: null, zeilen: [], filter: 'meine', laedt: false };
   var V = function () { return EG.tab('laufzettel', 'v_meine_aufgaben'); };
@@ -145,7 +145,7 @@
      DEMO (nur ?demo=1): erfundene Aufgaben, Rechte wie in der Datenbank nachgebildet
      ==================================================================== */
   var ROLLEN = {
-    vor_ort: ['admin', 'dispo', 'verkauf', 'werkstatt', 'aufbereitung'], dispo: ['admin', 'dispo'], werkstatt: ['admin', 'werkstatt'],
+    vor_ort: ['admin', 'dispo', 'verkauf', 'werkstatt', 'aufbereitung'], dispo: ['admin', 'dispo'], buchhaltung: ['admin', 'buchhaltung', 'dispo'], werkstatt: ['admin', 'werkstatt'],
     aufbereitung: ['admin', 'aufbereitung', 'werkstatt'], verkauf_akte: ['admin', 'dispo', 'verkauf'], oli: ['admin']
   };
   function demoMeine(a) { return (ROLLEN[a.abteilung] || ['admin']).indexOf(EG.rolle) >= 0; }
